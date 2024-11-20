@@ -68,6 +68,13 @@ const limiter = rateLimit({
   message: "Too many requests from this IP, please try again later."
 });
 
+const Loginlimiter = rateLimit({
+    windowMs: 15 * 60 * 1000, 
+    max: 5, 
+    message: "Too many login attempts from this account, please try again later."
+});
+
+
 const authenticateToken = (req, res, next) => {
     const authHeader = req.headers["authorization"];
     const token = authHeader && authHeader.split(" ")[1]; // Extract token from "Bearer <token>"
@@ -99,10 +106,10 @@ const authenticateToken = (req, res, next) => {
 // database
 const db = mysql.createPool({
     //host: '2a02:4780:28:feaa::1',  // use this in production
-    host: 'srv1388.hstgr.io',
-    user: 'u350266280_lokidatasetup',           
-    password: 'texeract2024LOKI$$$',            
-    database: 'u350266280_xeradatabase',    
+    host: process.env.DB_HOST,
+    user: process.env.DB_USER,           
+    password: process.env.DB_PASSWORD,            
+    database: process.env.DB_DATABASE,    
     waitForConnections: true,
     connectTimeout: 20000, 
     port: 3306,               
@@ -145,99 +152,124 @@ app.get("/xera/api/user-login", authenticateToken, async (req, res) => {
 });
 
 
-app.post('/xera/api/login-basic',limiter, async (req, res) => {
+app.post('/xera/api/login-basic',Loginlimiter, async (req, res) => {
     const { username, password } = req.body;
 
     if (!username || !password) {
         return res.status(403).json({ success: false, message: "Request Error. Input Field"})
     }
-
-    const loginData = {
-        username: username,
-        password: password
-    }
-    const jsonData = JSON.stringify(loginData)
+    
     try {
-        axios
-            .post("https://engeenx.com/xeraUserLoginBasic.php", jsonData)
-            .then((response) => {
+
+        const [user] = await db.query("SELECT * FROM xera_user_accounts WHERE BINARY username = ?", [username]);
+
+        if (user.length > 0) {
+            const userData = user[0]
+            const dataPass = userData.password
+            
+            if (dataPass.slice(0,4) === "$2y$") {
+                const normalizedHash = dataPass.replace("$2y$", "$2a$");
                 
-                const resData = response.data
-                
-                if (resData.success) {
-                    const xeraWallet = resData.xera_wallet
-                    const authToken = jwt.sign({ xeraWallet }, jwtSecret, { expiresIn: "7d" });
-                    return res.status(200).json({ success: true, message: resData.message, authToken: authToken})
+                if (await bcrypt.compare(password, normalizedHash)) {
+                    const xeraJWT = {
+                        loginState : "basic",
+                        isloggedIn : "true",
+                        myXeraUsername : userData.username,
+                        myXeraAddress : userData.xera_wallet
+                    }
+                    const authToken = jwt.sign({ xeraJWT }, jwtSecret, { expiresIn: "2d" });
+                    return res.status(200).json({ success: true, message: `${user[0].username} Successfully Login`, authToken: authToken})
                 } else {
-                    return res.status(403).json({ success: false, message: resData.message})
+                    return res.status(401).json({ success: false, message: 'Wrong password' });
                 }
-            })
+            } else {
+                if (await bcrypt.compare(password, dataPass)) {
+                    const xeraJWT = {
+                        loginState : "basic",
+                        isloggedIn : "true",
+                        myXeraUsername : userData.username,
+                        myXeraAddress : userData.xera_wallet
+                    }
+                    const authToken = jwt.sign({ xeraJWT }, jwtSecret, { expiresIn: "2d" });
+                    return res.status(200).json({ success: true, message: `${user[0].username} Successfully Login Basic Account`, authToken: authToken})
+                } else {
+                    return res.status(401).json({ success: false, message: 'Wrong password' });
+                }
+            }
+            
+        } else {
+            return res.status(403).json({ success: false, message: resData.message})
+        }
     } catch (error) {
         return res.status(500).json({ success: false, message: "Internal Server Error"})
     }
 })
 
 
-app.post('/xera/api/login-prKey',limiter, async (req, res) => {
+app.post('/xera/api/login-prKey',Loginlimiter, async (req, res) => {
     const { privateKey } = req.body;
 
     if (!privateKey) {
         return res.status(403).json({ success: false, message: "Request Error. No private key received"})
     }
 
-    const loginData = {
-        userPrivateKey: privateKey,
-    }
-    const jsonData = JSON.stringify(loginData)
     try {
-        axios
-            .post("https://engeenx.com/xeraUserLoginPK.php", jsonData)
-            .then((response) => {
-                
-                const resData = response.data
-                
-                if (resData.success) {
-                    const xeraWallet = resData.xera_wallet
-                    const authToken = jwt.sign({ xeraWallet }, jwtSecret, { expiresIn: "7d" });
-                    return res.status(200).json({ success: true, message: resData.message, authToken: authToken})
-                } else {
-                    return res.status(403).json({ success: false, message: resData.message})
-                }
-            })
+        const [user] = await db.query("SELECT * FROM xera_user_accounts WHERE BINARY private_key = ?", [privateKey]);
+        const userData = user[0]
+        if (user.length > 0) {
+            const xeraJWT = {
+                loginState : "basic",
+                isloggedIn : "true",
+                myXeraUsername : userData.username,
+                myXeraAddress : userData.xera_wallet
+            }
+            const authToken = jwt.sign({ xeraJWT }, jwtSecret, { expiresIn: "2d" });
+            return res.status(200).json({ success: true, message: `${user[0].username} Successfully Login Full Access`, authToken: authToken})
+        } else {
+            return res.status(403).json({ success: false, message: resData.message})
+        }
     } catch (error) {
-        return res.status(500).json({ success: false, message: "Internal Server Error"})
+        return res.status(500).json({ success: false, message: "Internal Server Error", error: error})
     }
 })
 
-app.post('/xera/api/login-phrase',limiter, async (req, res) => {
+app.post('/xera/api/login-phrase',Loginlimiter, async (req, res) => {
     const { seedPhrase } = req.body;
-
     if (!seedPhrase) {
         return res.status(403).json({ success: false, message: "Request Error. No private key received"})
     }
     
+    const seed = JSON.parse(seedPhrase)
+
     try {
-        axios
-            .post("https://engeenx.com/xeraUserLoginPhrase.php", seedPhrase,
-                {headers: {
-                    'Content-Type': 'application/json',
+        const sqlPhrase = "SELECT * FROM xera_user_wallet WHERE BINARY word1 = ? AND word2 = ? AND word3 = ? AND word4 = ? AND word5 = ? AND word6 = ? AND word7 = ? AND word8 = ? AND word9 = ? AND word10 = ? AND word11 = ? AND word12 = ?"
+        const [user] = await db.query(sqlPhrase, [seed.seedWord1,seed.seedWord2,seed.seedWord3,seed.seedWord4,seed.seedWord5,seed.seedWord6,seed.seedWord7,seed.seedWord8,seed.seedWord9,seed.seedWord10,seed.seedWord11,seed.seedWord12]);
+
+        if (user.length > 0) {
+            const userData = user[0]
+            const getUsername = await db.query("SELECT * FROM xera_user_accounts WHERE BINARY xera_wallet = ?", [userData.public_key]);
+            if (getUsername[0].length > 0) {
+                const userarray = getUsername[0]
+                const username = userarray[0].username
+                const xeraJWT = {
+                    loginState : "basic",
+                    isloggedIn : "true",
+                    myXeraUsername : userData.username,
+                    myXeraAddress : userData.public_key
                 }
-            })
-            .then((response) => {
-                const resData = response.data
-                
-                if (resData.success) {
-                    const xeraWallet = resData.xera_wallet
-                    const authToken = jwt.sign({ xeraWallet }, jwtSecret, { expiresIn: "7d" });
-                    return res.status(200).json({ success: true, message: resData.message, authToken: authToken})
-                } else {
-                    return res.status(403).json({ success: false, message: resData.message})
-                }
-            })
+                const authToken = jwt.sign({ xeraJWT }, jwtSecret, { expiresIn: "2d" });
+                return res.status(200).json({ success: true, message: `${user[0].username} Successfully Login Full Access`, authToken: authToken})
+            } else {
+                return res.status(400).json({ success: false, message: "No user found in that key phrase"})
+            }
+        } else {
+            return res.status(400).json({ success: false, message: "No user found in that key phrase"})
+        }
     } catch (error) {
         return res.status(500).json({ success: false, message: "Internal Server Error"})
     }
 })
+
 
 app.listen(port, () => {
     console.log(`Server is running on http://localhost:${port}`);
