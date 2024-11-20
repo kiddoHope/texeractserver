@@ -14,7 +14,7 @@ const axios = require('axios')
 
 app.use(bodyParser.json());
 
-const allowedOrigins = ['https://skinmiso.ca', 'https://skinmiso.ph', 'http://localhost:3000', 'https://skinmiso.vercel.app', 'https://skinmiso-ph-beta.vercel.app', 'http://localhost:3001'];
+const allowedOrigins = ['https://texeract.network', 'http://localhost:3000', 'http://localhost:3001'];
 
 app.use(cors({
   origin: (origin, callback) => {
