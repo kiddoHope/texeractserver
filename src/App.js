@@ -20,12 +20,12 @@ function App() {
       seedWord4: "frost",
       seedWord5: "drums",
       seedWord6: "shrimp",
-      seedWord7: "",
+      seedWord7: "sunrise",
       seedWord8: "oats",
       seedWord9: "haze",
       seedWord10: "chair",
       seedWord11: "treetop",
-      seedWord12: ""
+      seedWord12: "plastic"
     }
 
     const seedPhrase = JSON.stringify(data)

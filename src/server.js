@@ -208,27 +208,38 @@ app.post('/xera/api/login-basic',Loginlimiter, async (req, res) => {
 
 app.post('/xera/api/login-prKey',Loginlimiter, async (req, res) => {
     const { privateKey } = req.body;
-
+    
     if (!privateKey) {
         return res.status(403).json({ success: false, message: "Request Error. No private key received"})
     }
 
     try {
-        const [user] = await db.query("SELECT * FROM xera_user_accounts WHERE BINARY private_key = ?", [privateKey]);
+        const [user] = await db.query("SELECT * FROM xera_user_wallet WHERE BINARY private_key = ?", [privateKey]);
         const userData = user[0]
+        
         if (user.length > 0) {
-            const xeraJWT = {
-                loginState : "basic",
-                isloggedIn : "true",
-                myXeraUsername : userData.username,
-                myXeraAddress : userData.xera_wallet
+            const userData = user[0]
+            const getUsername = await db.query("SELECT * FROM xera_user_accounts WHERE BINARY xera_wallet = ?", [userData.public_key]);
+            if (getUsername[0].length > 0) {
+                const userarray = getUsername[0]
+                const username = userarray[0].username
+                const xeraJWT = {
+                    loginState : "basic",
+                    isloggedIn : "true",
+                    myXeraUsername : username,
+                    myXeraAddress : userData.public_key
+                }
+                const authToken = jwt.sign({ xeraJWT }, jwtSecret, { expiresIn: "2d" });
+                return res.status(200).json({ success: true, message: `${username} Successfully Login Full Access`, authToken: authToken})
+            } else {
+                return res.status(400).json({ success: false, message: "No user found in that key phrase"})
             }
-            const authToken = jwt.sign({ xeraJWT }, jwtSecret, { expiresIn: "2d" });
-            return res.status(200).json({ success: true, message: `${user[0].username} Successfully Login Full Access`, authToken: authToken})
         } else {
             return res.status(403).json({ success: false, message: resData.message})
         }
     } catch (error) {
+        console.log(error);
+        
         return res.status(500).json({ success: false, message: "Internal Server Error", error: error})
     }
 })
@@ -254,11 +265,11 @@ app.post('/xera/api/login-phrase',Loginlimiter, async (req, res) => {
                 const xeraJWT = {
                     loginState : "basic",
                     isloggedIn : "true",
-                    myXeraUsername : userData.username,
+                    myXeraUsername : username,
                     myXeraAddress : userData.public_key
                 }
                 const authToken = jwt.sign({ xeraJWT }, jwtSecret, { expiresIn: "2d" });
-                return res.status(200).json({ success: true, message: `${user[0].username} Successfully Login Full Access`, authToken: authToken})
+                return res.status(200).json({ success: true, message: `${username} Successfully Login Full Access`, authToken: authToken})
             } else {
                 return res.status(400).json({ success: false, message: "No user found in that key phrase"})
             }
