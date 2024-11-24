@@ -723,6 +723,34 @@ app.get('/xera/v1/api/token/asset-tokens',authenticateAPIToken, async (req,res) 
     }
 })
 
+app.get('/xera/v1/api/token/faucet-transaction', authenticateAPIToken, async (req,res) => {
+    const authHeader = req.headers["authorization"];
+    const token = authHeader && authHeader.split(" ")[1];
+    const decode = jwtDecode(token)
+
+    try {
+        const [checkModeration] = await db.query('SELECT * FROM xera_developer WHERE BINARY xera_wallet = ?', [decode.xera_wallet])
+        if (checkModeration.length > 0) {
+            if (checkModeration[0].xera_moderation === "creator") {
+                const [assetTokens] = await db.query(`SELECT * FROM xera_network_transactions`);
+                
+                if (assetTokens.length > 0) {
+                    const cleanedData = assetTokens.map(({id, transaction_origin, sender_address, tansaction_command, transaction_token, transaction_token_id, transaction_validator, transaction_date,  ...clean}) => clean)
+                    
+                    return res.status(200).json({ success: true, data: cleanedData})
+                } else {
+                    return res.status(404).json({ success:false, message : "no tokens found"})
+                }
+            } else {
+                return res.status(401).json({ success:false, message : "unknown request"})
+            }
+        } else {
+            return res.status(401).json({ success:false, message : "invalid request"})
+        }
+    } catch (error) {
+        return res.status(500).json({ success: false, message: "request error", error: error})
+    }
+})
 app.listen(port, () => {
     console.log(`Server is running on http://localhost:${port}`);
 });
