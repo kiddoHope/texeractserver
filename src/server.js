@@ -628,7 +628,7 @@ app.post('/xera/v1/api/user/balance', authenticateToken, async (req,res) => {
         const [transactions] = await db.query( 'SELECT * FROM xera_network_transactions WHERE receiver_address = ? OR sender_address = ?',[user,user]);
         const [tokenList] = await db.query("SELECT * FROM xera_asset_token")
         
-        if (transactions.length > 0) {
+        if (tokenList.length > 0) {
             const balances = tokenList.map((token) => {
                 const { token_id } = token;
                 
@@ -652,7 +652,8 @@ app.post('/xera/v1/api/user/balance', authenticateToken, async (req,res) => {
         
                 return { ...token, totalBalance };
             });
-
+            console.log(balances);
+            
             const cleanedData = balances.map(({ id, token_id, token_owner, token_symbol, token_decimal, token_supply, token_circulating, token_info, ...clean}) => clean)
             
             return res.status(200).json({ success: true, data: cleanedData})
