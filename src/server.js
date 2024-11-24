@@ -735,8 +735,9 @@ app.get('/xera/v1/api/token/faucet-transaction', authenticateAPIToken, async (re
                 const [assetTokens] = await db.query(`SELECT * FROM xera_network_transactions`);
                 
                 if (assetTokens.length > 0) {
-                    const cleanedData = assetTokens.map(({id, transaction_origin, sender_address, tansaction_command, transaction_token, transaction_token_id, transaction_validator, transaction_date,  ...clean}) => clean)
+                    const sorted = assetTokens.sort((a,b) => b.id - a.id)
                     
+                    const cleanedData = sorted.map(({id, transaction_origin, sender_address, tansaction_command, transaction_token, transaction_token_id, transaction_validator, transaction_date,  ...clean}) => clean)
                     return res.status(200).json({ success: true, data: cleanedData})
                 } else {
                     return res.status(404).json({ success:false, message : "no tokens found"})
