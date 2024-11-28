@@ -14,7 +14,7 @@ const axios = require('axios')
 
 app.use(bodyParser.json());
 
-const allowedOrigins = ['https://texeract.network', 'http://localhost:3000'];
+const allowedOrigins = ['https://texeract.network', 'http://localhost:3000', 'http://localhost:3001'];
 
 app.use(cors({
   origin: (origin, callback) => {
@@ -653,6 +653,9 @@ app.post('/xera/v1/api/user/balance', authenticateToken, async (req,res) => {
                 return { ...token, totalBalance };
             });
             console.log(balances);
+
+
+            // npx update-browserslist-db@latest
             
             const cleanedData = balances.map(({ id, token_id, token_owner, token_symbol, token_decimal, token_supply, token_circulating, token_info, ...clean}) => clean)
             
