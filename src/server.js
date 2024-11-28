@@ -550,12 +550,40 @@ app.post('/xera/v1/api/users/user-tasks/all-task',authenticateToken, async (req,
             .reduce((latest, current) => {
                 return new Date(current.xera_completed_date) > new Date(latest.xera_completed_date) ? current : latest;
             });
+            const filterSubsTamago = transactions.filter(data => data.xera_task === "Subscribe - @MikeTamago");
+            const filterAlrock = transactions.filter(data => data.xera_task === "Subscribe - @ALROCK");
+            const followTamago = transactions.filter(data => data.xera_task === "Follow - @BRGYTamago");
+            const followAlrock = transactions.filter(data => data.xera_task === "Follow - @ALrOck14");
             
             let alltask = {};
 
             if (filterTelegram.length > 0) {
                 filterTelegram.forEach(item => {
                     alltask.telegramtask = item.xera_status;
+                });
+            }
+
+            if (filterSubsTamago.length > 0) {
+                filterSubsTamago.forEach(item => {
+                    alltask.subsTamago = item.xera_status;
+                });
+            }
+
+            if (filterAlrock.length > 0) {
+                filterAlrock.forEach(item => {
+                    alltask.subsalrock = item.xera_status;
+                });
+            }
+
+            if (followTamago.length > 0) {
+                followTamago.forEach(item => {
+                    alltask.followTamago = item.xera_status;
+                });
+            }
+
+            if (followAlrock.length > 0) {
+                followAlrock.forEach(item => {
+                    alltask.followalrock = item.xera_status;
                 });
             }
 
@@ -586,6 +614,8 @@ app.post('/xera/v1/api/users/user-tasks/all-task',authenticateToken, async (req,
                     alltask.solWallet = "true";
                 }
             }
+
+            
 
             return res.status(200).json({ success: true, data: alltask, claimData: filterTXERA.xera_completed_date})
         } else {
