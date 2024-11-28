@@ -254,7 +254,7 @@ app.post("/xera/v1/api/user/register",authenticateAPIToken, async (req,res) => {
       }
 })
 
-app.post('/xera/v1/api/user/login-basic',authenticateAPIToken,Loginlimiter, async (req, res) => {
+app.post('/xera/v1/api/user/login-basic',authenticateAPIToken, async (req, res) => {
     const { username, password } = req.body;
 
     if (!username || !password) {
@@ -307,7 +307,7 @@ app.post('/xera/v1/api/user/login-basic',authenticateAPIToken,Loginlimiter, asyn
     }
 })
 
-app.post('/xera/v1/api/user/login-prKey',authenticateAPIToken,Loginlimiter, async (req, res) => {
+app.post('/xera/v1/api/user/login-prKey',authenticateAPIToken, async (req, res) => {
     const { privateKey } = req.body;
     
     
@@ -343,7 +343,7 @@ app.post('/xera/v1/api/user/login-prKey',authenticateAPIToken,Loginlimiter, asyn
     }
 })
 
-app.post('/xera/v1/api/user/login-phrase',authenticateAPIToken, Loginlimiter, async (req, res) => {
+app.post('/xera/v1/api/user/login-phrase',authenticateAPIToken, async (req, res) => {
     const { seedPhrase } = req.body;
 
     if (!seedPhrase) {
@@ -786,6 +786,7 @@ app.get('/xera/v1/api/token/faucet-transaction', authenticateAPIToken, async (re
         return res.status(500).json({ success: false, message: "request error", error: error})
     }
 })
+
 app.listen(port, () => {
     console.log(`Server is running on http://localhost:${port}`);
 });
