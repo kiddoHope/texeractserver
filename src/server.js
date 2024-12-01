@@ -14,7 +14,7 @@ const axios = require('axios')
 
 app.use(bodyParser.json());
 
-const allowedOrigins = ['https://texeract.network', 'http://localhost:3000', 'http://localhost:3001'];
+const allowedOrigins = ['https://texeract.network', 'http://localhost:3000', 'http://localhost:3001', 'https://texeract-network-beta.vercel.app'];
 
 app.use(cors({
   origin: (origin, callback) => {
@@ -147,6 +147,10 @@ const db = mysql.createPool({
 function generateRandomString(length) {
     return crypto.randomBytes(length).toString('hex').slice(0, length);
 }
+
+// const apitokn = "xeraAPI-"+generateRandomString(10)+"-"+generateRandomString(20)
+// console.log(apitokn);
+
 
 async function testConnection() {
     try {
