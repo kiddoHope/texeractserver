@@ -560,9 +560,36 @@ app.post('/xera/v1/api/users/user-tasks/all-task',authenticateToken, async (req,
             const followAlrock = transactions.filter(data => data.xera_task === "Follow - @ALrOck14");
             const filterSubsCryp = transactions.filter(data => data.xera_task === "Subscribe - @CrypDropPh")
             const filterSubsKim = transactions.filter(data => data.xera_task === "Subscribe - @kimporsha11")
+            const filterFacebook = transactions.filter(data => data.xera_task === "Facebook Task")
+            const filterTelegram2 = transactions.filter(data => data.xera_task === "Telegram 2 Task")
+            const filterTiktok = transactions.filter(data => data.xera_task === "TikTok Task")
+            const ffilterBluesky = transactions.filter(data => data.xera_task === "Bluesky Task")
             
             let alltask = {};
 
+            if (filterFacebook.length > 0) {
+                filterFacebook.forEach(item => {
+                    alltask.facebooktask = item.xera_status;
+                });
+            }
+            
+            if (filterTelegram2.length > 0) {
+                filterTelegram2.forEach(item => {
+                    alltask.telegramtask2 = item.xera_status;
+                });
+            }
+            
+            if (filterTiktok.length > 0) {
+                filterTiktok.forEach(item => {
+                    alltask.tiktoktask = item.xera_status;
+                });
+            }
+
+            if (ffilterBluesky.length > 0) {
+                ffilterBluesky.forEach(item => {
+                    alltask.blueskytask = item.xera_status;
+                });
+            }
 
             if (filterSubsCryp.length > 0) {
                 filterSubsCryp.forEach(item => {
