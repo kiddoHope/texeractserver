@@ -522,17 +522,14 @@ app.post('/xera/v1/api/users/user-tasks/all-task',authenticateToken, async (req,
 
     try {
         const [transactions] = await db.query('SELECT * FROM xera_user_tasks WHERE BINARY username = ?',[user]);
+        
         const [connectedWallet] = await db.query('SELECT * FROM xera_user_accounts WHERE BINARY username = ?',[user]);
         
         if (transactions.length > 0) {
             const filterTelegram = transactions.filter(data => data.xera_task === "Telegram Task");
             const filterTwitter = transactions.filter(data => data.xera_task === "Twitter Task");
             const filterWalletConnect = transactions.filter(data => data.xera_task === "Wallet Connect Task");
-            const filterTXERA = transactions
-            .filter(data => data.xera_task === "TXERA Claim Task")
-            .reduce((latest, current) => {
-                return new Date(current.xera_completed_date) > new Date(latest.xera_completed_date) ? current : latest;
-            });
+            
             const filterSubsTamago = transactions.filter(data => data.xera_task === "Subscribe - @MikeTamago");
             const filterAlrock = transactions.filter(data => data.xera_task === "Subscribe - @ALROCK");
             const followTamago = transactions.filter(data => data.xera_task === "Follow - @BRGYTamago");
@@ -543,9 +540,17 @@ app.post('/xera/v1/api/users/user-tasks/all-task',authenticateToken, async (req,
             const filterTelegram2 = transactions.filter(data => data.xera_task === "Telegram 2 Task")
             const filterTiktok = transactions.filter(data => data.xera_task === "TikTok Task")
             const ffilterBluesky = transactions.filter(data => data.xera_task === "Bluesky Task")
-            
+            const filterTXERA = transactions.filter(data => data.xera_task === "TXERA Claim Task");
+
             let alltask = {};
 
+            if (filterTXERA.length > 0) {
+                const txeracount = filterTXERA.reduce((latest, current) => {
+                    return new Date(current.xera_completed_date) > new Date(latest.xera_completed_date) ? current : latest;
+                })
+                alltask.claimtask = txeracount.xera_status;
+            }
+            
             if (filterFacebook.length > 0) {
                 filterFacebook.forEach(item => {
                     alltask.facebooktask = item.xera_status;
@@ -624,9 +629,6 @@ app.post('/xera/v1/api/users/user-tasks/all-task',authenticateToken, async (req,
                 });
             }
 
-            if (filterTXERA) {
-                alltask.claimtask = filterTXERA.xera_status;
-            }
             if (connectedWallet.length > 0) {
                 const ethWallet = connectedWallet[0].eth_wallet
                 if (ethWallet) {
@@ -647,6 +649,8 @@ app.post('/xera/v1/api/users/user-tasks/all-task',authenticateToken, async (req,
             return res.status(404).json({ success:false, message : "no transaction found"})
         }
     } catch (error) {
+        console.log(error);
+        
         return res.status(500).json({ success: false, message: "request error", error: error})
     }
 })
