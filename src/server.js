@@ -388,13 +388,10 @@ app.post('/xera/v1/api/user/login-phrase',authenticateAPIToken, async (req, res)
     }
 })
 
-app.get('/xera/v1/api/users/users-list', authenticateAPIToken, async (req,res) => {
-    const authHeader = req.headers["authorization"];
-    const token = authHeader && authHeader.split(" ")[1];
-    const decode = jwtDecode(token)
-
+app.post('/xera/v1/api/users/users-list', async (req,res) => {
+    const { apikey } = req.body
     try {
-        const [checkModeration] = await db.query('SELECT * FROM xera_developer WHERE BINARY xera_wallet = ?', [decode.xera_wallet])
+        const [checkModeration] = await db.query('SELECT * FROM xera_developer WHERE BINARY xera_api = ?', [apikey])
         if (checkModeration.length > 0) {
             if (checkModeration[0].xera_moderation === "creator") {
                 const [users] = await db.query(`
@@ -418,13 +415,10 @@ app.get('/xera/v1/api/users/users-list', authenticateAPIToken, async (req,res) =
     }
 })
 
-app.get('/xera/v1/api/users/user-task/referrals', authenticateAPIToken, async (req,res) => {
-    const authHeader = req.headers["authorization"];
-    const token = authHeader && authHeader.split(" ")[1];
-    const decode = jwtDecode(token)
-
+app.post('/xera/v1/api/users/user-task/referrals', async (req,res) => {
+    const { apikey } = req.body
     try {
-        const [checkModeration] = await db.query('SELECT * FROM xera_developer WHERE BINARY xera_wallet = ?', [decode.xera_wallet])
+        const [checkModeration] = await db.query('SELECT * FROM xera_developer WHERE BINARY xera_api = ?', [apikey])
         if (checkModeration.length > 0) {
             if (checkModeration[0].xera_moderation === "creator") {
                 const [userstask] = await db.query(`
@@ -474,13 +468,10 @@ app.get('/xera/v1/api/users/user-task/referrals', authenticateAPIToken, async (r
     }
 })
 
-app.get('/xera/v1/api/users/user-tasks/ranking', authenticateAPIToken, async (req,res) => {
-    const authHeader = req.headers["authorization"];
-    const token = authHeader && authHeader.split(" ")[1];
-    const decode = jwtDecode(token)
-
+app.post('/xera/v1/api/users/user-tasks/ranking', async (req,res) => {
+    const { apikey } = req.body
     try {
-        const [checkModeration] = await db.query('SELECT * FROM xera_developer WHERE BINARY xera_wallet = ?', [decode.xera_wallet])
+        const [checkModeration] = await db.query('SELECT * FROM xera_developer WHERE BINARY xera_api = ?', [apikey])
         if (checkModeration.length > 0) {
             if (checkModeration[0].xera_moderation === "creator") {
                 const [userstask] = await db.query(` SELECT xera_user_accounts.username, xera_user_accounts.xera_wallet, xera_user_display.xera_nft_meta, xera_user_tasks.xera_task, xera_user_tasks.xera_points FROM xera_user_accounts INNER JOIN xera_user_tasks ON BINARY xera_user_accounts.username = BINARY xera_user_tasks.username INNER JOIN xera_user_display ON xera_user_accounts.xera_wallet = xera_user_display.xera_wallet `);
@@ -763,13 +754,10 @@ app.post('/xera/v1/api/user/following', authenticateToken, async (req,res) => {
     
 })
 
-app.get('/xera/v1/api/token/asset-tokens',authenticateAPIToken, async (req,res) => {
-    const authHeader = req.headers["authorization"];
-    const token = authHeader && authHeader.split(" ")[1];
-    const decode = jwtDecode(token)
-
+app.post('/xera/v1/api/token/asset-tokens', async (req,res) => {
+    const { apikey } = req.body
     try {
-        const [checkModeration] = await db.query('SELECT * FROM xera_developer WHERE BINARY xera_wallet = ?', [decode.xera_wallet])
+        const [checkModeration] = await db.query('SELECT * FROM xera_developer WHERE BINARY xera_api = ?', [apikey])
         if (checkModeration.length > 0) {
             if (checkModeration[0].xera_moderation === "creator") {
                 const [assetTokens] = await db.query(`SELECT * FROM xera_asset_token`);
@@ -792,13 +780,10 @@ app.get('/xera/v1/api/token/asset-tokens',authenticateAPIToken, async (req,res) 
     }
 })
 
-app.get('/xera/v1/api/token/faucet-transaction', authenticateAPIToken, async (req,res) => {
-    const authHeader = req.headers["authorization"];
-    const token = authHeader && authHeader.split(" ")[1];
-    const decode = jwtDecode(token)
-
+app.post('/xera/v1/api/token/faucet-transaction', async (req,res) => {
+    const { apikey } = req.body
     try {
-        const [checkModeration] = await db.query('SELECT * FROM xera_developer WHERE BINARY xera_wallet = ?', [decode.xera_wallet])
+        const [checkModeration] = await db.query('SELECT * FROM xera_developer WHERE BINARY xera_api = ?', [apikey])
         if (checkModeration.length > 0) {
             if (checkModeration[0].xera_moderation === "creator") {
                 const [assetTokens] = await db.query(`SELECT * FROM xera_network_transactions`);
