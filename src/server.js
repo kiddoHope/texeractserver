@@ -542,8 +542,8 @@ app.post('/xera/v1/api/users/user-tasks/all-task',authenticateToken, async (req,
     }
 
     try {
-        const [transactions] = await db.query('SELECT * FROM xera_user_tasks WHERE username = ?',[user]);
-        const [connectedWallet] = await db.query('SELECT * FROM xera_user_accounts WHERE username = ?',[user]);
+        const [transactions] = await db.query('SELECT * FROM xera_user_tasks WHERE BINARY username = ?',[user]);
+        const [connectedWallet] = await db.query('SELECT * FROM xera_user_accounts WHERE BINARY username = ?',[user]);
         
         if (transactions.length > 0) {
             const filterTelegram = transactions.filter(data => data.xera_task === "Telegram Task");
