@@ -436,7 +436,7 @@ app.get('/xera/v1/api/users/user-task/referrals', authenticateAPIToken, async (r
                         xera_user_tasks.xera_points
                     FROM xera_user_accounts
                     INNER JOIN xera_user_tasks 
-                    ON xera_user_accounts.username = xera_user_tasks.username COLLATE utf8mb4_unicode_ci
+                    ON BINARY xera_user_accounts.username = BINARY xera_user_tasks.username COLLATE utf8mb4_unicode_ci
                     INNER JOIN xera_user_display 
                     ON xera_user_accounts.xera_wallet = xera_user_display.xera_wallet COLLATE utf8mb4_unicode_ci
                 `);
@@ -483,19 +483,7 @@ app.get('/xera/v1/api/users/user-tasks/ranking', authenticateAPIToken, async (re
         const [checkModeration] = await db.query('SELECT * FROM xera_developer WHERE BINARY xera_wallet = ?', [decode.xera_wallet])
         if (checkModeration.length > 0) {
             if (checkModeration[0].xera_moderation === "creator") {
-                const [userstask] = await db.query(`
-                    SELECT 
-                        xera_user_accounts.username,
-                        xera_user_accounts.xera_wallet, 
-                        xera_user_display.xera_nft_meta,
-                        xera_user_tasks.xera_task,
-                        xera_user_tasks.xera_points
-                    FROM xera_user_accounts
-                    INNER JOIN xera_user_tasks 
-                    ON xera_user_accounts.username = xera_user_tasks.username COLLATE utf8mb4_unicode_ci
-                    INNER JOIN xera_user_display 
-                    ON xera_user_accounts.xera_wallet = xera_user_display.xera_wallet COLLATE utf8mb4_unicode_ci
-                `);
+                const [userstask] = await db.query(` SELECT xera_user_accounts.username, xera_user_accounts.xera_wallet, xera_user_display.xera_nft_meta, xera_user_tasks.xera_task, xera_user_tasks.xera_points FROM xera_user_accounts INNER JOIN xera_user_tasks ON BINARY xera_user_accounts.username = BINARY xera_user_tasks.username INNER JOIN xera_user_display ON xera_user_accounts.xera_wallet = xera_user_display.xera_wallet `);
                 
                 
                 if (userstask.length > 0) {
@@ -674,6 +662,7 @@ app.post('/xera/v1/api/users/user-tasks/all-task',authenticateToken, async (req,
 
 app.post('/xera/v1/api/user/transactions', authenticateToken, async (req,res) => {
     const {user} = req.body;
+    
     if (!user) {
         return res.status(403).json({ success: false, message: "invalid request"})
     }
