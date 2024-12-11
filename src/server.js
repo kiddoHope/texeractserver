@@ -807,6 +807,7 @@ app.post('/xera/v1/api/user/transactions', authenticateToken, async (req, res) =
     if (!user) {
         return res.status(403).json({ success: false, message: "Invalid request" });
     }
+    const page = 1
     const limit = 50
     try {
         const offset = (page - 1) * limit;
