@@ -183,8 +183,7 @@ app.post("/xera/v1/api/generate/access-token", async (req,res) => {
 
 app.post("/xera/v1/api/user/check-username", async (req,res) => {
     const {username} = req.body;
-    console.log(username);
-
+    
     if (!username) {
         return res.status(400).json({ success: false, message: "please complete all the fields"});
     }
@@ -192,7 +191,7 @@ app.post("/xera/v1/api/user/check-username", async (req,res) => {
     try {
         const [checkuser] = await db.query(`SELECT * FROM xera_user_accounts WHERE BINARY username = ?`,[username])
         if (checkuser.length > 0) {
-            return res.status(400).json({ success: false, message: 'Username already exists' });
+            return res.status(200).json({ success: false, message: 'Username already exists' });
         } else {
             return res.status(200).json({ success: true, message: 'Username is available' });
         }
