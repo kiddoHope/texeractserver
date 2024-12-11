@@ -501,6 +501,48 @@ app.post('/xera/v1/api/users/user-task/referrals', async (req, res) => {
     }
 });
 
+app.post('/xera/v1/api/users/total-points', async (req, res) => {
+    const { apikey } = req.body;
+    
+    if (!apikey) {
+        return res.status(400).json({ success: false, message: "No request found" });
+    }
+
+    try {
+        const [checkModeration] = await db.query('SELECT * FROM xera_developer WHERE BINARY xera_api = ?', [apikey]);
+        if (checkModeration.length > 0) {
+            if (checkModeration[0].xera_moderation === "creator") {
+                const [userstask] = await db.query(`
+                    SELECT 
+                        xera_user_accounts.username, 
+                        xera_user_tasks.xera_points 
+                    FROM xera_user_accounts 
+                    INNER JOIN xera_user_tasks 
+                    ON BINARY xera_user_accounts.username = BINARY xera_user_tasks.username
+                `);
+
+                if (userstask.length > 0) {
+                    let totalPoints = 0;
+
+                    userstask.forEach(({ xera_points }) => {
+                        totalPoints += Number(xera_points);
+                    });
+                    
+                    return res.status(200).json({ success: true, totalPoints });
+                } else {
+                    return res.status(404).json({ success: false, message: "No tasks found" });
+                }
+            } else {
+                return res.status(401).json({ success: false, message: "Unknown request" });
+            }
+        } else {
+            return res.status(401).json({ success: false, message: "Invalid request" });
+        }
+    } catch (error) {
+        return res.status(500).json({ success: false, message: "Request error", error: error });
+    }
+});
+
 app.post('/xera/v1/api/users/user-tasks/ranking', async (req, res) => {
     const { request } = req.body;
     
@@ -827,7 +869,6 @@ app.post('/xera/v1/api/user/transactions', authenticateToken, async (req, res) =
         return res.status(500).json({ success: false, message: "Request error", error: error });
     }
 });
-
 
 app.post('/xera/v1/api/user/balance', authenticateToken, async (req,res) => {
     const {user} = req.body;
