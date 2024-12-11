@@ -9,7 +9,7 @@ const bcrypt = require('bcrypt');
 const crypto = require('crypto');
 const rateLimit = require('express-rate-limit')
 const app = express();
-const port = 5000;
+const port = 5001;
 const axios = require('axios')
 
 app.use(bodyParser.json());
@@ -181,9 +181,29 @@ app.post("/xera/v1/api/generate/access-token", async (req,res) => {
     }
 })
 
+app.post("/xera/v1/api/user/check-username", async (req,res) => {
+    const {username} = req.body;
+    console.log(username);
+
+    if (!username) {
+        return res.status(400).json({ success: false, message: "please complete all the fields"});
+    }
+
+    try {
+        const [checkuser] = await db.query(`SELECT * FROM xera_user_accounts WHERE BINARY username = ?`,[username])
+        if (checkuser.length > 0) {
+            return res.status(400).json({ success: false, message: 'Username already exists' });
+        } else {
+            return res.status(200).json({ success: true, message: 'Username is available' });
+        }
+    } catch (error) {
+        res.status(500).json({ success: false, message: 'request error', error: error.message }); 
+    }
+})
+
 app.post("/xera/v1/api/user/register",authenticateAPIToken, async (req,res) => {
     const { username } = req.body;
-
+    
     if (!username) {
         return res.status(400).json({ success: false, message: "please complete all the fields"});
     }
@@ -415,10 +435,12 @@ app.post('/xera/v1/api/users/users-list', async (req,res) => {
     }
 })
 
-app.post('/xera/v1/api/users/user-task/referrals', async (req,res) => {
-    const { apikey } = req.body
+app.post('/xera/v1/api/users/user-task/referrals', async (req, res) => {
+    const { apikey, page = 1, limit = 50 } = req.body;
+    const offset = (page - 1) * limit;
+
     try {
-        const [checkModeration] = await db.query('SELECT * FROM xera_developer WHERE BINARY xera_api = ?', [apikey])
+        const [checkModeration] = await db.query('SELECT * FROM xera_developer WHERE BINARY xera_api = ?', [apikey]);
         if (checkModeration.length > 0) {
             if (checkModeration[0].xera_moderation === "creator") {
                 const [userstask] = await db.query(`
@@ -433,57 +455,59 @@ app.post('/xera/v1/api/users/user-task/referrals', async (req,res) => {
                     ON BINARY xera_user_accounts.username = BINARY xera_user_tasks.username COLLATE utf8mb4_unicode_ci
                     INNER JOIN xera_user_display 
                     ON xera_user_accounts.xera_wallet = xera_user_display.xera_wallet COLLATE utf8mb4_unicode_ci
-                `);
+                    LIMIT ?, ?
+                `, [offset, limit]);
                 
                 if (userstask.length > 0) {
-                    const referralFilter = userstask.filter(user => user.xera_task === "Referral Task")
+                    const referralFilter = userstask.filter(user => user.xera_task === "Referral Task");
                     const combinedArray = Object.values(
                         referralFilter.reduce((acc, item) => {
-                          const { username, xera_wallet, xera_nft_meta } = item;
-                          if (!acc[username]) {
-                            acc[username] = {
-                              username,
-                              xera_wallet, 
-                              xera_nft_meta, 
-                              count: 0,
-                            };
-                          }
-                          acc[username].count += 1;
-                          return acc;
+                            const { username, xera_wallet, xera_nft_meta } = item;
+                            if (!acc[username]) {
+                                acc[username] = {
+                                    username,
+                                    xera_wallet,
+                                    xera_nft_meta,
+                                    count: 0,
+                                };
+                            }
+                            acc[username].count += 1;
+                            return acc;
                         }, {})
-                      );
+                    );
                     const sortedData = combinedArray.sort((a, b) => b.count - a.count);
-                    return res.status(200).json({ success: true, data: sortedData})
+                    return res.status(200).json({ success: true, data: sortedData });
                 } else {
-                    return res.status(404).json({ success:false, message : "no tasks found"})
+                    return res.status(404).json({ success: false, message: "no tasks found" });
                 }
             } else {
-                return res.status(401).json({ success:false, message : "unknown request"})
+                return res.status(401).json({ success: false, message: "unknown request" });
             }
         } else {
-            return res.status(401).json({ success:false, message : "invalid request"})
+            return res.status(401).json({ success: false, message: "invalid request" });
         }
     } catch (error) {
-        return res.status(500).json({ success: false, message: "request error", error: error})
+        return res.status(500).json({ success: false, message: "request error", error: error });
     }
-})
+});
 
-app.post('/xera/v1/api/users/user-tasks/ranking', async (req,res) => {
-    const { apikey } = req.body
+app.post('/xera/v1/api/users/user-tasks/ranking', async (req, res) => {
+    const { apikey, page = 1, limit = 100 } = req.body;
+    const offset = (page - 1) * limit;
+
     try {
-        const [checkModeration] = await db.query('SELECT * FROM xera_developer WHERE BINARY xera_api = ?', [apikey])
+        const [checkModeration] = await db.query('SELECT * FROM xera_developer WHERE BINARY xera_api = ?', [apikey]);
         if (checkModeration.length > 0) {
             if (checkModeration[0].xera_moderation === "creator") {
-                const [userstask] = await db.query(` SELECT xera_user_accounts.username, xera_user_accounts.xera_wallet, xera_user_display.xera_nft_meta, xera_user_tasks.xera_task, xera_user_tasks.xera_points FROM xera_user_accounts INNER JOIN xera_user_tasks ON BINARY xera_user_accounts.username = BINARY xera_user_tasks.username INNER JOIN xera_user_display ON xera_user_accounts.xera_wallet = xera_user_display.xera_wallet `);
-                
+                const [userstask] = await db.query(`SELECT xera_user_accounts.username, xera_user_accounts.xera_wallet, xera_user_display.xera_nft_meta, xera_user_tasks.xera_task, xera_user_tasks.xera_points FROM xera_user_accounts INNER JOIN xera_user_tasks ON BINARY xera_user_accounts.username = BINARY xera_user_tasks.username INNER JOIN xera_user_display ON xera_user_accounts.xera_wallet = xera_user_display.xera_wallet LIMIT ?, ?`, [offset, limit]);
                 
                 if (userstask.length > 0) {
                     const result = {};
 
                     // Combine data for the same username
-                    userstask.forEach(({ username,xera_wallet, xera_task, xera_points }) => {
+                    userstask.forEach(({ username, xera_wallet, xera_task, xera_points }) => {
                         if (!result[username]) {
-                            result[username] = { username,xera_wallet, referralTaskCount: 0, totalPoints: 0 };
+                            result[username] = { username, xera_wallet, referralTaskCount: 0, totalPoints: 0 };
                         }
                         result[username].totalPoints += Number(xera_points);
                         if (xera_task === 'Referral Task') {
@@ -493,25 +517,25 @@ app.post('/xera/v1/api/users/user-tasks/ranking', async (req,res) => {
 
                     // Convert the result to an array and sort by totalPoints (descending)
                     const sortedData = Object.values(result)
-                    .sort((a, b) => b.totalPoints - a.totalPoints)
-                    .map((item, index) => ({ ...item, rank: index + 1 }));
+                        .sort((a, b) => b.totalPoints - a.totalPoints)
+                        .map((item, index) => ({ ...item, rank: index + 1 }));
 
-                    const filtereddata = sortedData.filter(xerapoints => Number(xerapoints.totalPoints) > 0)
+                    const filtereddata = sortedData.filter(xerapoints => Number(xerapoints.totalPoints) > 0);
                     
-                    return res.status(200).json({ success: true, data: filtereddata})
+                    return res.status(200).json({ success: true, data: filtereddata });
                 } else {
-                    return res.status(404).json({ success:false, message : "no tasks found"})
+                    return res.status(404).json({ success: false, message: "no tasks found" });
                 }
             } else {
-                return res.status(401).json({ success:false, message : "unknown request"})
+                return res.status(401).json({ success: false, message: "unknown request" });
             }
         } else {
-            return res.status(401).json({ success:false, message : "invalid request"})
+            return res.status(401).json({ success: false, message: "invalid request" });
         }
     } catch (error) {
-        return res.status(500).json({ success: false, message: "request error", error: error})
+        return res.status(500).json({ success: false, message: "request error", error: error });
     }
-})
+});
 
 app.post('/xera/v1/api/users/user-tasks/all-task',authenticateToken, async (req,res) => {
     const {user} = req.body;
@@ -655,6 +679,96 @@ app.post('/xera/v1/api/users/user-tasks/all-task',authenticateToken, async (req,
     }
 })
 
+app.post('/xera/v1/api/users/all-wallet', async (req,res) => {
+    const {apikey} = req.body; 
+    
+    try {
+        const [checkModeration] = await db.query('SELECT * FROM xera_developer WHERE BINARY xera_api = ?', [apikey]);
+        if (checkModeration.length > 0) {
+            if (checkModeration[0].xera_moderation === "creator") {
+                const [countWallet] = await db.query('SELECT * FROM xera_user_accounts')
+                if (countWallet.length > 0) {
+                    res.status(200).json({ success:true, message: "Successfully count all wallet", walletCount: countWallet.length})
+                }
+            } else {
+                return res.status(401).json({ success: false, message: "unknown request" });
+            } 
+        } else {
+            return res.status(401).json({ success: false, message: "invalid request" });
+        }
+    } catch (error) {
+        return res.status(500).json({ success: false, message: "request error", error: error });
+    }
+})
+
+app.post('/xera/v1/api/users/all-participant', async (req, res) => {
+    const { apikey } = req.body;
+    
+    try {
+        const [checkModeration] = await db.query('SELECT * FROM xera_developer WHERE BINARY xera_api = ?', [apikey]);
+        if (checkModeration.length > 0) {
+            if (checkModeration[0].xera_moderation === "creator") {
+                const [userParticipants] = await db.query(`
+                    SELECT DISTINCT xera_user_accounts.username
+                    FROM 
+                        xera_user_accounts 
+                    INNER JOIN 
+                        xera_user_tasks ON BINARY xera_user_accounts.username = BINARY xera_user_tasks.username 
+                `);
+
+                if (userParticipants.length > 0) {
+                    const uniqueParticipantCount = userParticipants.length;
+                    return res.status(200).json({ success: true, message: "Successfully retrieved data count", participantCount: uniqueParticipantCount });
+                } else {
+                    return res.status(404).json({ success: false, message: "no tasks found" });
+                }
+            } else {
+                return res.status(401).json({ success: false, message: "unknown request" });
+            }
+        } else {
+            return res.status(401).json({ success: false, message: "invalid request" });
+        }
+    } catch (error) {
+        return res.status(500).json({ success: false, message: "request error", error: error });
+    }
+});
+
+app.post('/xera/v1/api/user/current-rank', authenticateToken, async (req, res) => {
+    const { user } = req.body;
+    
+    if (!user) {
+        return res.status(403).json({ success: false, message: "Invalid request" });
+    }
+
+    try {
+        // Query to get the total points and rank the users
+        const [userRankings] = await db.query(`
+            SELECT username, SUM(xera_points) as totalPoints
+            FROM xera_user_tasks
+            GROUP BY username
+            ORDER BY totalPoints DESC
+        `);
+
+        // Find the specific user's rank
+        const userRank = userRankings.findIndex(rankUser => rankUser.username === user) + 1;
+        const userTotalPoints = userRankings.find(rankUser => rankUser.username === user)?.totalPoints;
+
+        if (userRank > 0 && userTotalPoints) {
+            return res.status(200).json({ 
+                success: true, 
+                message: "Successfully retrieved user rank", 
+                username: user, 
+                rank: userRank,
+                totalPoints: userTotalPoints 
+            });
+        } else {
+            return res.status(404).json({ success: false, message: "User not found" });
+        }
+    } catch (error) {
+        return res.status(500).json({ success: false, message: "Request error", error: error });
+    }
+});
+
 app.post('/xera/v1/api/user/transactions', authenticateToken, async (req,res) => {
     const {user} = req.body;
     
@@ -712,8 +826,6 @@ app.post('/xera/v1/api/user/balance', authenticateToken, async (req,res) => {
         
                 return { ...token, totalBalance };
             });
-            console.log(balances);
-
 
             // npx update-browserslist-db@latest
             
@@ -784,32 +896,35 @@ app.post('/xera/v1/api/token/asset-tokens', async (req,res) => {
     }
 })
 
-app.post('/xera/v1/api/token/faucet-transaction', async (req,res) => {
-    const { apikey } = req.body
+app.post('/xera/v1/api/token/faucet-transaction', async (req, res) => {
+    const { apikey, page = 1, limit = 100 } = req.body;
+    const offset = (page - 1) * limit;
+
     try {
-        const [checkModeration] = await db.query('SELECT * FROM xera_developer WHERE BINARY xera_api = ?', [apikey])
+        const [checkModeration] = await db.query('SELECT * FROM xera_developer WHERE BINARY xera_api = ?', [apikey]);
         if (checkModeration.length > 0) {
             if (checkModeration[0].xera_moderation === "creator") {
-                const [assetTokens] = await db.query(`SELECT * FROM xera_network_transactions`);
+                const [assetTokens] = await db.query(`SELECT * FROM xera_network_transactions LIMIT ?, ?`, [offset, limit]);
                 
                 if (assetTokens.length > 0) {
-                    const sorted = assetTokens.sort((a,b) => b.id - a.id)
+                    const sorted = assetTokens.sort((a, b) => b.id - a.id);
                     
-                    const cleanedData = sorted.map(({id, transaction_origin, sender_address, tansaction_command, transaction_token, transaction_token_id, transaction_validator, transaction_date,  ...clean}) => clean)
-                    return res.status(200).json({ success: true, data: cleanedData})
+                    const cleanedData = sorted.map(({ id, transaction_origin, sender_address, transaction_command, transaction_token, transaction_token_id, transaction_validator, transaction_date, ...clean }) => clean);
+                    return res.status(200).json({ success: true, data: cleanedData });
                 } else {
-                    return res.status(404).json({ success:false, message : "no tokens found"})
+                    return res.status(404).json({ success: false, message: "no tokens found" });
                 }
             } else {
-                return res.status(401).json({ success:false, message : "unknown request"})
+                return res.status(401).json({ success: false, message: "unknown request" });
             }
         } else {
-            return res.status(401).json({ success:false, message : "invalid request"})
+            return res.status(401).json({ success: false, message: "invalid request" });
         }
     } catch (error) {
-        return res.status(500).json({ success: false, message: "request error", error: error})
+        return res.status(500).json({ success: false, message: "request error", error: error });
     }
-})
+});
+
 
 app.listen(port, () => {
     console.log(`Server is running on http://localhost:${port}`);
