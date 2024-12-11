@@ -437,14 +437,13 @@ app.post('/xera/v1/api/users/users-list', async (req,res) => {
 
 app.post('/xera/v1/api/users/user-task/referrals', async (req, res) => {
     const { request } = req.body;
-
+    
     if (!request) {
         res.status(400).json({ success: false, message: "no request found"})
     }
     const apikey = request.api
     const limit = request.limit
-    const offset = (request.page - 1) * request.limit;
-
+    const page = request.page
     try {
         const [checkModeration] = await db.query('SELECT * FROM xera_developer WHERE BINARY xera_api = ?', [apikey]);
         if (checkModeration.length > 0) {
@@ -461,8 +460,7 @@ app.post('/xera/v1/api/users/user-task/referrals', async (req, res) => {
                     ON BINARY xera_user_accounts.username = BINARY xera_user_tasks.username COLLATE utf8mb4_unicode_ci
                     INNER JOIN xera_user_display 
                     ON xera_user_accounts.xera_wallet = xera_user_display.xera_wallet COLLATE utf8mb4_unicode_ci
-                    LIMIT ?, ?
-                `, [offset, limit]);
+                `);
                 
                 if (userstask.length > 0) {
                     const referralFilter = userstask.filter(user => user.xera_task === "Referral Task");
@@ -472,8 +470,8 @@ app.post('/xera/v1/api/users/user-task/referrals', async (req, res) => {
                             if (!acc[username]) {
                                 acc[username] = {
                                     username,
-                                    xera_wallet,
-                                    xera_nft_meta,
+                                    xera_wallet, 
+                                    xera_nft_meta, 
                                     count: 0,
                                 };
                             }
@@ -482,37 +480,54 @@ app.post('/xera/v1/api/users/user-task/referrals', async (req, res) => {
                         }, {})
                     );
                     const sortedData = combinedArray.sort((a, b) => b.count - a.count);
-                    return res.status(200).json({ success: true, data: sortedData });
+                    
+                    // Pagination logic
+                    const startIndex = (page - 1) * limit;
+                    const endIndex = page * limit;
+                    const paginatedData = sortedData.slice(startIndex, endIndex);
+                    
+                    return res.status(200).json({ success: true, data: paginatedData });
                 } else {
-                    return res.status(404).json({ success: false, message: "no tasks found" });
+                    return res.status(404).json({ success: false, message: "No tasks found" });
                 }
             } else {
-                return res.status(401).json({ success: false, message: "unknown request" });
+                return res.status(401).json({ success: false, message: "Unknown request" });
             }
         } else {
-            return res.status(401).json({ success: false, message: "invalid request" });
+            return res.status(401).json({ success: false, message: "Invalid request" });
         }
     } catch (error) {
-        return res.status(500).json({ success: false, message: "request error", error: error });
+        return res.status(500).json({ success: false, message: "Request error", error: error });
     }
 });
 
 app.post('/xera/v1/api/users/user-tasks/ranking', async (req, res) => {
     const { request } = req.body;
-
+    
     if (!request) {
         res.status(400).json({ success: false, message: "no request found"})
     }
     const apikey = request.api
     const limit = request.limit
-    const offset = (request.page - 1) * request.limit;
-
+    const page = request.page
     try {
         const [checkModeration] = await db.query('SELECT * FROM xera_developer WHERE BINARY xera_api = ?', [apikey]);
         if (checkModeration.length > 0) {
             if (checkModeration[0].xera_moderation === "creator") {
-                const [userstask] = await db.query(`SELECT xera_user_accounts.username, xera_user_accounts.xera_wallet, xera_user_display.xera_nft_meta, xera_user_tasks.xera_task, xera_user_tasks.xera_points FROM xera_user_accounts INNER JOIN xera_user_tasks ON BINARY xera_user_accounts.username = BINARY xera_user_tasks.username INNER JOIN xera_user_display ON xera_user_accounts.xera_wallet = xera_user_display.xera_wallet LIMIT ?, ?`, [offset, limit]);
-                
+                const [userstask] = await db.query(`
+                    SELECT 
+                        xera_user_accounts.username, 
+                        xera_user_accounts.xera_wallet, 
+                        xera_user_display.xera_nft_meta, 
+                        xera_user_tasks.xera_task, 
+                        xera_user_tasks.xera_points 
+                    FROM xera_user_accounts 
+                    INNER JOIN xera_user_tasks 
+                    ON BINARY xera_user_accounts.username = BINARY xera_user_tasks.username 
+                    INNER JOIN xera_user_display 
+                    ON xera_user_accounts.xera_wallet = xera_user_display.xera_wallet
+                `);
+
                 if (userstask.length > 0) {
                     const result = {};
 
@@ -533,19 +548,24 @@ app.post('/xera/v1/api/users/user-tasks/ranking', async (req, res) => {
                         .map((item, index) => ({ ...item, rank: index + 1 }));
 
                     const filtereddata = sortedData.filter(xerapoints => Number(xerapoints.totalPoints) > 0);
+
+                    // Pagination logic
+                    const startIndex = (page - 1) * limit;
+                    const endIndex = page * limit;
+                    const paginatedData = filtereddata.slice(startIndex, endIndex);
                     
-                    return res.status(200).json({ success: true, data: filtereddata });
+                    return res.status(200).json({ success: true, data: paginatedData });
                 } else {
-                    return res.status(404).json({ success: false, message: "no tasks found" });
+                    return res.status(404).json({ success: false, message: "No tasks found" });
                 }
             } else {
-                return res.status(401).json({ success: false, message: "unknown request" });
+                return res.status(401).json({ success: false, message: "Unknown request" });
             }
         } else {
-            return res.status(401).json({ success: false, message: "invalid request" });
+            return res.status(401).json({ success: false, message: "Invalid request" });
         }
     } catch (error) {
-        return res.status(500).json({ success: false, message: "request error", error: error });
+        return res.status(500).json({ success: false, message: "Request error", error: error });
     }
 });
 
@@ -783,29 +803,30 @@ app.post('/xera/v1/api/user/current-rank', authenticateToken, async (req, res) =
 
 app.post('/xera/v1/api/user/transactions', authenticateToken, async (req, res) => {
     const { user } = req.body;
-    const limit = 50;
     
     if (!user) {
-        return res.status(403).json({ success: false, message: "invalid request" });
+        return res.status(403).json({ success: false, message: "Invalid request" });
     }
-
+    const limit = 50
     try {
+        const offset = (page - 1) * limit;
         const [transactions] = await db.query(
-            'SELECT * FROM xera_network_transactions WHERE receiver_address = ? OR sender_address = ? LIMIT ?', 
-            [user, user, limit]
+            'SELECT * FROM xera_network_transactions WHERE receiver_address = ? OR sender_address = ? ORDER BY transaction_date DESC LIMIT ? OFFSET ?', 
+            [user, user, limit, offset]
         );
 
         if (transactions.length > 0) {
             const cleanedData = transactions.map(({ id, transaction_origin, transaction_token_id, transaction_validator, transaction_date, ...clean }) => clean);
             return res.status(200).json({ success: true, data: cleanedData });
         } else {
-            return res.status(404).json({ success: false, message: "no transaction found" });
+            return res.status(404).json({ success: false, message: "No transactions found" });
         }
         
     } catch (error) {
-        return res.status(500).json({ success: false, message: "request error", error: error });
+        return res.status(500).json({ success: false, message: "Request error", error: error });
     }
 });
+
 
 app.post('/xera/v1/api/user/balance', authenticateToken, async (req,res) => {
     const {user} = req.body;
@@ -913,39 +934,42 @@ app.post('/xera/v1/api/token/asset-tokens', async (req,res) => {
 
 app.post('/xera/v1/api/token/faucet-transaction', async (req, res) => {
     const { request } = req.body;
-
+    
     if (!request) {
         res.status(400).json({ success: false, message: "no request found"})
     }
     const apikey = request.api
     const limit = request.limit
-    const offset = (request.page - 1) * request.limit;
-
+    const page = request.page
     try {
         const [checkModeration] = await db.query('SELECT * FROM xera_developer WHERE BINARY xera_api = ?', [apikey]);
         if (checkModeration.length > 0) {
             if (checkModeration[0].xera_moderation === "creator") {
-                const [assetTokens] = await db.query(`SELECT * FROM xera_network_transactions LIMIT ?, ?`, [offset, limit]);
-                
+                const [assetTokens] = await db.query('SELECT * FROM xera_network_transactions');
+
                 if (assetTokens.length > 0) {
                     const sorted = assetTokens.sort((a, b) => b.id - a.id);
-                    
-                    const cleanedData = sorted.map(({ id, transaction_origin, sender_address, transaction_command, transaction_token, transaction_token_id, transaction_validator, transaction_date, ...clean }) => clean);
-                    return res.status(200).json({ success: true, data: cleanedData });
+                    const cleanedData = sorted.map(({ id, transaction_origin, sender_address, tansaction_command, transaction_token, transaction_token_id, transaction_validator, transaction_date, ...clean }) => clean);
+
+                    // Pagination logic
+                    const startIndex = (page - 1) * limit;
+                    const endIndex = page * limit;
+                    const paginatedData = cleanedData.slice(startIndex, endIndex);
+
+                    return res.status(200).json({ success: true, data: paginatedData });
                 } else {
-                    return res.status(404).json({ success: false, message: "no tokens found" });
+                    return res.status(404).json({ success: false, message: "No tokens found" });
                 }
             } else {
-                return res.status(401).json({ success: false, message: "unknown request" });
+                return res.status(401).json({ success: false, message: "Unknown request" });
             }
         } else {
-            return res.status(401).json({ success: false, message: "invalid request" });
+            return res.status(401).json({ success: false, message: "Invalid request" });
         }
     } catch (error) {
-        return res.status(500).json({ success: false, message: "request error", error: error });
+        return res.status(500).json({ success: false, message: "Request error", error: error });
     }
 });
-
 
 app.listen(port, () => {
     console.log(`Server is running on http://localhost:${port}`);
