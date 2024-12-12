@@ -797,26 +797,29 @@ app.post('/xera/v1/api/users/all-participant', async (req, res) => {
     }
 });
 
-app.post('/xera/v1/api/user/current-rank', authenticateToken, async (req, res) => {
+app.post('/xera/v1/api/user/current-rank', async (req, res) => {
     const { user } = req.body;
+    console.log(user);
+    
     
     if (!user) {
         return res.status(403).json({ success: false, message: "Invalid request" });
     }
 
-    try {
-        // Query to get the total points and rank the users
-        const [userRankings] = await db.query(`
-            SELECT BINARY username, SUM(xera_points) as totalPoints
-            FROM xera_user_tasks
-            GROUP BY BINARY username
-            ORDER BY totalPoints DESC
+    try 
+        {const [userRankings] = await db.query(`
+            SELECT t.username, MAX(t.xera_wallet) AS xera_wallet, SUM(t.xera_points) AS total_points, 
+                SUM(CASE WHEN t.xera_task = 'Referral Task' THEN 1 ELSE 0 END) AS referral_task_count
+            FROM xera_user_tasks t
+            WHERE DATE(t.xera_completed_date) BETWEEN '2024-09-28' AND '2024-12-20'
+            GROUP BY BINARY t.username
+            ORDER BY total_points DESC
         `);
-
+        
         // Find the specific user's rank
         const userRank = userRankings.findIndex(rankUser => rankUser.username === user) + 1;
-        const userTotalPoints = userRankings.find(rankUser => rankUser.username === user)?.totalPoints;
-
+        const userTotalPoints = userRankings.find(rankUser => rankUser.username === user)?.total_points;
+        
         if (userRank > 0 && userTotalPoints) {
             return res.status(200).json({ 
                 success: true, 
@@ -828,8 +831,9 @@ app.post('/xera/v1/api/user/current-rank', authenticateToken, async (req, res) =
         } else {
             return res.status(404).json({ success: false, message: "User not found" });
         }
+        
     } catch (error) {
-        return res.status(500).json({ success: false, message: "Request error", error: error });
+        return res.status(500).json({ success: false, message: "Request error", error: error.message });
     }
 });
 
