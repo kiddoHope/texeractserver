@@ -511,21 +511,10 @@ app.post('/xera/v1/api/users/total-points', async (req, res) => {
         const [checkModeration] = await db.query('SELECT * FROM xera_developer WHERE BINARY xera_api = ?', [apikey]);
         if (checkModeration.length > 0) {
             if (checkModeration[0].xera_moderation === "creator") {
-                const [userstask] = await db.query(`
-                    SELECT 
-                        xera_user_accounts.username, 
-                        xera_user_tasks.xera_points 
-                    FROM xera_user_accounts 
-                    INNER JOIN xera_user_tasks 
-                    ON BINARY xera_user_accounts.username = BINARY xera_user_tasks.username
-                `);
-
+                const [userstask] = await db.query(`SELECT SUM(xera_points) AS total_points FROM xera_user_tasks`);
+                
                 if (userstask.length > 0) {
-                    let totalPoints = 0;
-
-                    userstask.forEach(({ xera_points }) => {
-                        totalPoints += Number(xera_points);
-                    });
+                    const totalPoints = userstask[0].total_points
                     
                     return res.status(200).json({ success: true, totalPoints });
                 } else {
@@ -759,9 +748,11 @@ app.post('/xera/v1/api/users/all-wallet', async (req,res) => {
         const [checkModeration] = await db.query('SELECT * FROM xera_developer WHERE BINARY xera_api = ?', [apikey]);
         if (checkModeration.length > 0) {
             if (checkModeration[0].xera_moderation === "creator") {
-                const [countWallet] = await db.query('SELECT * FROM xera_user_accounts')
+                const [countWallet] = await db.query('SELECT COUNT(*) AS user_count FROM xera_user_accounts')
+                
                 if (countWallet.length > 0) {
-                    res.status(200).json({ success:true, message: "Successfully count all wallet", walletCount: countWallet.length})
+                    const walletCount = countWallet[0].user_count
+                    res.status(200).json({ success:true, message: "Successfully count all wallet", walletCount: walletCount})
                 }
             } else {
                 return res.status(401).json({ success: false, message: "unknown request" });
@@ -816,9 +807,9 @@ app.post('/xera/v1/api/user/current-rank', authenticateToken, async (req, res) =
     try {
         // Query to get the total points and rank the users
         const [userRankings] = await db.query(`
-            SELECT username, SUM(xera_points) as totalPoints
+            SELECT BINARY username, SUM(xera_points) as totalPoints
             FROM xera_user_tasks
-            GROUP BY username
+            GROUP BY BINARY username
             ORDER BY totalPoints DESC
         `);
 
