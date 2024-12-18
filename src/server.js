@@ -8,10 +8,12 @@ require('dotenv').config();
 const bcrypt = require('bcrypt');
 const crypto = require('crypto');
 const rateLimit = require('express-rate-limit')
+const moment = require('moment');
 const app = express();
 const port = 5000;
-const axios = require('axios')
+const compression = require('compression');
 
+app.use(compression());
 app.use(bodyParser.json());
 
 const allowedOrigins = ['https://texeract.network', 'http://localhost:3000', 'http://localhost:3001', 'https://texeract-network-beta.vercel.app','https://tg-texeract-beta.vercel.app','https://texeractbot.xyz'];
@@ -47,6 +49,9 @@ app.use((req, res, next) => {
 const jwtSecret = process.env.MAIN_JWT_SECRET
 const jwtAPISecret = process.env.API_JWT_SECRET
 
+// 46.202.129.137
+// 2a02:4780:28:feaa::1
+
 const jwtDecode = (token) => {
   try {
     const base64Url = token.split('.')[1];
@@ -62,13 +67,18 @@ const jwtDecode = (token) => {
 };
 
 const limiter = rateLimit({
-  windowMs: 15 * 60 * 1000, 
-  max: 5, 
-  message: "Too many requests from this IP, please try again later."
-});
+    windowMs: 5 * 60 * 1000, 
+    max: 10,
+    handler: (req, res) => {
+      res.status(429).json({
+        success: false,
+        message: "Rate limit exceeded. Please try again in 5 minutes."
+      });
+    }
+  });
 
 const Loginlimiter = rateLimit({
-    windowMs: 15 * 60 * 1000, 
+    windowMs: 5 * 60 * 1000, 
     max: 5, 
     message: "Too many login attempts from this account, please try again later."
 });
@@ -127,22 +137,23 @@ const authenticateToken = (req, res, next) => {
     });
 };
 
-
-
-  
 // database
 const db = mysql.createPool({
-    //host: '2a02:4780:28:feaa::1',  // use this in production
-    host: process.env.DB_HOST,
-    user: process.env.DB_USER,           
-    password: process.env.DB_PASSWORD,            
-    database: process.env.DB_DATABASE,    
+    // host: '2a02:4780:28:feaa::1',  // use this in production
+    host: process.env.DB_HOST ,
+    user: process.env.DB_USER ,
+    password: process.env.DB_PASSWORD ,
+    database: process.env.DB_DATABASE ,
+    port: 3306,
     waitForConnections: true,
-    connectTimeout: 20000, 
-    port: 3306,               
+    connectTimeout: 20000,      
     connectionLimit: 10,  
     queueLimit: 0          
-  });
+});
+
+process.on('uncaughtException', function (err) {
+    console.log(err);
+});
 
 function generateRandomString(length) {
     return crypto.randomBytes(length).toString('hex').slice(0, length);
@@ -158,15 +169,44 @@ async function testConnection() {
         console.log('Database connection successful!');
         connection.release(); // Release the connection back to the pool
     } catch (error) {
-        console.error('Database connection failed:', error.message);
+        console.error('Database connection failed:', error);
     }
 }
 
 testConnection();
 
+// cache user
+const getUserFromCache = async (username) => {
+    let user = cache.get(username);
+    if (!user) {
+        const [dbUser] = await db.query("SELECT * FROM xera_user_accounts WHERE BINARY username = ?", [username]);
+        if (dbUser.length > 0) {
+            user = dbUser[0];
+            cache.set(username, user);
+        }
+    }
+    return user;
+};
+
+const getDevFromCache = async (api) => {
+    let dev = cache.get(api);
+    if (!dev) {
+        const [dbDev] = await db.query('SELECT * FROM xera_developer WHERE BINARY xera_api = ?', [api]);
+        if (dbDev.length > 0) {
+            dev = dbDev[0];
+            cache.set(api, dev);
+        }
+    }
+    return dev;
+};
+
 app.post("/xera/v1/api/generate/access-token", async (req,res) => {
     const {apikey} = req.body;
     
+    if (!apikey) {
+        return res.status(400).json({ success: false, message: "API key is required" });
+    }
+
     try {
         const [apikeyCheck] = await db.query("SELECT * FROM xera_developer WHERE BINARY xera_api = ?", [apikey]);
         if (apikeyCheck.length > 0) {
@@ -181,7 +221,7 @@ app.post("/xera/v1/api/generate/access-token", async (req,res) => {
     }
 })
 
-app.post("/xera/v1/api/user/check-username", async (req,res) => {
+app.post("/xera/v1/api/user/check-username", limiter ,async (req,res) => {
     const {username} = req.body;
     
     if (!username) {
@@ -189,95 +229,19 @@ app.post("/xera/v1/api/user/check-username", async (req,res) => {
     }
 
     try {
-        const [checkuser] = await db.query(`SELECT * FROM xera_user_accounts WHERE BINARY username = ?`,[username])
-        if (checkuser.length > 0) {
+        const user = await getUserFromCache(username) 
+        
+        if (user) {
             return res.status(200).json({ success: false, message: 'Username already exists' });
         } else {
             return res.status(200).json({ success: true, message: 'Username is available' });
         }
     } catch (error) {
-        res.status(500).json({ success: false, message: 'request error', error: error.message }); 
+        res.status(500).json({ success: false, message: 'request error' }); 
     }
 })
 
-app.post("/xera/v1/api/user/register",authenticateAPIToken, async (req,res) => {
-    const { username } = req.body;
-    
-    if (!username) {
-        return res.status(400).json({ success: false, message: "please complete all the fields"});
-    }
-
-    try {
-    
-        const customerID = 'skms_' + generateRandomString(10);
-        const { email, mobileno, username, password, referral,region } = req.body;
-    
-        let ref
-        
-        const usernameCheckSql = "SELECT * FROM sk_customer_credentials WHERE BINARY user_username = ?";
-        const [usernameCheckResults] = await db.query(usernameCheckSql, [username]);
-        if (usernameCheckResults.length > 0) {
-          return res.status(400).json({ success: false, message: 'Username already exists' });
-        }
-    
-        const emailCheckSql = "SELECT * FROM sk_customer_credentials WHERE BINARY user_email = ?";
-        const [emailCheckResults] = await db.query(emailCheckSql, [email]);
-        if (emailCheckResults.length > 0) {
-          return res.status(400).json({ success: false, message: 'Email already exists' });
-        }
-    
-        if (mobileno !== "no phone added") {
-          const mobileCheckSql = "SELECT * FROM sk_customer_credentials WHERE user_mobileno = ?";
-          const [mobileCheckResults] = await db.query(mobileCheckSql, [mobileno]);
-          if (mobileCheckResults.length > 0) {
-            return res.status(400).json({ success: false, message: 'Mobile number already exists' });
-          }
-        }
-    
-        
-        if (referral !== "") {
-          const referralCheckSql = "SELECT * FROM sk_participant_info WHERE user_participant_referral = ?";
-          const [referralCheckResults] = await db.query(referralCheckSql, [referral]);
-          if (referralCheckResults.length === 0) {
-            return res.status(400).json({ success: false, message: 'Referral Code Does not exist' });
-          }
-        }
-    
-        if (referral === '') {
-          ref = 'def'
-        } else (
-          ref = referral
-        )
-    
-        const hash_pass = await bcrypt.hash(password, 10);
-        const generatedSession = generateRandomString(10);
-        const userRole = 'customer';
-        const loginSession = 'sknms' + generatedSession + 'log';
-        const activity = 'active';
-    
-        const insertSql = "INSERT INTO sk_customer_credentials (user_customerID, user_mobileno, user_email, user_username, user_password, user_role, user_referral,user_region, user_activity, user_loginSession) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
-        const [insertResult] = await db.query(insertSql, [customerID, mobileno, email, username, hash_pass, userRole, ref, region, activity, loginSession]);
-    
-        if (insertResult.affectedRows > 0) {
-    
-          const insertInfo = "INSERT INTO sk_customer_info (user_customerID) VALUES (?)";
-          const [insertInfoResult] = await db.query(insertInfo, [customerID]);
-    
-          if (insertInfoResult.affectedRows > 0) {
-            const authToken = jwt.sign({ customerID }, jwtSecret, { expiresIn: "7d" });
-            return res.status(200).json({ success: true, message: 'Customer successfully registered', loginSession, token: authToken });
-          } else {
-            return res.status(500).json({ success: false, message: 'Error registering user' });
-          }
-        } else {
-          return res.status(500).json({ success: false, message: 'Error registering user' });
-        }
-      } catch (error) {
-        res.status(500).json({ success: false, message: 'request error', error: error.message }); // Return specific error message
-      }
-})
-
-app.post('/xera/v1/api/user/login-basic',authenticateAPIToken, async (req, res) => {
+app.post('/xera/v1/api/user/login-basic',authenticateAPIToken, Loginlimiter, async (req, res) => {
     const { username, password } = req.body;
 
     if (!username || !password) {
@@ -286,10 +250,9 @@ app.post('/xera/v1/api/user/login-basic',authenticateAPIToken, async (req, res) 
     
     try {
 
-        const [user] = await db.query("SELECT * FROM xera_user_accounts WHERE BINARY username = ?", [username]);
+        const userData = await getUserFromCache(username);
         
-        if (user.length > 0) {
-            const userData = user[0]
+        if (userData) {
             const dataPass = userData.password
             
             if (dataPass.slice(0,4) === "$2y$") {
@@ -303,7 +266,7 @@ app.post('/xera/v1/api/user/login-basic',authenticateAPIToken, async (req, res) 
                         myXeraAddress : userData.xera_wallet
                     }
                     const authToken = jwt.sign({ xeraJWT }, jwtSecret, { expiresIn: "2d" });
-                    return res.status(200).json({ success: true, message: `${user[0].username} Successfully Login`, authToken: authToken})
+                    return res.status(200).json({ success: true, message: `${userData.username} Successfully Login`, authToken: authToken})
                 } else {
                     return res.status(401).json({ success: false, message: 'Wrong password' });
                 }
@@ -316,7 +279,7 @@ app.post('/xera/v1/api/user/login-basic',authenticateAPIToken, async (req, res) 
                         myXeraAddress : userData.xera_wallet
                     }
                     const authToken = jwt.sign({ xeraJWT }, jwtSecret, { expiresIn: "2d" });
-                    return res.status(200).json({ success: true, message: `${user[0].username} Successfully Login Basic Account`, authToken: authToken})
+                    return res.status(200).json({ success: true, message: `${userData.username} Successfully Login Basic Account`, authToken: authToken})
                 } else {
                     return res.status(401).json({ success: false, message: 'Wrong password' });
                 }
@@ -330,7 +293,7 @@ app.post('/xera/v1/api/user/login-basic',authenticateAPIToken, async (req, res) 
     }
 })
 
-app.post('/xera/v1/api/user/login-prKey',authenticateAPIToken, async (req, res) => {
+app.post('/xera/v1/api/user/login-prKey',authenticateAPIToken, Loginlimiter, async (req, res) => {
     const { privateKey } = req.body;
     
     
@@ -366,7 +329,7 @@ app.post('/xera/v1/api/user/login-prKey',authenticateAPIToken, async (req, res) 
     }
 })
 
-app.post('/xera/v1/api/user/login-phrase',authenticateAPIToken, async (req, res) => {
+app.post('/xera/v1/api/user/login-phrase',authenticateAPIToken, Loginlimiter, async (req, res) => {
     const { seedPhrase } = req.body;
 
     if (!seedPhrase) {
@@ -407,100 +370,101 @@ app.post('/xera/v1/api/user/login-phrase',authenticateAPIToken, async (req, res)
     }
 })
 
-app.post('/xera/v1/api/users/users-list', async (req,res) => {
-    const { apikey } = req.body
-    try {
-        const [checkModeration] = await db.query('SELECT * FROM xera_developer WHERE BINARY xera_api = ?', [apikey])
-        if (checkModeration.length > 0) {
-            if (checkModeration[0].xera_moderation === "creator") {
-                const [users] = await db.query(`
-                    SELECT 
-                    xera_user_display.xera_wallet,
-                    xera_user_accounts.username
-                    FROM xera_user_display
-                    INNER JOIN xera_user_accounts 
-                    ON xera_user_display.xera_wallet = xera_user_accounts.xera_wallet COLLATE utf8mb4_unicode_ci
-                `); 
+// app.post('/xera/v1/api/users/users-list', async (req,res) => {
+//     const { apikey } = req.body
+//     try {
+//         const checkModeration = await getDevFromCache(apikey)
+        
+//         if (checkModeration) {
+//             if (checkModeration.xera_moderation === "creator") {
+//                 const [users] = await db.query(`
+//                     SELECT 
+//                     xera_user_display.xera_wallet,
+//                     xera_user_accounts.username
+//                     FROM xera_user_display
+//                     INNER JOIN xera_user_accounts 
+//                     ON xera_user_display.xera_wallet = xera_user_accounts.xera_wallet COLLATE utf8mb4_unicode_ci
+//                 `); 
                 
-                return res.status(200).json({ success: true, data: users})
-            } else {
-                return res.status(401).json({ success:false, message : "unknown request"})
-            }
-        } else {
-            return res.status(401).json({ success:false, message : "invalid request"})
-        }
-    } catch (error) {
-        return res.status(500).json({ success: false, message: "request error", error: error})
-    }
-})
+//                 return res.status(200).json({ success: true, data: users})
+//             } else {
+//                 return res.status(401).json({ success:false, message : "unknown request"})
+//             }
+//         } else {
+//             return res.status(401).json({ success:false, message : "invalid request"})
+//         }
+//     } catch (error) {
+//         return res.status(500).json({ success: false, message: "request error", error: error})
+//     }
+// })
 
-app.post('/xera/v1/api/users/user-task/referrals', async (req, res) => {
-    const { request } = req.body;
+// app.post('/xera/v1/api/users/user-task/referrals', async (req, res) => {
+//     const { request } = req.body;
     
-    if (!request) {
-        res.status(400).json({ success: false, message: "no request found"})
-    }
-    const apikey = request.api
-    const limit = request.limit
-    const page = request.page
-    try {
-        const [checkModeration] = await db.query('SELECT * FROM xera_developer WHERE BINARY xera_api = ?', [apikey]);
-        if (checkModeration.length > 0) {
-            if (checkModeration[0].xera_moderation === "creator") {
-                const [userstask] = await db.query(`
-                    SELECT 
-                        xera_user_accounts.username,
-                        xera_user_accounts.xera_wallet, 
-                        xera_user_display.xera_nft_meta,
-                        xera_user_tasks.xera_task,
-                        xera_user_tasks.xera_points
-                    FROM xera_user_accounts
-                    INNER JOIN xera_user_tasks 
-                    ON BINARY xera_user_accounts.username = BINARY xera_user_tasks.username COLLATE utf8mb4_unicode_ci
-                    INNER JOIN xera_user_display 
-                    ON xera_user_accounts.xera_wallet = xera_user_display.xera_wallet COLLATE utf8mb4_unicode_ci
-                `);
+//     if (!request) {
+//         res.status(400).json({ success: false, message: "no request found"})
+//     }
+//     const apikey = request.api
+//     const limit = request.limit
+//     const page = request.page
+//     try {
+//         const [checkModeration] = await db.query('SELECT * FROM xera_developer WHERE BINARY xera_api = ?', [apikey]);
+//         if (checkModeration.length > 0) {
+//             if (checkModeration[0].xera_moderation === "creator") {
+//                 const [userstask] = await db.query(`
+//                     SELECT 
+//                         xera_user_accounts.username,
+//                         xera_user_accounts.xera_wallet, 
+//                         xera_user_display.xera_nft_meta,
+//                         xera_user_tasks.xera_task,
+//                         xera_user_tasks.xera_points
+//                     FROM xera_user_accounts
+//                     INNER JOIN xera_user_tasks 
+//                     ON BINARY xera_user_accounts.username = BINARY xera_user_tasks.username COLLATE utf8mb4_unicode_ci
+//                     INNER JOIN xera_user_display 
+//                     ON xera_user_accounts.xera_wallet = xera_user_display.xera_wallet COLLATE utf8mb4_unicode_ci
+//                 `);
                 
-                if (userstask.length > 0) {
-                    const referralFilter = userstask.filter(user => user.xera_task === "Referral Task");
-                    const combinedArray = Object.values(
-                        referralFilter.reduce((acc, item) => {
-                            const { username, xera_wallet, xera_nft_meta } = item;
-                            if (!acc[username]) {
-                                acc[username] = {
-                                    username,
-                                    xera_wallet, 
-                                    xera_nft_meta, 
-                                    count: 0,
-                                };
-                            }
-                            acc[username].count += 1;
-                            return acc;
-                        }, {})
-                    );
-                    const sortedData = combinedArray.sort((a, b) => b.count - a.count);
+//                 if (userstask.length > 0) {
+//                     const referralFilter = userstask.filter(user => user.xera_task === "Referral Task");
+//                     const combinedArray = Object.values(
+//                         referralFilter.reduce((acc, item) => {
+//                             const { username, xera_wallet, xera_nft_meta } = item;
+//                             if (!acc[username]) {
+//                                 acc[username] = {
+//                                     username,
+//                                     xera_wallet, 
+//                                     xera_nft_meta, 
+//                                     count: 0,
+//                                 };
+//                             }
+//                             acc[username].count += 1;
+//                             return acc;
+//                         }, {})
+//                     );
+//                     const sortedData = combinedArray.sort((a, b) => b.count - a.count);
                     
-                    // Pagination logic
-                    const startIndex = (page - 1) * limit;
-                    const endIndex = page * limit;
-                    const paginatedData = sortedData.slice(startIndex, endIndex);
+//                     // Pagination logic
+//                     const startIndex = (page - 1) * limit;
+//                     const endIndex = page * limit;
+//                     const paginatedData = sortedData.slice(startIndex, endIndex);
                     
-                    return res.status(200).json({ success: true, data: paginatedData });
-                } else {
-                    return res.status(404).json({ success: false, message: "No tasks found" });
-                }
-            } else {
-                return res.status(401).json({ success: false, message: "Unknown request" });
-            }
-        } else {
-            return res.status(401).json({ success: false, message: "Invalid request" });
-        }
-    } catch (error) {
-        return res.status(500).json({ success: false, message: "Request error", error: error });
-    }
-});
+//                     return res.status(200).json({ success: true, data: paginatedData });
+//                 } else {
+//                     return res.status(404).json({ success: false, message: "No tasks found" });
+//                 }
+//             } else {
+//                 return res.status(401).json({ success: false, message: "Unknown request" });
+//             }
+//         } else {
+//             return res.status(401).json({ success: false, message: "Invalid request" });
+//         }
+//     } catch (error) {
+//         return res.status(500).json({ success: false, message: "Request error", error: error });
+//     }
+// });
 
-app.post('/xera/v1/api/users/total-points', async (req, res) => {
+app.post('/xera/v1/api/users/total-points', limiter, async (req, res) => {
     const { apikey } = req.body;
     
     if (!apikey) {
@@ -508,9 +472,10 @@ app.post('/xera/v1/api/users/total-points', async (req, res) => {
     }
 
     try {
-        const [checkModeration] = await db.query('SELECT * FROM xera_developer WHERE BINARY xera_api = ?', [apikey]);
-        if (checkModeration.length > 0) {
-            if (checkModeration[0].xera_moderation === "creator") {
+        const checkModeration = await getDevFromCache(apikey)
+        
+        if (checkModeration) {
+            if (checkModeration.xera_moderation === "creator") {
                 const [userstask] = await db.query(`SELECT SUM(xera_points) AS total_points FROM xera_user_tasks`);
                 
                 if (userstask.length > 0) {
@@ -531,75 +496,75 @@ app.post('/xera/v1/api/users/total-points', async (req, res) => {
     }
 });
 
-app.post('/xera/v1/api/users/user-tasks/ranking', async (req, res) => {
-    const { request } = req.body;
+// app.post('/xera/v1/api/users/user-tasks/ranking', limiter, async (req, res) => {
+//     const { request } = req.body;
     
-    if (!request) {
-        res.status(400).json({ success: false, message: "no request found"})
-    }
-    const apikey = request.api
-    const limit = request.limit
-    const page = request.page
-    try {
-        const [checkModeration] = await db.query('SELECT * FROM xera_developer WHERE BINARY xera_api = ?', [apikey]);
-        if (checkModeration.length > 0) {
-            if (checkModeration[0].xera_moderation === "creator") {
-                const [userstask] = await db.query(`
-                    SELECT 
-                        xera_user_accounts.username, 
-                        xera_user_accounts.xera_wallet, 
-                        xera_user_display.xera_nft_meta, 
-                        xera_user_tasks.xera_task, 
-                        xera_user_tasks.xera_points 
-                    FROM xera_user_accounts 
-                    INNER JOIN xera_user_tasks 
-                    ON BINARY xera_user_accounts.username = BINARY xera_user_tasks.username 
-                    INNER JOIN xera_user_display 
-                    ON xera_user_accounts.xera_wallet = xera_user_display.xera_wallet
-                `);
+//     if (!request) {
+//         res.status(400).json({ success: false, message: "no request found"})
+//     }
+//     const apikey = request.api
+//     const limit = request.limit
+//     const page = request.page
+//     try {
+//         const checkModeration = await getDevFromCache(apikey)
+//         if (checkModeration) {
+//             if (checkModeration.xera_moderation === "creator") {
+//                 const [userstask] = await db.query(`
+//                     SELECT 
+//                         xera_user_accounts.username, 
+//                         xera_user_accounts.xera_wallet, 
+//                         xera_user_display.xera_nft_meta, 
+//                         xera_user_tasks.xera_task, 
+//                         xera_user_tasks.xera_points 
+//                     FROM xera_user_accounts 
+//                     INNER JOIN xera_user_tasks 
+//                     ON BINARY xera_user_accounts.username = BINARY xera_user_tasks.username 
+//                     INNER JOIN xera_user_display 
+//                     ON xera_user_accounts.xera_wallet = xera_user_display.xera_wallet
+//                 `);
 
-                if (userstask.length > 0) {
-                    const result = {};
+//                 if (userstask.length > 0) {
+//                     const result = {};
 
-                    // Combine data for the same username
-                    userstask.forEach(({ username, xera_wallet, xera_task, xera_points }) => {
-                        if (!result[username]) {
-                            result[username] = { username, xera_wallet, referralTaskCount: 0, totalPoints: 0 };
-                        }
-                        result[username].totalPoints += Number(xera_points);
-                        if (xera_task === 'Referral Task') {
-                            result[username].referralTaskCount += 1;
-                        }
-                    });
+//                     // Combine data for the same username
+//                     userstask.forEach(({ username, xera_wallet, xera_task, xera_points }) => {
+//                         if (!result[username]) {
+//                             result[username] = { username, xera_wallet, referralTaskCount: 0, totalPoints: 0 };
+//                         }
+//                         result[username].totalPoints += Number(xera_points);
+//                         if (xera_task === 'Referral Task') {
+//                             result[username].referralTaskCount += 1;
+//                         }
+//                     });
 
-                    // Convert the result to an array and sort by totalPoints (descending)
-                    const sortedData = Object.values(result)
-                        .sort((a, b) => b.totalPoints - a.totalPoints)
-                        .map((item, index) => ({ ...item, rank: index + 1 }));
+//                     // Convert the result to an array and sort by totalPoints (descending)
+//                     const sortedData = Object.values(result)
+//                         .sort((a, b) => b.totalPoints - a.totalPoints)
+//                         .map((item, index) => ({ ...item, rank: index + 1 }));
 
-                    const filtereddata = sortedData.filter(xerapoints => Number(xerapoints.totalPoints) > 0);
+//                     const filtereddata = sortedData.filter(xerapoints => Number(xerapoints.totalPoints) > 0);
 
-                    // Pagination logic
-                    const startIndex = (page - 1) * limit;
-                    const endIndex = page * limit;
-                    const paginatedData = filtereddata.slice(startIndex, endIndex);
+//                     // Pagination logic
+//                     const startIndex = (page - 1) * limit;
+//                     const endIndex = page * limit;
+//                     const paginatedData = filtereddata.slice(startIndex, endIndex);
                     
-                    return res.status(200).json({ success: true, data: paginatedData });
-                } else {
-                    return res.status(404).json({ success: false, message: "No tasks found" });
-                }
-            } else {
-                return res.status(401).json({ success: false, message: "Unknown request" });
-            }
-        } else {
-            return res.status(401).json({ success: false, message: "Invalid request" });
-        }
-    } catch (error) {
-        return res.status(500).json({ success: false, message: "Request error", error: error });
-    }
-});
+//                     return res.status(200).json({ success: true, data: paginatedData });
+//                 } else {
+//                     return res.status(404).json({ success: false, message: "No tasks found" });
+//                 }
+//             } else {
+//                 return res.status(401).json({ success: false, message: "Unknown request" });
+//             }
+//         } else {
+//             return res.status(401).json({ success: false, message: "Invalid request" });
+//         }
+//     } catch (error) {
+//         return res.status(500).json({ success: false, message: "Request error", error: error });
+//     }
+// });
 
-app.post('/xera/v1/api/users/user-tasks/all-task',authenticateToken, async (req,res) => {
+app.post('/xera/v1/api/user/tasks/all-task',authenticateToken, limiter, async (req,res) => {
     const {user} = req.body;
     
     if (!user) {
@@ -608,10 +573,9 @@ app.post('/xera/v1/api/users/user-tasks/all-task',authenticateToken, async (req,
 
     try {
         const [transactions] = await db.query('SELECT * FROM xera_user_tasks WHERE BINARY username = ?',[user]);
-        
         const [connectedWallet] = await db.query('SELECT * FROM xera_user_accounts WHERE BINARY username = ?',[user]);
         
-        if (transactions.length > 0) {
+        if (transactions) {
             const filterTelegram = transactions.filter(data => data.xera_task === "Telegram Task");
             const filterTwitter = transactions.filter(data => data.xera_task === "Twitter Task");
             const filterWalletConnect = transactions.filter(data => data.xera_task === "Wallet Connect Task");
@@ -735,19 +699,22 @@ app.post('/xera/v1/api/users/user-tasks/all-task',authenticateToken, async (req,
             return res.status(404).json({ success:false, message : "no transaction found"})
         }
     } catch (error) {
-        console.log(error);
-        
         return res.status(500).json({ success: false, message: "request error", error: error})
     }
 })
 
-app.post('/xera/v1/api/users/all-wallet', async (req,res) => {
+app.post('/xera/v1/api/users/all-wallet', limiter,async (req,res) => {
     const {apikey} = req.body; 
     
+    if (!apikey) {
+        return res.status(400).json({ success: false, message: "No request found" });
+    }
+
     try {
-        const [checkModeration] = await db.query('SELECT * FROM xera_developer WHERE BINARY xera_api = ?', [apikey]);
-        if (checkModeration.length > 0) {
-            if (checkModeration[0].xera_moderation === "creator") {
+        const checkModeration = await getDevFromCache(apikey)
+        
+        if (checkModeration) {
+            if (checkModeration.xera_moderation === "creator") {
                 const [countWallet] = await db.query('SELECT COUNT(*) AS user_count FROM xera_user_accounts')
                 
                 if (countWallet.length > 0) {
@@ -765,13 +732,18 @@ app.post('/xera/v1/api/users/all-wallet', async (req,res) => {
     }
 })
 
-app.post('/xera/v1/api/users/all-participant', async (req, res) => {
+app.post('/xera/v1/api/users/all-participant', limiter,async (req, res) => {
     const { apikey } = req.body;
-    
+
+    if (!apikey) {
+        return res.status(400).json({ success: false, message: "No request found" });
+    }
+
     try {
-        const [checkModeration] = await db.query('SELECT * FROM xera_developer WHERE BINARY xera_api = ?', [apikey]);
-        if (checkModeration.length > 0) {
-            if (checkModeration[0].xera_moderation === "creator") {
+        const checkModeration = await getDevFromCache(apikey)
+        
+        if (checkModeration) {
+            if (checkModeration.xera_moderation === "creator") {
                 const [userParticipants] = await db.query(`
                     SELECT DISTINCT xera_user_accounts.username
                     FROM 
@@ -797,11 +769,9 @@ app.post('/xera/v1/api/users/all-participant', async (req, res) => {
     }
 });
 
-app.post('/xera/v1/api/user/current-rank', async (req, res) => {
+app.post('/xera/v1/api/user/current-rank', authenticateToken, limiter, async (req, res) => {
     const { user } = req.body;
-    console.log(user);
-    
-    
+
     if (!user) {
         return res.status(403).json({ success: false, message: "Invalid request" });
     }
@@ -837,7 +807,7 @@ app.post('/xera/v1/api/user/current-rank', async (req, res) => {
     }
 });
 
-app.post('/xera/v1/api/user/transactions', authenticateToken, async (req, res) => {
+app.post('/xera/v1/api/user/transactions', authenticateToken, limiter,async (req, res) => {
     const { user } = req.body;
     
     if (!user) {
@@ -864,7 +834,7 @@ app.post('/xera/v1/api/user/transactions', authenticateToken, async (req, res) =
     }
 });
 
-app.post('/xera/v1/api/user/balance', authenticateToken, async (req,res) => {
+app.post('/xera/v1/api/user/balance', authenticateToken, limiter,async (req,res) => {
     const {user} = req.body;
     if (!user) {
         return res.status(403).json({ success: false, message: "invalid request"})
@@ -914,7 +884,7 @@ app.post('/xera/v1/api/user/balance', authenticateToken, async (req,res) => {
     
 })
 
-app.post('/xera/v1/api/user/following', authenticateToken, async (req,res) => {
+app.post('/xera/v1/api/user/following', authenticateToken, limiter, async (req,res) => {
     const {user} = req.body;
     if (!user) {
         return res.status(403).json({ success: false, message: "invalid request"})
@@ -942,12 +912,18 @@ app.post('/xera/v1/api/user/following', authenticateToken, async (req,res) => {
     
 })
 
-app.post('/xera/v1/api/token/asset-tokens', async (req,res) => {
+app.post('/xera/v1/api/token/asset-tokens', limiter, async(req,res) => {
     const { apikey } = req.body
+
+    if (!apikey) {
+        return res.status(400).json({ success: false, message: "No request found" });
+    }
+
     try {
-        const [checkModeration] = await db.query('SELECT * FROM xera_developer WHERE BINARY xera_api = ?', [apikey])
-        if (checkModeration.length > 0) {
-            if (checkModeration[0].xera_moderation === "creator") {
+        const checkModeration = await getDevFromCache(apikey)
+        
+        if (checkModeration) {
+            if (checkModeration.xera_moderation === "creator") {
                 const [assetTokens] = await db.query(`SELECT * FROM xera_asset_token`);
                 
                 if (assetTokens.length > 0) {
@@ -1006,6 +982,411 @@ app.post('/xera/v1/api/token/faucet-transaction', async (req, res) => {
         return res.status(500).json({ success: false, message: "Request error", error: error });
     }
 });
+
+app.post('/xera/v1/api/token/faucet-claim', authenticateToken, limiter, async (req, res) => {
+    const { username, txHash, sender, receiver, command, amount, token, tokenId } = req.body;
+    
+  
+    if (!username || !txHash || !sender || !receiver || !command || !amount || !token || !tokenId) {
+      return res.status(400).json({ success: false, message: 'Incomplete transaction data.' });
+    }
+  
+    const txLocalDate = new Date().toISOString().slice(0, 19).replace('T', ' ');
+    
+    try {
+  
+      // Step 1: Check for recent transactions
+      const [lastTransaction] = await db.query(
+        'SELECT transaction_date, transaction_hash FROM xera_network_transactions WHERE receiver_address = ? ORDER BY transaction_date DESC LIMIT 1',
+        [receiver]
+      );
+  
+      let transactionOrigin = 'Genesis Transaction';
+      if (lastTransaction.length > 0) {
+        const lastTxDate = new Date(lastTransaction[0].transaction_date).getTime()
+        const dateNow = (new Date()).getTime()
+        
+        const timeDiff = dateNow - lastTxDate;
+        
+  
+        // Block if the last transaction is within 12 hours
+        if (timeDiff < 43200000) { // 12 hours in milliseconds
+          const timeRemaining = new Date(timeDiff).toISOString().substr(11, 8);
+          
+          return res.status(400).json({success: false, message: `Claim again after ${timeRemaining}`,});
+        } else {
+            transactionOrigin = lastTransaction[0].transaction_hash;
+            // Step 2: Retrieve block details
+            const [blockData] = await db.query(
+                'SELECT current_block, block_validator FROM xera_network_blocks ORDER BY id DESC LIMIT 1'
+            );
+            
+            if (blockData.length > 0) {
+                const { current_block: txBlock, block_validator: validator } = blockData[0];
+                const [incrementBlockCount] = await db.query('UPDATE xera_network_blocks SET block_transactions = block_transactions + 1 WHERE current_block = ?',[txBlock]);
+                if (incrementBlockCount.affectedRows > 0) {
+                    // Step 3: Insert new transaction
+                    const [addTransaction] = await db.query(
+                        'INSERT INTO xera_network_transactions (transaction_block, transaction_origin, transaction_hash, sender_address, receiver_address, transaction_command, transaction_amount, transaction_token, transaction_token_id, transaction_validator, transaction_date) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+                        [txBlock, transactionOrigin, txHash, sender, receiver, command, amount, token, tokenId, validator, txLocalDate]
+                    );
+                    if (addTransaction.affectedRows > 0) {
+                        // Step 4: Update token circulation
+                        const [currentToken] = await db.query(
+                            'SELECT token_circulating FROM xera_asset_token WHERE token_symbol = ?',
+                            [token]
+                        );
+                        if (currentToken.length > 0) {
+                            const newCirculating = parseInt(currentToken[0].token_circulating) + amount;
+            
+                            const [updateTokenCirculating] = await db.query(
+                                'UPDATE xera_asset_token SET token_circulating = ? WHERE token_id = ?',
+                                [newCirculating, tokenId]
+                            );
+                            if (updateTokenCirculating.affectedRows > 0) {
+                                // Step 5: Record task completion
+                                const [recordTask] = await db.query(
+                                    'INSERT INTO xera_user_tasks (username, xera_wallet, xera_task, xera_status, xera_points) VALUES (?, ?, ?, ?, ?)',
+                                    [username, receiver, 'TXERA Claim Task', 'ok', '1250']
+                                );
+                                if (recordTask.affectedRows > 0) {
+                                    res.json({ success: true, message: '1 TXERA Claimed Successfully.' });
+                                } else {
+                                    res.status(400).json({success:false, message: "Error inserting record"})
+                                }
+                            } else {
+                                res.status(400).json({success:false, message: "Error updating token circulation"})
+                            }
+                        } else {
+                            res.status(400).json({success:false, message: "Token not found or mismatched token symbol."})
+                        }
+                    } else {
+                        res.status(400).json({success:false, message: "Error adding transaction"})
+                    }
+                } else {
+                res.status(400).json({ success: false, message: "Error increment count"})
+                }
+            } else {
+                res.status(400).json({ success:false, message: 'Block data not found. Transaction aborted.'});
+            }
+        }
+  
+      }
+  
+    //   // Step 2: Retrieve block details
+    //   const [blockData] = await db.query(
+    //     'SELECT current_block, block_validator FROM xera_network_blocks ORDER BY id DESC LIMIT 1'
+    //   );
+    //   console.log(blockData);
+      
+    //   if (blockData.length > 0) {
+
+    //   } else {
+    //     throw new Error('Block data not found. Transaction aborted.');
+    //   }
+  
+  
+    //   // Increment block transaction count
+    //   const [incrementBlockCount] = await db.query(
+    //     'UPDATE xera_network_blocks SET block_transactions = block_transactions + 1 WHERE current_block = ?',
+    //     [txBlock]
+    //   );
+
+    //   if (incrementBlockCount.affectedRows > 0) {
+    //     // Step 3: Insert new transaction
+    //     const [addTransaction] = await db.query(
+    //         'INSERT INTO xera_network_transactions (transaction_block, transaction_origin, transaction_hash, sender_address, receiver_address, transaction_command, transaction_amount, transaction_token, transaction_token_id, transaction_validator, transaction_date) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+    //         [txBlock, transactionOrigin, txHash, sender, receiver, command, amount, token, tokenId, validator, txLocalDate]
+    //     );
+    //     if (addTransaction.affectedRows > 0) {
+    //         // Step 4: Update token circulation
+    //         const [currentToken] = await db.query(
+    //             'SELECT token_circulating FROM xera_asset_token WHERE token_symbol = ?',
+    //             [token]
+    //         );
+    //         if (currentToken.length > 0) {
+    //             const newCirculating = currentToken[0].token_circulating + amount;
+  
+    //             const [updateTokenCirculating] = await db.query(
+    //                 'UPDATE xera_asset_token SET token_circulating = ? WHERE token_id = ?',
+    //                 [newCirculating, tokenId]
+    //             );
+    //             if (updateTokenCirculating.affectedRows > 0) {
+    //                 // Step 5: Record task completion
+    //                 const [recordTask] = await db.query(
+    //                     'INSERT INTO xera_user_tasks (username, xera_wallet, xera_task, xera_status, xera_points) VALUES (?, ?, ?, ?, ?)',
+    //                     [username, receiver, 'TXERA Claim Task', 'ok', '1250']
+    //                 );
+    //                 if (recordTask.affectedRows > 0) {
+    //                     res.json({ success: true, message: '1 TXERA Claimed Successfully.' });
+    //                 } else {
+    //                     res.status(400).json({success:false, message: "Error inserting record"})
+    //                 }
+    //             } else {
+    //                 res.status(400).json({success:false, message: "Error updating token circulation"})
+    //             }
+    //         } else {
+    //             res.status(400).json({success:false, message: "Token not found or mismatched token symbol."})
+    //         }
+    //     }
+    //   } else {
+    //     res.status(400).json({ success: false, message: "Error increment count"})
+    //   }
+    } catch (err) {
+      res.status(400).json({ success: false, message: err.message });
+    }
+});
+
+app.post('/xera/v1/api/token/users/full-stats', limiter, async (req, res) => {
+    const { apikey } = req.body;
+    
+    if (!apikey) {
+        return res.status(400).json({ success: false, message: "No request found" });
+    }
+
+    try {
+        const checkModeration = await getDevFromCache(apikey);
+        if (checkModeration) {
+            if (checkModeration.xera_moderation === "creator") {
+                const results = [];
+
+                for (let i = 0; i < 10; i++) {
+                    const date = moment().subtract(i, 'days').format('YYYY-MM-DD');
+                    const startDate = `${date} 00:00:00`;
+                    const endDate = `${date} 23:59:59`;
+
+                    // Get total points for the day
+                    const [pointsRows] = await db.query(
+                        `SELECT SUM(xera_points) AS totalPoints
+                         FROM xera_user_tasks
+                         WHERE xera_completed_date BETWEEN ? AND ?`,
+                        [startDate, endDate]
+                    );
+
+                    const totalPoints = pointsRows[0]?.totalPoints || 0;
+
+                    // Get daily participants
+                    const [usersRows] = await db.query(
+                        `SELECT COUNT(DISTINCT username) AS dailyParticipants
+                         FROM xera_user_tasks
+                         WHERE xera_completed_date BETWEEN ? AND ?`,
+                        [startDate, endDate]
+                    );
+
+                    const dailyParticipants = usersRows[0]?.dailyParticipants || 0;
+
+                    // Get new users from referral tasks
+                    const [referralRows] = await db.query(
+                        `SELECT COUNT(*) AS newUsers
+                         FROM xera_user_tasks
+                         WHERE xera_completed_date BETWEEN ? AND ?
+                           AND xera_task = 'Referral Task'`,
+                        [startDate, endDate]
+                    );
+
+                    const newUsers = referralRows[0]?.newUsers || 0;
+
+                    // Get TXERA claim tasks
+                    const [txeraClaimRows] = await db.query(
+                        `SELECT COUNT(*) AS txeraClaimTasks
+                         FROM xera_user_tasks
+                         WHERE xera_completed_date BETWEEN ? AND ?
+                           AND xera_task = 'TXERA Claim Task'`,
+                        [startDate, endDate]
+                    );
+
+                    const txeraClaimTasks = txeraClaimRows[0]?.txeraClaimTasks || 0;
+
+                    // Add the data for the current date to the results array
+                    results.push({
+                        date,
+                        totalPoints,
+                        dailyParticipants,
+                        newUsers,
+                        txeraClaimTasks,
+                    });
+                }
+
+                // Send the response after the loop finishes
+                return res.status(200).json({
+                    success: true,
+                    message: "Successfully retrieved users data",
+                    usersData: results,
+                });
+            } else {
+                return res.status(401).json({ success: false, message: "Unknown request" });
+            }
+        } else {
+            return res.status(401).json({ success: false, message: "Invalid request" });
+        }
+    } catch (error) {
+        return res.status(500).json({ success: false, message: "Request error", error: error.message });
+    }
+});
+
+app.post('/xera/v1/api/token/airdrop/phase1', limiter, async (req,res) => {
+    const { request } = req.body;
+
+    if (!request) {
+        return res.status(400).json({ success: false, message: "No request found" });
+    }
+
+    const apikey = request.api;
+    const limit = parseInt(request.limit, 10) || 10; 
+    const page = parseInt(request.page, 10) || 1;
+
+    if (!apikey) {
+        return res.status(403).json({ success: false, message: "Invalid or missing API key" });
+    }
+
+    const offset = (page - 1) * limit; 
+
+    try {
+        const checkModeration = await getDevFromCache(apikey);
+        if (checkModeration) {
+            if (checkModeration.xera_moderation === "creator") {
+                const [rows] = await db.query(`
+                    SELECT t.username, 
+                        MAX(t.xera_wallet) AS xera_wallet, 
+                        SUM(t.xera_points) AS total_points, 
+                        SUM(CASE WHEN t.xera_task = 'Referral Task' THEN 1 ELSE 0 END) AS referral_task_count
+                    FROM xera_user_tasks t
+                    WHERE DATE(t.xera_completed_date) BETWEEN '2024-09-28' AND '2024-12-20'
+                    GROUP BY t.username
+                    ORDER BY total_points DESC
+                    LIMIT ? OFFSET ?`, [limit, offset]);
+
+                // Query to get total number of records
+                const [totalRows] = await db.query(`
+                    SELECT COUNT(DISTINCT username) AS total
+                    FROM xera_user_tasks
+                    WHERE DATE(xera_completed_date) BETWEEN '2024-09-28' AND '2024-12-20'
+                `);
+
+                const total = totalRows[0]?.total || 0;
+                const totalPages = Math.ceil(total / limit);
+
+                res.status(200).json({
+                    success: true,
+                    data: rows,
+                    message: "data retrieved Successfully",
+                    pagination: {
+                        currentPage: page,
+                        totalPages,
+                        totalRecords: total,
+                        limit
+                    }
+                });
+            } else {
+                return res.status(401).json({ success: false, message: "Unknown request" });
+            }
+        } else {
+            return res.status(401).json({ success: false, message: "Invalid request" });
+        }
+    } catch (error) {
+        return res.status(500).json({ success: false, message: "Request error", error: error.message });
+    }
+
+    
+})
+
+app.post('/xera/v1/api/users/airdrop/participants', limiter, async (req,res) => {
+    const { apikey } = req.body;
+    
+    if (!apikey) {
+        return res.status(400).json({ success: false, message: "No request found" });
+    }
+
+    try {
+        const checkModeration = await getDevFromCache(apikey);
+        if (checkModeration) {
+            if (checkModeration.xera_moderation === "creator") {
+                const [userTask] = await db.query('SELECT COUNT(DISTINCT BINARY username) AS user_participants FROM xera_user_tasks')
+                if (userTask.length > 0) {
+                    const participantData = userTask[0]
+                    res.status(200).json({ success: true, message: "User tasks successfully retrieve", participantData})
+                } else {
+                    return res.status(400).json({ success: false, message: "No data retrieve" });
+                }
+            } else {
+                return res.status(401).json({ success: false, message: "Unknown request" });
+            }
+        } else {
+            return res.status(401).json({ success: false, message: "Invalid request" });
+        }
+    } catch (error) {
+        return res.status(500).json({ success: false, message: "Request error", error: error.message });
+    }
+})
+
+app.post('/xera/v1/api/users/airdrop/recent-participant', limiter, async (req,res) => {
+    const { apikey } = req.body;
+    
+    if (!apikey) {
+        return res.status(400).json({ success: false, message: "No request found" });
+    }
+
+    try {
+        const checkModeration = await getDevFromCache(apikey);
+        if (checkModeration) {
+            if (checkModeration.xera_moderation === "creator") {
+                const [recentParticipants] = await db.query(`
+                    SELECT COUNT(DISTINCT BINARY username) AS recent_participants
+                    FROM xera_user_tasks
+                    WHERE xera_completed_date BETWEEN CONCAT(CURDATE(), ' 00:00:00') AND CONCAT(CURDATE(), ' 23:59:59')
+                      AND xera_task != 'TXERA Claim Task'
+                `);
+        
+                if (recentParticipants.length > 0) {
+                    const participantsData = recentParticipants[0]
+                    res.status(200).json({ success: true, message: "User tasks successfully retrieve", participantsData})
+                } else {
+                    return res.status(400).json({ success: false, message: "No data retrieve" });
+                }
+            } else {
+                return res.status(401).json({ success: false, message: "Unknown request" });
+            }
+        } else {
+            return res.status(401).json({ success: false, message: "Invalid request" });
+        }
+    } catch (error) {
+        return res.status(500).json({ success: false, message: "Request error", error: error.message });
+    }
+})
+
+app.post('/xera/v1/api/users/node/transaction-history', limiter, async (req,res) => {
+    const { apikey } = req.body;
+    
+    if (!apikey) {
+        return res.status(400).json({ success: false, message: "No request found" });
+    }
+
+    try {
+        const checkModeration = await getDevFromCache(apikey);
+        if (checkModeration) {
+            if (checkModeration.xera_moderation === "creator") {
+                const currentDate = new Date().toISOString().split('T')[0];
+                const [transactionNode] = await db.query(`
+                    SELECT node_id, node_name, node_owner, node_points, node_txhash, node_txdate
+                    FROM xera_user_node
+                    WHERE node_txdate >= ?
+                `,[currentDate]);
+        
+                if (transactionNode.length > 0) {
+                    res.status(200).json({ success: true, message: "User tasks successfully retrieve", transaction : transactionNode})
+                } else {
+                    return res.status(400).json({ success: false, message: "No data retrieve" });
+                }
+            } else {
+                return res.status(401).json({ success: false, message: "Unknown request" });
+            }
+        } else {
+            return res.status(401).json({ success: false, message: "Invalid request" });
+        }
+    } catch (error) {
+        return res.status(500).json({ success: false, message: "Request error", error: error.message });
+    }
+})
 
 app.listen(port, () => {
     console.log(`Server is running on http://localhost:${port}`);
