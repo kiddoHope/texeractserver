@@ -6,6 +6,8 @@ require('dotenv').config();
 const moment = require('moment');
 const app = express();
 const port = 5002;
+const NodeCache = require('node-cache');
+const cache = new NodeCache({ stdTTL: 60 });
 const compression = require('compression');
 
 app.use(compression());
@@ -69,6 +71,18 @@ async function testConnection() {
 }
 
 testConnection();
+
+const getDevFromCache = async (api) => {
+    let dev = cache.get(api);
+    if (!dev) {
+        const [dbDev] = await db.query('SELECT * FROM xera_developer WHERE BINARY xera_api = ?', [api]);
+        if (dbDev.length > 0) {
+            dev = dbDev[0];
+            cache.set(api, dev);
+        }
+    }
+    return dev;
+};
 
 app.post('/xera/v1/api/users/airdrop/full-stats', async (req, res) => {
     const { apikey } = req.body;

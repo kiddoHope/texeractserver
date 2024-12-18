@@ -6,9 +6,6 @@ const cors = require("cors");
 const { body, validationResult } = require('express-validator');
 require('dotenv').config();
 const bcrypt = require('bcrypt');
-const crypto = require('crypto');
-const rateLimit = require('express-rate-limit')
-const moment = require('moment');
 const app = express();
 const port = 5001;
 const compression = require('compression');
@@ -95,33 +92,6 @@ const authenticateToken = (req, res, next) => {
     });
 };
 
-const authenticateAPIToken = (req, res, next) => {
-    const authHeader = req.headers["authorization"];
-    const token = authHeader && authHeader.split(" ")[1]; // Extract token from "Bearer <token>"
-
-    if (!token) {
-        return res.status(401).json({ success: false, message: "Authentication token is required" });
-    }
-
-    jwt.verify(token, jwtAPISecret, (err, decoded) => {
-        if (err) {
-            if (err.name === "TokenExpiredError") {
-                // Handle expired token case
-                return res.status(401).json({ success: false, message: "Token has expired" });
-            }
-            if (err.name === "JsonWebTokenError") {
-                // Handle invalid token case
-                return res.status(403).json({ success: false, message: "Invalid token" });
-            }
-            // Handle other errors
-            return res.status(403).json({ success: false, message: "Token verification failed" });
-        }
-        
-        req.user = decoded; // Attach decoded user information to the request object
-        next(); // Proceed to the next middleware or route handler
-    });
-};
-
 async function testConnection() {
     try {
         const connection = await db.getConnection();
@@ -146,26 +116,26 @@ const getUserFromCache = async (username) => {
     return user;
 };
 
-app.post("/xera/v1/api/generate/access-token", async (req,res) => {
-    const {apikey} = req.body;
+// app.post("/xera/v1/api/generate/access-token", async (req,res) => {
+//     const {apikey} = req.body;
     
-    if (!apikey) {
-        return res.status(400).json({ success: false, message: "API key is required" });
-    }
+//     if (!apikey) {
+//         return res.status(400).json({ success: false, message: "API key is required" });
+//     }
 
-    try {
-        const [apikeyCheck] = await db.query("SELECT * FROM xera_developer WHERE BINARY xera_api = ?", [apikey]);
-        if (apikeyCheck.length > 0) {
-            const xera_wallet = apikeyCheck[0].xera_wallet
-            const authToken = jwt.sign({ xera_wallet }, jwtAPISecret, { expiresIn: "1d" });
-            return res.status(200).json({ success: true, accessToken: authToken})
-        } else {
-            return res.status(401).json({ success: false, message: "Invalid api key"})
-        }
-    } catch (error) {
-        return res.status(500).json({ success: false, message: "request error"})
-    }
-})
+//     try {
+//         const [apikeyCheck] = await db.query("SELECT * FROM xera_developer WHERE BINARY xera_api = ?", [apikey]);
+//         if (apikeyCheck.length > 0) {
+//             const xera_wallet = apikeyCheck[0].xera_wallet
+//             const authToken = jwt.sign({ xera_wallet }, jwtAPISecret, { expiresIn: "1d" });
+//             return res.status(200).json({ success: true, accessToken: authToken})
+//         } else {
+//             return res.status(401).json({ success: false, message: "Invalid api key"})
+//         }
+//     } catch (error) {
+//         return res.status(500).json({ success: false, message: "request error"})
+//     }
+// })
 
 app.post("/xera/v1/api/user/check-username" ,async (req,res) => {
     const {username} = req.body;
@@ -187,7 +157,7 @@ app.post("/xera/v1/api/user/check-username" ,async (req,res) => {
     }
 })
 
-app.post('/xera/v1/api/user/login-basic',authenticateAPIToken, async (req, res) => {
+app.post('/xera/v1/api/user/login-basic', async (req, res) => {
     const { username, password } = req.body;
 
     if (!username || !password) {
@@ -239,7 +209,7 @@ app.post('/xera/v1/api/user/login-basic',authenticateAPIToken, async (req, res) 
     }
 })
 
-app.post('/xera/v1/api/user/login-prKey',authenticateAPIToken, async (req, res) => {
+app.post('/xera/v1/api/user/login-prKey', async (req, res) => {
     const { privateKey } = req.body;
     
     
@@ -275,7 +245,7 @@ app.post('/xera/v1/api/user/login-prKey',authenticateAPIToken, async (req, res) 
     }
 })
 
-app.post('/xera/v1/api/user/login-phrase',authenticateAPIToken, async (req, res) => {
+app.post('/xera/v1/api/user/login-phrase', async (req, res) => {
     const { seedPhrase } = req.body;
 
     if (!seedPhrase) {
@@ -443,8 +413,6 @@ app.post('/xera/v1/api/user/tasks/all-task', authenticateToken, async (req,res) 
                     alltask.solWallet = "true";
                 }
             }
-
-            
 
             return res.status(200).json({ success: true, data: alltask, claimData: filterTXERA.xera_completed_date})
         } else {
@@ -691,8 +659,6 @@ app.post('/xera/v1/api/token/faucet-claim', authenticateToken, async (req, res) 
       res.status(400).json({ success: false, message: err.message });
     }
 });
-
-
 
 app.listen(port, () => {
     console.log(`Server is running on http://localhost:${port}`);
