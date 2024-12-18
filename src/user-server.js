@@ -432,11 +432,11 @@ app.post('/xera/v1/api/user/current-rank', authenticateToken, async (req, res) =
 
     try 
         {const [userRankings] = await db.query(`
-            SELECT t.username, MAX(t.xera_wallet) AS xera_wallet, SUM(t.xera_points) AS total_points, 
+             SELECT t.username, MAX(t.xera_wallet) AS xera_wallet, SUM(t.xera_points) AS total_points, 
                 SUM(CASE WHEN t.xera_task = 'Referral Task' THEN 1 ELSE 0 END) AS referral_task_count
             FROM xera_user_tasks t
             WHERE DATE(t.xera_completed_date) BETWEEN '2024-09-28' AND '2024-12-20'
-            GROUP BY BINARY t.username
+            GROUP BY t.username
             ORDER BY total_points DESC
         `);
         
@@ -569,7 +569,7 @@ app.post('/xera/v1/api/user/following', authenticateToken, async (req,res) => {
 app.post('/xera/v1/api/user/faucet-claim', authenticateToken, async (req, res) => {
     const { username, txHash, sender, receiver, command, amount, token, tokenId } = req.body;
     
-  
+    
     if (!username || !txHash || !sender || !receiver || !command || !amount || !token || !tokenId) {
       return res.status(400).json({ success: false, message: 'Incomplete transaction data.' });
     }
@@ -607,18 +607,21 @@ app.post('/xera/v1/api/user/faucet-claim', authenticateToken, async (req, res) =
             if (blockData.length > 0) {
                 const { current_block: txBlock, block_validator: validator } = blockData[0];
                 const [incrementBlockCount] = await db.query('UPDATE xera_network_blocks SET block_transactions = block_transactions + 1 WHERE current_block = ?',[txBlock]);
+                
                 if (incrementBlockCount.affectedRows > 0) {
                     // Step 3: Insert new transaction
                     const [addTransaction] = await db.query(
-                        'INSERT INTO xera_network_transactions (transaction_block, transaction_origin, transaction_hash, sender_address, receiver_address, transaction_command, transaction_amount, transaction_token, transaction_token_id, transaction_validator, transaction_date) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
-                        [txBlock, transactionOrigin, txHash, sender, receiver, command, amount, token, tokenId, validator, txLocalDate]
+                        'INSERT INTO xera_network_transactions (transaction_block, transaction_origin, transaction_hash, sender_address, receiver_address, transaction_command, transaction_amount, transaction_token, transaction_token_id, transaction_validator, transaction_date, transaction_fee_amount,transaction_fee_token,transaction_fee_token_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+                        [txBlock, transactionOrigin, txHash, sender, receiver, command, amount, token, tokenId, validator, txLocalDate, 0.00, '', '']
                     );
+                    
                     if (addTransaction.affectedRows > 0) {
                         // Step 4: Update token circulation
                         const [currentToken] = await db.query(
                             'SELECT token_circulating FROM xera_asset_token WHERE token_symbol = ?',
                             [token]
                         );
+                        
                         if (currentToken.length > 0) {
                             const newCirculating = parseInt(currentToken[0].token_circulating) + amount;
             
@@ -626,14 +629,17 @@ app.post('/xera/v1/api/user/faucet-claim', authenticateToken, async (req, res) =
                                 'UPDATE xera_asset_token SET token_circulating = ? WHERE token_id = ?',
                                 [newCirculating, tokenId]
                             );
+                            
                             if (updateTokenCirculating.affectedRows > 0) {
                                 // Step 5: Record task completion
                                 const [recordTask] = await db.query(
-                                    'INSERT INTO xera_user_tasks (username, xera_wallet, xera_task, xera_status, xera_points) VALUES (?, ?, ?, ?, ?)',
-                                    [username, receiver, 'TXERA Claim Task', 'ok', '1250']
+                                    'INSERT INTO xera_user_tasks (username, xera_wallet, xera_task, xera_status, xera_points, xera_telegram_id, xera_twitter_username) VALUES (?, ?, ?, ?, ?, ?, ?)',
+                                    [username, receiver, 'TXERA Claim Task', 'ok', '1250', '', '']
                                 );
+                                
                                 if (recordTask.affectedRows > 0) {
-                                    res.json({ success: true, message: '1 TXERA Claimed Successfully.' });
+                                    res.status(200).json({ success: true, message: '1 TXERA Claimed Successfully.' });
+                                    
                                 } else {
                                     res.status(400).json({success:false, message: "Error inserting record"})
                                 }

@@ -89,7 +89,6 @@ const getDevFromCache = async (api) => {
     }
 };
 
-
 app.post('/xera/v1/api/users/airdrop/full-stats', async (req, res) => {
     const { apikey } = req.body;
     
