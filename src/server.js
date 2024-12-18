@@ -101,11 +101,6 @@ const getDevFromCache = async (api) => {
     return dev;
 };
 
-app.get('/xera', (req, res) => {
-    res.status(200).send('Xera API is running');
-});
-
-
 // app.post('/xera/v1/api/users/users-list', async (req,res) => {
 //     const { apikey } = req.body
 //     try {
