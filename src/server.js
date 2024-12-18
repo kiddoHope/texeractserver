@@ -3,12 +3,8 @@ const bodyParser = require("body-parser");
 const jwt = require("jsonwebtoken");
 const mysql = require('mysql2/promise')
 const cors = require("cors");
-const { body, validationResult } = require('express-validator');
 require('dotenv').config();
-const bcrypt = require('bcrypt');
-const crypto = require('crypto');
 const rateLimit = require('express-rate-limit')
-const moment = require('moment');
 const app = express();
 const port = 5000;
 const compression = require('compression');
@@ -54,19 +50,6 @@ const jwtAPISecret = process.env.API_JWT_SECRET
 // 46.202.129.137
 // 2a02:4780:28:feaa::1
 
-const jwtDecode = (token) => {
-  try {
-    const base64Url = token.split('.')[1];
-    const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
-    const jsonPayload = decodeURIComponent(atob(base64).split('').map(function(c) {
-      return '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2);
-    }).join(''));
-
-    return JSON.parse(jsonPayload);
-  } catch (error) {
-    throw new Error('Invalid token specified');
-  }
-};
 
 const limiter = rateLimit({
     windowMs: 5 * 60 * 1000, 
@@ -84,33 +67,6 @@ const Loginlimiter = rateLimit({
     max: 5, 
     message: "Too many login attempts from this account, please try again later."
 });
-
-const authenticateAPIToken = (req, res, next) => {
-    const authHeader = req.headers["authorization"];
-    const token = authHeader && authHeader.split(" ")[1]; // Extract token from "Bearer <token>"
-
-    if (!token) {
-        return res.status(401).json({ success: false, message: "Authentication token is required" });
-    }
-
-    jwt.verify(token, jwtAPISecret, (err, decoded) => {
-        if (err) {
-            if (err.name === "TokenExpiredError") {
-                // Handle expired token case
-                return res.status(401).json({ success: false, message: "Token has expired" });
-            }
-            if (err.name === "JsonWebTokenError") {
-                // Handle invalid token case
-                return res.status(403).json({ success: false, message: "Invalid token" });
-            }
-            // Handle other errors
-            return res.status(403).json({ success: false, message: "Token verification failed" });
-        }
-        
-        req.user = decoded; // Attach decoded user information to the request object
-        next(); // Proceed to the next middleware or route handler
-    });
-};
 
 const authenticateToken = (req, res, next) => {
     const authHeader = req.headers["authorization"];
@@ -156,11 +112,6 @@ const db = mysql.createPool({
 process.on('uncaughtException', function (err) {
     console.log(err);
 });
-
-function generateRandomString(length) {
-    return crypto.randomBytes(length).toString('hex').slice(0, length);
-}
-
 // const apitokn = "xeraAPI-"+generateRandomString(10)+"-"+generateRandomString(20)
 // console.log(apitokn);
 
@@ -176,19 +127,6 @@ async function testConnection() {
 }
 
 testConnection();
-
-// cache user
-const getUserFromCache = async (username) => {
-    let user = cache.get(username);
-    if (!user) {
-        const [dbUser] = await db.query("SELECT * FROM xera_user_accounts WHERE BINARY username = ?", [username]);
-        if (dbUser.length > 0) {
-            user = dbUser[0];
-            cache.set(username, user);
-        }
-    }
-    return user;
-};
 
 const getDevFromCache = async (api) => {
     let dev = cache.get(api);

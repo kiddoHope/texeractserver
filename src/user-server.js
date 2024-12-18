@@ -95,6 +95,33 @@ const authenticateToken = (req, res, next) => {
     });
 };
 
+const authenticateAPIToken = (req, res, next) => {
+    const authHeader = req.headers["authorization"];
+    const token = authHeader && authHeader.split(" ")[1]; // Extract token from "Bearer <token>"
+
+    if (!token) {
+        return res.status(401).json({ success: false, message: "Authentication token is required" });
+    }
+
+    jwt.verify(token, jwtAPISecret, (err, decoded) => {
+        if (err) {
+            if (err.name === "TokenExpiredError") {
+                // Handle expired token case
+                return res.status(401).json({ success: false, message: "Token has expired" });
+            }
+            if (err.name === "JsonWebTokenError") {
+                // Handle invalid token case
+                return res.status(403).json({ success: false, message: "Invalid token" });
+            }
+            // Handle other errors
+            return res.status(403).json({ success: false, message: "Token verification failed" });
+        }
+        
+        req.user = decoded; // Attach decoded user information to the request object
+        next(); // Proceed to the next middleware or route handler
+    });
+};
+
 async function testConnection() {
     try {
         const connection = await db.getConnection();
@@ -160,7 +187,7 @@ app.post("/xera/v1/api/user/check-username" ,async (req,res) => {
     }
 })
 
-app.post('/xera/v1/api/user/login-basic',authenticateToken, async (req, res) => {
+app.post('/xera/v1/api/user/login-basic',authenticateAPIToken, async (req, res) => {
     const { username, password } = req.body;
 
     if (!username || !password) {
@@ -212,7 +239,7 @@ app.post('/xera/v1/api/user/login-basic',authenticateToken, async (req, res) => 
     }
 })
 
-app.post('/xera/v1/api/user/login-prKey',authenticateToken, async (req, res) => {
+app.post('/xera/v1/api/user/login-prKey',authenticateAPIToken, async (req, res) => {
     const { privateKey } = req.body;
     
     
@@ -248,7 +275,7 @@ app.post('/xera/v1/api/user/login-prKey',authenticateToken, async (req, res) => 
     }
 })
 
-app.post('/xera/v1/api/user/login-phrase',authenticateToken, async (req, res) => {
+app.post('/xera/v1/api/user/login-phrase',authenticateAPIToken, async (req, res) => {
     const { seedPhrase } = req.body;
 
     if (!seedPhrase) {
