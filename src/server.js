@@ -221,7 +221,7 @@ app.post("/xera/v1/api/generate/access-token", async (req,res) => {
     }
 })
 
-app.post("/xera/v1/api/user/check-username", limiter ,async (req,res) => {
+app.post("/xera/v1/api/user/check-username" ,async (req,res) => {
     const {username} = req.body;
     
     if (!username) {
@@ -241,7 +241,7 @@ app.post("/xera/v1/api/user/check-username", limiter ,async (req,res) => {
     }
 })
 
-app.post('/xera/v1/api/user/login-basic',authenticateAPIToken, Loginlimiter, async (req, res) => {
+app.post('/xera/v1/api/user/login-basic',authenticateAPIToken, async (req, res) => {
     const { username, password } = req.body;
 
     if (!username || !password) {
@@ -293,7 +293,7 @@ app.post('/xera/v1/api/user/login-basic',authenticateAPIToken, Loginlimiter, asy
     }
 })
 
-app.post('/xera/v1/api/user/login-prKey',authenticateAPIToken, Loginlimiter, async (req, res) => {
+app.post('/xera/v1/api/user/login-prKey',authenticateAPIToken, async (req, res) => {
     const { privateKey } = req.body;
     
     
@@ -329,7 +329,7 @@ app.post('/xera/v1/api/user/login-prKey',authenticateAPIToken, Loginlimiter, asy
     }
 })
 
-app.post('/xera/v1/api/user/login-phrase',authenticateAPIToken, Loginlimiter, async (req, res) => {
+app.post('/xera/v1/api/user/login-phrase',authenticateAPIToken, async (req, res) => {
     const { seedPhrase } = req.body;
 
     if (!seedPhrase) {
@@ -464,7 +464,7 @@ app.post('/xera/v1/api/user/login-phrase',authenticateAPIToken, Loginlimiter, as
 //     }
 // });
 
-app.post('/xera/v1/api/users/total-points', limiter, async (req, res) => {
+app.post('/xera/v1/api/users/total-points', async (req, res) => {
     const { apikey } = req.body;
     
     if (!apikey) {
@@ -496,7 +496,7 @@ app.post('/xera/v1/api/users/total-points', limiter, async (req, res) => {
     }
 });
 
-// app.post('/xera/v1/api/users/user-tasks/ranking', limiter, async (req, res) => {
+// app.post('/xera/v1/api/users/user-tasks/ranking', async (req, res) => {
 //     const { request } = req.body;
     
 //     if (!request) {
@@ -564,7 +564,7 @@ app.post('/xera/v1/api/users/total-points', limiter, async (req, res) => {
 //     }
 // });
 
-app.post('/xera/v1/api/user/tasks/all-task', authenticateToken, limiter, async (req,res) => {
+app.post('/xera/v1/api/user/tasks/all-task', authenticateToken, async (req,res) => {
     const {user} = req.body;
     
     if (!user) {
@@ -703,7 +703,7 @@ app.post('/xera/v1/api/user/tasks/all-task', authenticateToken, limiter, async (
     }
 })
 
-app.post('/xera/v1/api/users/all-wallet', limiter,async (req,res) => {
+app.post('/xera/v1/api/users/all-wallet',async (req,res) => {
     const {apikey} = req.body; 
     
     if (!apikey) {
@@ -732,7 +732,7 @@ app.post('/xera/v1/api/users/all-wallet', limiter,async (req,res) => {
     }
 })
 
-app.post('/xera/v1/api/users/all-participant', limiter,async (req, res) => {
+app.post('/xera/v1/api/users/all-participant',async (req, res) => {
     const { apikey } = req.body;
 
     if (!apikey) {
@@ -769,7 +769,7 @@ app.post('/xera/v1/api/users/all-participant', limiter,async (req, res) => {
     }
 });
 
-app.post('/xera/v1/api/user/current-rank', authenticateToken, limiter, async (req, res) => {
+app.post('/xera/v1/api/user/current-rank', authenticateToken, async (req, res) => {
     const { user } = req.body;
 
     if (!user) {
@@ -807,7 +807,7 @@ app.post('/xera/v1/api/user/current-rank', authenticateToken, limiter, async (re
     }
 });
 
-app.post('/xera/v1/api/user/transactions', authenticateToken, limiter,async (req, res) => {
+app.post('/xera/v1/api/user/transactions', authenticateToken,async (req, res) => {
     const { user } = req.body;
     
     if (!user) {
@@ -834,7 +834,7 @@ app.post('/xera/v1/api/user/transactions', authenticateToken, limiter,async (req
     }
 });
 
-app.post('/xera/v1/api/user/balance', authenticateToken, limiter,async (req,res) => {
+app.post('/xera/v1/api/user/balance', authenticateToken,async (req,res) => {
     const {user} = req.body;
     if (!user) {
         return res.status(403).json({ success: false, message: "invalid request"})
@@ -884,7 +884,7 @@ app.post('/xera/v1/api/user/balance', authenticateToken, limiter,async (req,res)
     
 })
 
-app.post('/xera/v1/api/user/following', authenticateToken, limiter, async (req,res) => {
+app.post('/xera/v1/api/user/following', authenticateToken, async (req,res) => {
     const {user} = req.body;
     if (!user) {
         return res.status(403).json({ success: false, message: "invalid request"})
@@ -912,7 +912,7 @@ app.post('/xera/v1/api/user/following', authenticateToken, limiter, async (req,r
     
 })
 
-app.post('/xera/v1/api/token/asset-tokens', limiter, async(req,res) => {
+app.post('/xera/v1/api/token/asset-tokens', async(req,res) => {
     const { apikey } = req.body
 
     if (!apikey) {
@@ -983,7 +983,7 @@ app.post('/xera/v1/api/token/faucet-transaction', async (req, res) => {
     }
 });
 
-app.post('/xera/v1/api/token/faucet-claim', authenticateToken, limiter, async (req, res) => {
+app.post('/xera/v1/api/token/faucet-claim', authenticateToken, async (req, res) => {
     const { username, txHash, sender, receiver, command, amount, token, tokenId } = req.body;
     
   
@@ -1137,7 +1137,7 @@ app.post('/xera/v1/api/token/faucet-claim', authenticateToken, limiter, async (r
     }
 });
 
-app.post('/xera/v1/api/users/airdrop/full-stats', limiter, async (req, res) => {
+app.post('/xera/v1/api/users/airdrop/full-stats', async (req, res) => {
     const { apikey } = req.body;
     
     if (!apikey) {
@@ -1224,7 +1224,7 @@ app.post('/xera/v1/api/users/airdrop/full-stats', limiter, async (req, res) => {
     }
 });
 
-app.post('/xera/v1/api/users/airdrop/phase1', limiter, async (req,res) => {
+app.post('/xera/v1/api/users/airdrop/phase1', async (req,res) => {
     const { request } = req.body;
 
     if (!request) {
@@ -1290,7 +1290,7 @@ app.post('/xera/v1/api/users/airdrop/phase1', limiter, async (req,res) => {
     
 })
 
-app.post('/xera/v1/api/users/airdrop/participants', limiter, async (req,res) => {
+app.post('/xera/v1/api/users/airdrop/participants', async (req,res) => {
     const { apikey } = req.body;
     
     if (!apikey) {
@@ -1319,7 +1319,7 @@ app.post('/xera/v1/api/users/airdrop/participants', limiter, async (req,res) => 
     }
 })
 
-app.post('/xera/v1/api/users/airdrop/recent-participant', limiter, async (req,res) => {
+app.post('/xera/v1/api/users/airdrop/recent-participant', async (req,res) => {
     const { apikey } = req.body;
     
     if (!apikey) {
@@ -1354,7 +1354,7 @@ app.post('/xera/v1/api/users/airdrop/recent-participant', limiter, async (req,re
     }
 })
 
-app.post('/xera/v1/api/users/node/transaction-history', limiter, async (req,res) => {
+app.post('/xera/v1/api/users/node/transaction-history', async (req,res) => {
     const { apikey } = req.body;
     
     if (!apikey) {
