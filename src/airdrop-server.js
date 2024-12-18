@@ -250,7 +250,7 @@ app.post('/xera/v1/api/users/airdrop/participants', async (req,res) => {
             if (checkModeration.xera_moderation === "creator") {
                 const [userTask] = await db.query('SELECT COUNT(DISTINCT BINARY username) AS user_participants FROM xera_user_tasks')
                 if (userTask.length > 0) {
-                    const participantData = userTask[0]
+                    const participantData = userTask[0].user_participants
                     res.status(200).json({ success: true, message: "User tasks successfully retrieve", participantData})
                 } else {
                     return res.status(400).json({ success: false, message: "No data retrieve" });

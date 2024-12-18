@@ -80,18 +80,6 @@ async function testConnection() {
 
 testConnection();
 
-const getDevFromCache = async (api) => {
-    let dev = cache.get(api);
-    if (!dev) {
-        const [dbDev] = await db.query('SELECT * FROM xera_developer WHERE BINARY xera_api = ?', [api]);
-        if (dbDev.length > 0) {
-            dev = dbDev[0];
-            cache.set(api, dev);
-        }
-    }
-    return dev;
-};
-
 app.post('/xera/v1/api/token/faucet-transaction', async (req, res) => {
     const { request } = req.body;
     
