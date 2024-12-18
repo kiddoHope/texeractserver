@@ -667,16 +667,17 @@ app.post('/xera/v1/api/user/faucet-claim', authenticateToken, async (req, res) =
 });
 
 app.post('/xera/v1/api/user/nodes', authenticateToken, async (req,res) => {
-    const { address } = req.body
+    const { user } = req.body
 
-    if (!address) {
+    if (!user) {
       return res.status(400).json({ success: false, message: 'No address get' });
     }
 
     try {
-        const [getUsernode] = await db.query('SELECT * FROM xera_asset_nodes WHERE node_owner = ?',[address])
+        const [getUsernode] = await db.query('SELECT * FROM xera_asset_nodes WHERE node_owner = ?',[user])
         if (getUsernode.length > 0) {
-            res.status(200).json({success:true, message :`Successfully retrieved node. wallet: ${address}`, node: getUsernode[0]})
+            const clean = getUsernode.map(({id, ...clean}) => clean)
+            res.status(200).json({success:true, message :`Successfully retrieved node. wallet: ${user}`, node: clean})
         } else {
             res.status(400).json({ success: false, message: "No node retrieved"})
         }
