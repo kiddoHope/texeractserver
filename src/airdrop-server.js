@@ -347,8 +347,8 @@ app.post('/xera/v1/api/users/airdrop/recent-participant', async (req,res) => {
                 `);
         
                 if (recentParticipants.length > 0) {
-                    const participantsData = recentParticipants[0]
-                    res.status(200).json({ success: true, message: "User tasks successfully retrieve", participantsData})
+                    const participantsData = recentParticipants[0].recent_participants
+                    res.status(200).json({ success: true, message: "Participants successfully retrieve", recentparticipants: participantsData})
                 } else {
                     return res.status(400).json({ success: false, message: "No data retrieve" });
                 }
