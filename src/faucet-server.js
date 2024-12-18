@@ -6,7 +6,7 @@ const cors = require("cors");
 require('dotenv').config();
 const rateLimit = require('express-rate-limit')
 const app = express();
-const port = 5000;
+const port = 5003;
 const compression = require('compression');
 const NodeCache = require('node-cache');
 const cache = new NodeCache({ stdTTL: 60 });
@@ -92,37 +92,44 @@ const getDevFromCache = async (api) => {
     return dev;
 };
 
-app.post('/xera/v1/api/token/asset-tokens', async(req,res) => {
-    const { apikey } = req.body
-
-    if (!apikey) {
-        return res.status(400).json({ success: false, message: "No request found" });
+app.post('/xera/v1/api/token/faucet-transaction', async (req, res) => {
+    const { request } = req.body;
+    
+    if (!request) {
+        res.status(400).json({ success: false, message: "no request found"})
     }
+    const apikey = request.api
+    const limit = request.limit
+    const page = request.page
     try {
-        const checkModeration = await getDevFromCache(apikey)
-        
-        if (checkModeration) {
-            
-            if (checkModeration.xera_moderation === "creator") {
-                const [assetTokens] = await db.query(`SELECT * FROM xera_asset_token`);
-                
+        const [checkModeration] = await db.query('SELECT * FROM xera_developer WHERE BINARY xera_api = ?', [apikey]);
+        if (checkModeration.length > 0) {
+            if (checkModeration[0].xera_moderation === "creator") {
+                const [assetTokens] = await db.query('SELECT * FROM xera_network_transactions');
+
                 if (assetTokens.length > 0) {
-                    const cleanedData = assetTokens.map(({id, ...clean}) => clean)
-                    
-                    return res.status(200).json({ success: true, data: cleanedData})
+                    const sorted = assetTokens.sort((a, b) => b.id - a.id);
+                    const cleanedData = sorted.map(({ id, transaction_origin, sender_address, tansaction_command, transaction_token, transaction_token_id, transaction_validator, transaction_date, ...clean }) => clean);
+
+                    // Pagination logic
+                    const startIndex = (page - 1) * limit;
+                    const endIndex = page * limit;
+                    const paginatedData = cleanedData.slice(startIndex, endIndex);
+
+                    return res.status(200).json({ success: true, data: paginatedData });
                 } else {
-                    return res.status(404).json({ success:false, message : "no tokens found"})
+                    return res.status(404).json({ success: false, message: "No tokens found" });
                 }
             } else {
-                return res.status(401).json({ success:false, message : "unknown request"})
+                return res.status(401).json({ success: false, message: "Unknown request" });
             }
         } else {
-            return res.status(401).json({ success:false, message : "invalid request"})
+            return res.status(401).json({ success: false, message: "Invalid request" });
         }
     } catch (error) {
-        return res.status(500).json({ success: false, message: "request error", error: error})
+        return res.status(500).json({ success: false, message: "Request error", error: error });
     }
-})
+});
 
 app.listen(port, () => {
     console.log(`Server is running on http://localhost:${port}`);
