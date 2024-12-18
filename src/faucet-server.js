@@ -90,29 +90,21 @@ app.post('/xera/v1/api/token/faucet-transaction', async (req, res) => {
     const limit = request.limit
     const page = request.page
     try {
-        const [checkModeration] = await db.query('SELECT * FROM xera_developer WHERE BINARY xera_api = ?', [apikey]);
-        if (checkModeration.length > 0) {
-            if (checkModeration[0].xera_moderation === "creator") {
-                const [assetTokens] = await db.query('SELECT * FROM xera_network_transactions');
+        const [assetTokens] = await db.query('SELECT transaction_block, transaction_hash, transaction_amount ,receiver_address, transaction_fee_token, transaction_fee_token_id  FROM xera_network_transactions');
 
-                if (assetTokens.length > 0) {
-                    const sorted = assetTokens.sort((a, b) => b.id - a.id);
-                    const cleanedData = sorted.map(({ id, transaction_origin, sender_address, tansaction_command, transaction_token, transaction_token_id, transaction_validator, transaction_date, ...clean }) => clean);
+        if (assetTokens.length > 0) {
+            const sorted = assetTokens.sort((a, b) => b.id - a.id);
 
-                    // Pagination logic
-                    const startIndex = (page - 1) * limit;
-                    const endIndex = page * limit;
-                    const paginatedData = cleanedData.slice(startIndex, endIndex);
+            // Pagination logic
+            const startIndex = (page - 1) * limit;
+            const endIndex = page * limit;
+            const paginatedData = sorted.slice(startIndex, endIndex);
+            console.log(paginatedData);
+            
 
-                    return res.status(200).json({ success: true, data: paginatedData });
-                } else {
-                    return res.status(404).json({ success: false, message: "No tokens found" });
-                }
-            } else {
-                return res.status(401).json({ success: false, message: "Unknown request" });
-            }
+            return res.status(200).json({ success: true, data: paginatedData });
         } else {
-            return res.status(401).json({ success: false, message: "Invalid request" });
+            return res.status(404).json({ success: false, message: "No tokens found" });
         }
     } catch (error) {
         return res.status(500).json({ success: false, message: "Request error", error: error });
