@@ -14,44 +14,35 @@ const cache = new NodeCache({ stdTTL: 60 });
 app.use(compression());
 app.use(bodyParser.json());
 
-const allowedOrigins = [
-'https://texeract.network',
-'http://localhost:3000',
-'http://localhost:3001',
-'https://texeract-network-beta.vercel.app',
-'https://tg-texeract-beta.vercel.app',
-'https://texeractbot.xyz'
-];
+const allowedOrigins = ['https://texeract.network', 'http://localhost:3000', 'http://localhost:3001', 'https://texeract-network-beta.vercel.app','https://tg-texeract-beta.vercel.app','https://texeractbot.xyz'];
 
 app.use(cors({
-origin: (origin, callback) => {
-    // Allow requests with no origin (mobile apps, curl requests)
+  origin: (origin, callback) => {
+    // Allow requests with no origin, like mobile apps or curl requests
     if (!origin) return callback(null, true);
     if (allowedOrigins.includes(origin)) {
-    return callback(null, true);
+      return callback(null, true);
     } else {
-    return callback(new Error('Not allowed by CORS'));
+      return callback(new Error('Not allowed by CORS'));
     }
-},
-methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH'],
-allowedHeaders: ['Content-Type', 'Authorization', 'x-access-token', 'X-Requested-With', 'Accept'],
-credentials: true, // Allow credentials (cookies, etc.) in CORS requests
+  },
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'x-access-token', 'X-Requested-With', 'Accept'],
+  credentials: true, // Allow credentials (cookies, etc.) in CORS requests
 }));
 
-// Handle OPTIONS requests for preflight
 app.options('*', (req, res) => {
-res.header('Access-Control-Allow-Origin', req.headers.origin);
-res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, PATCH');
-res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization, x-access-token, X-Requested-With, Accept');
-res.header('Access-Control-Allow-Credentials', 'true');
-res.sendStatus(204);  // No content for OPTIONS request
+  res.header('Access-Control-Allow-Origin', req.headers.origin);
+  res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE', 'PATCH');
+  res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization, x-access-token, X-Requested-With, Accept');
+  res.header('Access-Control-Allow-Credentials', 'true');
+  res.sendStatus(204);
 });
 
 app.use((req, res, next) => {
-res.header('Vary', 'Origin');
-next();
+  res.header('Vary', 'Origin');
+  next();
 });
-
 
 const jwtSecret = process.env.MAIN_JWT_SECRET
 const jwtAPISecret = process.env.API_JWT_SECRET
@@ -100,6 +91,11 @@ const getDevFromCache = async (api) => {
     }
     return dev;
 };
+
+app.get('/xera', (req, res) => {
+    res.status(200).send('Xera API is running');
+});
+
 
 // app.post('/xera/v1/api/users/users-list', async (req,res) => {
 //     const { apikey } = req.body
@@ -195,66 +191,6 @@ const getDevFromCache = async (api) => {
 //     }
 // });
 
-app.post('/xera/v1/api/users/total-points', async (req, res) => {
-    const { apikey } = req.body;
-    
-    if (!apikey) {
-        return res.status(400).json({ success: false, message: "No request found" });
-    }
-
-    try {
-        const checkModeration = await getDevFromCache(apikey)
-        
-        if (checkModeration) {
-            if (checkModeration.xera_moderation === "creator") {
-                const [userstask] = await db.query(`SELECT SUM(xera_points) AS total_points FROM xera_user_tasks`);
-                
-                if (userstask.length > 0) {
-                    const totalPoints = userstask[0].total_points
-                    
-                    return res.status(200).json({ success: true, totalPoints });
-                } else {
-                    return res.status(404).json({ success: false, message: "No tasks found" });
-                }
-            } else {
-                return res.status(401).json({ success: false, message: "Unknown request" });
-            }
-        } else {
-            return res.status(401).json({ success: false, message: "Invalid request" });
-        }
-    } catch (error) {
-        return res.status(500).json({ success: false, message: "Request error", error: error });
-    }
-});
-
-app.post('/xera/v1/api/users/all-wallet',async (req,res) => {
-    const {apikey} = req.body; 
-    
-    if (!apikey) {
-        return res.status(400).json({ success: false, message: "No request found" });
-    }
-
-    try {
-        const checkModeration = await getDevFromCache(apikey)
-        
-        if (checkModeration) {
-            if (checkModeration.xera_moderation === "creator") {
-                const [countWallet] = await db.query('SELECT COUNT(*) AS user_count FROM xera_user_accounts')
-                
-                if (countWallet.length > 0) {
-                    const walletCount = countWallet[0].user_count
-                    res.status(200).json({ success:true, message: "Successfully count all wallet", walletCount: walletCount})
-                }
-            } else {
-                return res.status(401).json({ success: false, message: "unknown request" });
-            } 
-        } else {
-            return res.status(401).json({ success: false, message: "invalid request" });
-        }
-    } catch (error) {
-        return res.status(500).json({ success: false, message: "request error", error: error });
-    }
-})
 
 // app.post('/xera/v1/api/users/all-participant',async (req, res) => {
 //     const { apikey } = req.body;
