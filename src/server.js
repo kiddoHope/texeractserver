@@ -12,6 +12,8 @@ const moment = require('moment');
 const app = express();
 const port = 5000;
 const compression = require('compression');
+const NodeCache = require('node-cache');
+const cache = new NodeCache({ stdTTL: 60 });
 
 app.use(compression());
 app.use(bodyParser.json());
@@ -918,11 +920,11 @@ app.post('/xera/v1/api/token/asset-tokens', async(req,res) => {
     if (!apikey) {
         return res.status(400).json({ success: false, message: "No request found" });
     }
-
     try {
         const checkModeration = await getDevFromCache(apikey)
         
         if (checkModeration) {
+            
             if (checkModeration.xera_moderation === "creator") {
                 const [assetTokens] = await db.query(`SELECT * FROM xera_asset_token`);
                 
