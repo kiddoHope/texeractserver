@@ -82,14 +82,19 @@ testConnection();
 
 const getDevFromCache = async (api) => {
     let dev = cache.get(api);
+
     if (!dev) {
         const [dbDev] = await db.query('SELECT * FROM xera_developer WHERE BINARY xera_api = ?', [api]);
         if (dbDev.length > 0) {
             dev = dbDev[0];
             cache.set(api, dev);
+        } else {
+            return res.status(401).json({ success: false, message: "Invalid request" });
         }
     }
-    return dev;
+    if (dev.xera_moderation !== 'creator') {
+        return res.status(401).json({ success: false, message: "Invalid request" });
+    }
 };
 
 app.post('/xera/v1/api/token/asset-tokens', async(req,res) => {
@@ -98,27 +103,18 @@ app.post('/xera/v1/api/token/asset-tokens', async(req,res) => {
     if (!apikey) {
         return res.status(400).json({ success: false, message: "No request found" });
     }
+    await getDevFromCache(apikey)
     try {
-        const checkModeration = await getDevFromCache(apikey)
+        const [assetTokens] = await db.query(`SELECT * FROM xera_asset_token`);
         
-        if (checkModeration) {
+        if (assetTokens.length > 0) {
+            const cleanedData = assetTokens.map(({id, ...clean}) => clean)
             
-            if (checkModeration.xera_moderation === "creator") {
-                const [assetTokens] = await db.query(`SELECT * FROM xera_asset_token`);
-                
-                if (assetTokens.length > 0) {
-                    const cleanedData = assetTokens.map(({id, ...clean}) => clean)
-                    
-                    return res.status(200).json({ success: true, data: cleanedData})
-                } else {
-                    return res.status(404).json({ success:false, message : "no tokens found"})
-                }
-            } else {
-                return res.status(401).json({ success:false, message : "unknown request"})
-            }
+            return res.status(200).json({ success: true, data: cleanedData})
         } else {
-            return res.status(401).json({ success:false, message : "invalid request"})
+            return res.status(404).json({ success:false, message : "no tokens found"})
         }
+    
     } catch (error) {
         return res.status(500).json({ success: false, message: "request error", error: error})
     }
