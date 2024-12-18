@@ -666,6 +666,25 @@ app.post('/xera/v1/api/user/faucet-claim', authenticateToken, async (req, res) =
     }
 });
 
+app.post('/xera/v1/api/user/nodes', authenticateToken, async (req,res) => {
+    const { address } = req.body
+
+    if (!address) {
+      return res.status(400).json({ success: false, message: 'No address get' });
+    }
+
+    try {
+        const [getUsernode] = await db.query('SELECT * FROM xera_asset_nodes WHERE node_owner = ?',[address])
+        if (getUsernode.length > 0) {
+            res.status(200).json({success:true, message :`Successfully retrieved node. wallet: ${address}`, node: getUsernode[0]})
+        } else {
+            res.status(400).json({ success: false, message: "No node retrieved"})
+        }
+    } catch (error) {
+        res.status(500).json({ success: false, message: err.message });
+    }
+})
+
 app.listen(port, () => {
     console.log(`Server is running on http://localhost:${port}`);
 });
