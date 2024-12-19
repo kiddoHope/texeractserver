@@ -761,17 +761,10 @@ app.post('/xera/v1/api/user/coin/claim', authenticateToken, async (req, res) => 
   
       let transactionOrigin = 'Genesis Transaction';
       if (lastTransaction.length > 0) {
-        const lastTxDate = new Date(lastTransaction[0].transaction_date).getTime()
-        const dateNow = (new Date()).getTime()
-        
-        const timeDiff = dateNow - lastTxDate;
-        
-  
+        const [tokenClaimedcheck] = await db.query(`SELECT * FROM xera_network_transactions WHERE sender_address = ? AND receiver_address = ?`,[sender,receiver]);
         // Block if the last transaction is within 12 hours
-        if (timeDiff < 43200000) { // 12 hours in milliseconds
-          const timeRemaining = new Date(timeDiff).toISOString().substr(11, 8);
-          
-          return res.status(400).json({success: false, message: `Claim again after ${timeRemaining}`,});
+        if (tokenClaimedcheck.length > 0) { // 12 hours in milliseconds
+          return res.status(400).json({success: false, message: `Xera Coin already claimed`,});
         } else {
             transactionOrigin = lastTransaction[0].transaction_hash;
             // Step 2: Retrieve block details
@@ -806,7 +799,7 @@ app.post('/xera/v1/api/user/coin/claim', authenticateToken, async (req, res) => 
                             );
                             
                             if (updateTokenCirculating.affectedRows > 0) {
-                                res.status(200).json({ success: true, message: '1 TXERA Claimed Successfully.' });
+                                res.status(200).json({ success: true, message: 'Coin Claimed Successfully.' });
                             } else {
                                 res.status(400).json({success:false, message: "Error updating token circulation"})
                             }
@@ -861,7 +854,9 @@ app.post('/xera/v1/api/user/security', authenticateToken, async (req,res) => {
         const [getUserSecurity] = await db.query('SELECT * FROM xera_user_security WHERE xera_wallet = ?',[user])
         if (getUserSecurity.length > 0) {
             const clean = getUserSecurity.map(({id, ip_address, date_verified, ...clean}) => clean)
-            res.status(200).json({success:true, message :`Successfully retrieved security. wallet: ${user}`, security: clean})
+            return res.status(200).json({success:true, message :`Successfully retrieved security. wallet: ${user}`, security: clean})
+        } else {
+            return res.status(400).json({ success: false, message: "No security retrieved"})
         }
     } catch (error) {
         res.status(500).json({ success: false, message: err.message });
