@@ -252,15 +252,82 @@ app.post('/xera/v1/api/users/airdrop/participants', async (req,res) => {
     }
 })
 
-app.post('/xera/v1/api/users/total-points', async (req, res) => {
+app.post('/xera/v1/api/users/total-points/phase1', async (req, res) => {
     const { apikey } = req.body;
     
+
     if (!apikey) {
         return res.status(400).json({ success: false, message: "No request found" });
     }
+
+    if (!apikey) {
+        return res.status(400).json({ success: false, message: "No request found" });
+    }
+
     await getDevFromCache(apikey);
+
     try {
-        const [userstask] = await db.query(`SELECT SUM(xera_points) AS total_points FROM xera_user_tasks`);
+        const [userstask] = await db.query(`SELECT SUM(xera_points) AS total_points FROM xera_user_tasks WHERE xera_completed_date >= ? AND xera_completed_date <= ?`,['2024-11-01 01:01:01','2024-12-18 01:01:01']);
+        
+        if (userstask.length > 0) {
+            const totalPoints = userstask[0].total_points
+            
+            return res.status(200).json({ success: true, totalPoints });
+        } else {
+            return res.status(404).json({ success: false, message: "No tasks found" });
+        }
+           
+    } catch (error) {
+        return res.status(500).json({ success: false, message: "Request error", error: error });
+    }
+});
+
+app.post('/xera/v1/api/users/total-points/phase2', async (req, res) => {
+    const { apikey } = req.body;
+    
+
+    if (!apikey) {
+        return res.status(400).json({ success: false, message: "No request found" });
+    }
+
+    if (!apikey) {
+        return res.status(400).json({ success: false, message: "No request found" });
+    }
+
+    await getDevFromCache(apikey);
+
+    try {
+        const [userstask] = await db.query(`SELECT SUM(xera_points) AS total_points FROM xera_user_tasks WHERE xera_completed_date >= ? AND xera_completed_date <= ?`,['2024-12-19 01:01:01','2025-02-25 01:01:01']);
+        
+        if (userstask.length > 0) {
+            const totalPoints = userstask[0].total_points
+            
+            return res.status(200).json({ success: true, totalPoints });
+        } else {
+            return res.status(404).json({ success: false, message: "No tasks found" });
+        }
+           
+    } catch (error) {
+        return res.status(500).json({ success: false, message: "Request error", error: error });
+    }
+});
+
+app.post('/xera/v1/api/users/total-points/phase2', async (req, res) => {
+    const { apikey } = req.body;
+    
+
+    if (!apikey) {
+        return res.status(400).json({ success: false, message: "No request found" });
+    }
+
+    if (!apikey) {
+        return res.status(400).json({ success: false, message: "No request found" });
+    }
+
+    await getDevFromCache(apikey);
+
+    try {
+        const [userstask] = await db.query(`SELECT SUM(xera_points) AS total_points FROM xera_user_tasks WHERE xera_completed_date >= ? AND xera_completed_date <= ?`,['2025-02-25 01:01:01','2025-05-30 01:01:01']);
         
         if (userstask.length > 0) {
             const totalPoints = userstask[0].total_points

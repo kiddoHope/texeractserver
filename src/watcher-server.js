@@ -77,6 +77,35 @@ async function testConnection() {
 
 testConnection();
 
+const jwtSecret = process.env.MAIN_JWT_SECRET
+
+const authenticateToken = (req, res, next) => {
+    const authHeader = req.headers["authorization"];
+    const token = authHeader && authHeader.split(" ")[1]; // Extract token from "Bearer <token>"
+
+    if (!token) {
+        return res.status(401).json({ success: false, message: "Authentication token is required" });
+    }
+
+    jwt.verify(token, jwtSecret, (err, decoded) => {
+        if (err) {
+            if (err.name === "TokenExpiredError") {
+                // Handle expired token case
+                return res.status(401).json({ success: false, message: "Token has expired" });
+            }
+            if (err.name === "JsonWebTokenError") {
+                // Handle invalid token case
+                return res.status(403).json({ success: false, message: "Invalid token" });
+            }
+            // Handle other errors
+            return res.status(403).json({ success: false, message: "Token verification failed" });
+        }
+        
+        req.user = decoded; // Attach decoded user information to the request object
+        next(); // Proceed to the next middleware or route handler
+    });
+};
+
 const getDevFromCache = async (api) => {
     let dev = cache.get(api);
 
@@ -193,6 +222,100 @@ app.post('/xera/v1/api/watcher/recovered-exp', async (req,res) => {
             res.status(200).json({success: true, message: "Recovered Exp retrieved", recoveredExp:recoveredXp})
         } else {
             res.status(400).json({success: false, message: "No watch data retrieved"})
+        }
+    } catch (error) {
+        return res.status(500).json({ success: false, message: "Request error", error: error.message });
+    }
+})
+
+app.post('/xera/v1/api/watcher/activate-node', authenticateToken, async (req,res) => {
+    const { user } = req.body;
+    
+    if (!user || !user.wallet || !user.username) {
+        return res.status(400).json({
+            success: false,
+            message: "Invalid request: Missing user details (wallet or nodeName)."
+        });
+    }
+
+    const formatDateTime = (date) => {
+        const year = date.getFullYear();
+        const month = String(date.getMonth() + 1).padStart(2, '0'); // Months are 0-indexed
+        const day = String(date.getDate()).padStart(2, '0');
+        const hours = String(date.getHours()).padStart(2, '0');
+        const minutes = String(date.getMinutes()).padStart(2, '0');
+        const seconds = String(date.getSeconds()).padStart(2, '0');
+    
+        return `${year}-${month}-${day} ${hours}:${minutes}:${seconds}`;
+    };
+    
+    const addHoursToDate = (date, hoursToAdd) => {
+        const updatedDate = new Date(date); // Create a new date object to avoid mutating the original
+        updatedDate.setHours(updatedDate.getHours() + hoursToAdd); // Add hours
+        return updatedDate;
+    };
+    
+    const username = user.username
+    const owner = user.wallet
+    const nodename = user.nodeName
+    const nodeid = user.nodeID
+    const nodeHash = user.nodeTXHash
+    const now = new Date(); // Current date and time
+    const formattedDateTime = formatDateTime(now);
+    const updatedDate = addHoursToDate(now, 12); // Add 12 hours
+    const formattedUpdatedDateTime = formatDateTime(updatedDate);
+
+    try {
+        const [updateNode] = await db.query(`UPDATE xera_asset_nodes SET node_state = 'activate' WHERE node_owner = ? AND node_id = ?`,[owner,nodeid])
+        if (updateNode.affectedRows > 0) {
+            const [insertNode] = await db.query(`
+                INSERT INTO xera_user_node (node_id, node_name, node_owner, node_points, node_reward, node_token, node_start, node_expire, node_txhash) VALUES ( ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+                [nodeid, nodename, owner, 20000, 0.00, '', formattedDateTime, formattedUpdatedDateTime, nodeHash] )
+            if (insertNode.affectedRows > 0) {
+                const [insertTask] = await db.query(`
+                    INSERT INTO xera_user_tasks (username, xera_wallet, xera_telegram_id, xera_twitter_username, xera_task, xera_status, xera_points) VALUES ( ?, ?, ?, ?, ?, ?, ?)`,
+                    [username, owner, '' , '', nodename, 'ok', 20000] )
+                if (insertTask.length > 0) {
+                    res.status(200).json({success: true, message: `Successfully activated 1 ${nodename}`, start: formattedDateTime, expire: formattedUpdatedDateTime  })
+                } else {
+                    res.status(400).json({success: true, message: `Error adding in users node` })
+                }
+            } else {
+                res.status(400).json({success: true, message: `Error adding in users node` })
+            }
+        } else {
+            res.status(400).json({ success: false, message: `Failed to activate ${nodename}`})
+        }
+    } catch (error) {
+        return res.status(500).json({ success: false, message: "Request error", error: error.message });
+    }
+})
+
+app.post('/xera/v1/api/watcher/operate', async (req,res) => {
+    const { apikey } = req.body;
+    
+    if (!apikey) {
+        return res.status(400).json({ success: false, message: "No request found" });
+    }
+    
+    await getDevFromCache(apikey);
+
+    try {
+        const [rows] = await db.query(`
+            SELECT username, xera_wallet, xera_account_ip, xera_referral
+            FROM xera_user_accounts
+            WHERE xera_account_ip IS NOT NULL AND xera_account_ip != '' 
+              AND NOT EXISTS (
+                  SELECT 1 FROM xera_user_security
+                  WHERE xera_user_security.username = xera_user_accounts.username
+                    AND xera_user_security.xera_wallet = xera_user_accounts.xera_wallet
+              ) 
+            LIMIT 1 FOR UPDATE
+        `);
+        if (rows.length > 0) {
+            res.status(200).json({success: true, message: "User found", data:rows})
+        } else {
+            res.status(400).json({success: false, message: "No user found"})
         }
     } catch (error) {
         return res.status(500).json({ success: false, message: "Request error", error: error.message });

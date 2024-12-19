@@ -46,7 +46,6 @@ app.use((req, res, next) => {
 });
 
 const jwtSecret = process.env.MAIN_JWT_SECRET
-const jwtAPISecret = process.env.API_JWT_SECRET
 
 const db = mysql.createPool({
     // host: '2a02:4780:28:feaa::1',  // use this in production
@@ -666,6 +665,95 @@ app.post('/xera/v1/api/user/faucet-claim', authenticateToken, async (req, res) =
     }
 });
 
+app.post('/xera/v1/api/user/coin/claim', authenticateToken, async (req, res) => {
+    const { username, txHash, sender, receiver, command, amount, token, tokenId } = req.body;
+    
+    
+    if (!username || !txHash || !sender || !receiver || !command || !amount || !token || !tokenId) {
+      return res.status(400).json({ success: false, message: 'Incomplete transaction data.' });
+    }
+  
+    const txLocalDate = new Date().toISOString().slice(0, 19).replace('T', ' ');
+    
+    try {
+  
+      // Step 1: Check for recent transactions
+      const [lastTransaction] = await db.query(
+        'SELECT transaction_date, transaction_hash FROM xera_network_transactions WHERE receiver_address = ? ORDER BY transaction_date DESC LIMIT 1',
+        [receiver]
+      );
+  
+      let transactionOrigin = 'Genesis Transaction';
+      if (lastTransaction.length > 0) {
+        const lastTxDate = new Date(lastTransaction[0].transaction_date).getTime()
+        const dateNow = (new Date()).getTime()
+        
+        const timeDiff = dateNow - lastTxDate;
+        
+  
+        // Block if the last transaction is within 12 hours
+        if (timeDiff < 43200000) { // 12 hours in milliseconds
+          const timeRemaining = new Date(timeDiff).toISOString().substr(11, 8);
+          
+          return res.status(400).json({success: false, message: `Claim again after ${timeRemaining}`,});
+        } else {
+            transactionOrigin = lastTransaction[0].transaction_hash;
+            // Step 2: Retrieve block details
+            const [blockData] = await db.query(
+                'SELECT current_block, block_validator FROM xera_network_blocks ORDER BY id DESC LIMIT 1'
+            );
+            
+            if (blockData.length > 0) {
+                const { current_block: txBlock, block_validator: validator } = blockData[0];
+                const [incrementBlockCount] = await db.query('UPDATE xera_network_blocks SET block_transactions = block_transactions + 1 WHERE current_block = ?',[txBlock]);
+                
+                if (incrementBlockCount.affectedRows > 0) {
+                    // Step 3: Insert new transaction
+                    const [addTransaction] = await db.query(
+                        'INSERT INTO xera_network_transactions (transaction_block, transaction_origin, transaction_hash, sender_address, receiver_address, transaction_command, transaction_amount, transaction_token, transaction_token_id, transaction_validator, transaction_date, transaction_fee_amount,transaction_fee_token,transaction_fee_token_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+                        [txBlock, transactionOrigin, txHash, sender, receiver, command, amount, token, tokenId, validator, txLocalDate, 0.00, '', '']
+                    );
+                    
+                    if (addTransaction.affectedRows > 0) {
+                        // Step 4: Update token circulation
+                        const [currentToken] = await db.query(
+                            'SELECT token_circulating FROM xera_asset_token WHERE token_symbol = ?',
+                            [token]
+                        );
+                        
+                        if (currentToken.length > 0) {
+                            const newCirculating = parseInt(currentToken[0].token_circulating) + amount;
+            
+                            const [updateTokenCirculating] = await db.query(
+                                'UPDATE xera_asset_token SET token_circulating = ? WHERE token_id = ?',
+                                [newCirculating, tokenId]
+                            );
+                            
+                            if (updateTokenCirculating.affectedRows > 0) {
+                                res.status(200).json({ success: true, message: '1 TXERA Claimed Successfully.' });
+                            } else {
+                                res.status(400).json({success:false, message: "Error updating token circulation"})
+                            }
+                        } else {
+                            res.status(400).json({success:false, message: "Token not found or mismatched token symbol."})
+                        }
+                    } else {
+                        res.status(400).json({success:false, message: "Error adding transaction"})
+                    }
+                } else {
+                res.status(400).json({ success: false, message: "Error increment count"})
+                }
+            } else {
+                res.status(400).json({ success:false, message: 'Block data not found. Transaction aborted.'});
+            }
+        }
+  
+      }
+    } catch (err) {
+      res.status(400).json({ success: false, message: err.message });
+    }
+});
+
 app.post('/xera/v1/api/user/nodes', authenticateToken, async (req,res) => {
     const { user } = req.body
 
@@ -680,6 +768,24 @@ app.post('/xera/v1/api/user/nodes', authenticateToken, async (req,res) => {
             res.status(200).json({success:true, message :`Successfully retrieved node. wallet: ${user}`, node: clean})
         } else {
             res.status(400).json({ success: false, message: "No node retrieved"})
+        }
+    } catch (error) {
+        res.status(500).json({ success: false, message: err.message });
+    }
+})
+
+app.post('/xera/v1/api/user/security', authenticateToken, async (req,res) => {
+    const { user } = req.body
+
+    if (!user) {
+      return res.status(400).json({ success: false, message: 'No address get' });
+    }
+
+    try {
+        const [getUserSecurity] = await db.query('SELECT * FROM xera_user_security WHERE xera_wallet = ?',[user])
+        if (getUserSecurity.length > 0) {
+            const clean = getUserSecurity.map(({id, ip_address, date_verified, ...clean}) => clean)
+            res.status(200).json({success:true, message :`Successfully retrieved security. wallet: ${user}`, security: clean})
         }
     } catch (error) {
         res.status(500).json({ success: false, message: err.message });
