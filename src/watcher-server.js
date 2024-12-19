@@ -325,25 +325,32 @@ app.post('/xera/v1/api/watcher/activate-node', authenticateToken, async (req,res
     const formattedUpdatedDateTime = formatDateTime(updatedDate);
 
     try {
-        const [updateNode] = await db.query(`UPDATE xera_asset_nodes SET node_state = 'activate' WHERE node_owner = ? AND node_id = ?`,[owner,nodeid])
-        if (updateNode.affectedRows > 0) {
-            const [insertNode] = await db.query(`
-                INSERT INTO xera_user_node (node_id, node_name, node_owner, node_points, node_reward, node_token, node_start, node_expire, node_txhash) VALUES ( ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-                [nodeid, nodename, owner, 20000, 0.00, '', formattedDateTime, formattedUpdatedDateTime, nodeHash] )
-            if (insertNode.affectedRows > 0) {
-                const [insertTask] = await db.query(`
-                    INSERT INTO xera_user_tasks (username, xera_wallet, xera_telegram_id, xera_twitter_username, xera_task, xera_status, xera_points) VALUES ( ?, ?, ?, ?, ?, ?, ?)`,
-                    [username, owner, '' , '', nodename, 'ok', 20000] )
-                if (insertTask.length > 0) {
-                    res.status(200).json({success: true, message: `Successfully activated 1 ${nodename}`, start: formattedDateTime, expire: formattedUpdatedDateTime  })
+        const [selectNode] = await db.query(`SELECT * FROM xera_asset_nodes WHERE node_name = ? AND node_owner = ?`,[nodename, owner])
+        if (selectNode.length > 0) {
+            const [updateNode] = await db.query(`UPDATE xera_asset_nodes SET node_state = 'active' WHERE node_owner = ? AND node_id = ?`,[owner,nodeid])
+            if (updateNode.affectedRows > 0) {
+                const nodePoints = selectNode[0].node_points
+                const [insertNode] = await db.query(`
+                    INSERT INTO xera_user_node (node_id, node_name, node_owner, node_points, node_reward, node_token, node_start, node_expire, node_txhash) VALUES ( ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+                    [nodeid, nodename, owner, nodePoints, 0.00, '', formattedDateTime, formattedUpdatedDateTime, nodeHash] )
+                    
+                if (insertNode.affectedRows > 0) {
+                    const [insertTask] = await db.query(`
+                        INSERT INTO xera_user_tasks (username, xera_wallet, xera_telegram_id, xera_twitter_username, xera_task, xera_status, xera_points) VALUES ( ?, ?, ?, ?, ?, ?, ?)`,
+                        [username, owner, '' , '', nodename, 'ok', nodePoints] )
+                    if (insertTask.affectedRows > 0) {
+                        res.status(200).json({success: true, message: `Successfully activated 1 ${nodename}`, start: formattedDateTime, expire: formattedUpdatedDateTime  })
+                    } else {
+                        res.status(400).json({success: true, message: `Error adding in users node` })
+                    }
                 } else {
                     res.status(400).json({success: true, message: `Error adding in users node` })
                 }
             } else {
-                res.status(400).json({success: true, message: `Error adding in users node` })
+                res.status(400).json({ success: false, message: `Failed to activate ${nodename}`})
             }
         } else {
-            res.status(400).json({ success: false, message: `Failed to activate ${nodename}`})
+            return res.status(400).json({ success: false, message: `No ${nodename} available`})
         }
     } catch (error) {
         return res.status(500).json({ success: false, message: "Request error", error: error.message });
