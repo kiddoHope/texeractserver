@@ -200,13 +200,13 @@ app.post('/xera/v1/api/watcher/watch-result', async (req,res) => {
     }
 })
 
-app.post('/xera/v1/api/watcher/recovered-exp', async (req,res) => {
+app.post('/xera/v1/api/watcher/recovered-exp/phase1', async (req, res) => {
     const { apikey } = req.body;
-    
+
     if (!apikey) {
         return res.status(400).json({ success: false, message: "No request found" });
     }
-    
+
     await getDevFromCache(apikey);
 
     try {
@@ -214,19 +214,78 @@ app.post('/xera/v1/api/watcher/recovered-exp', async (req,res) => {
             SELECT COUNT(*) AS referral_task_count
             FROM xera_user_tasks
             WHERE xera_task = 'Referral Task' AND xera_points = 0
+              AND xera_completed_date BETWEEN '2024-09-28' AND '2024-12-20'
         `);
 
         // Calculate recovered_xp
         const recoveredXp = countData[0].referral_task_count * 5000;
         if (countData.length > 0) {
-            res.status(200).json({success: true, message: "Recovered Exp retrieved", recoveredExp:recoveredXp})
+            res.status(200).json({ success: true, message: "Recovered Exp retrieved", recoveredExp: recoveredXp });
         } else {
-            res.status(400).json({success: false, message: "No watch data retrieved"})
+            res.status(400).json({ success: false, message: "No watch data retrieved" });
         }
     } catch (error) {
         return res.status(500).json({ success: false, message: "Request error", error: error.message });
     }
-})
+});
+
+app.post('/xera/v1/api/watcher/recovered-exp/phase2', async (req, res) => {
+    const { apikey } = req.body;
+
+    if (!apikey) {
+        return res.status(400).json({ success: false, message: "No request found" });
+    }
+
+    await getDevFromCache(apikey);
+
+    try {
+        const [countData] = await db.query(`
+            SELECT COUNT(*) AS referral_task_count
+            FROM xera_user_tasks
+            WHERE xera_task = 'Referral Task' AND xera_points = 0
+              AND xera_completed_date BETWEEN '2024-12-19' AND '2025-02-25'
+        `);
+
+        // Calculate recovered_xp
+        const recoveredXp = countData[0].referral_task_count * 5000;
+        if (countData.length > 0) {
+            res.status(200).json({ success: true, message: "Recovered Exp retrieved", recoveredExp: recoveredXp });
+        } else {
+            res.status(400).json({ success: false, message: "No watch data retrieved" });
+        }
+    } catch (error) {
+        return res.status(500).json({ success: false, message: "Request error", error: error.message });
+    }
+});
+
+app.post('/xera/v1/api/watcher/recovered-exp/phase3', async (req, res) => {
+    const { apikey } = req.body;
+
+    if (!apikey) {
+        return res.status(400).json({ success: false, message: "No request found" });
+    }
+
+    await getDevFromCache(apikey);
+
+    try {
+        const [countData] = await db.query(`
+            SELECT COUNT(*) AS referral_task_count
+            FROM xera_user_tasks
+            WHERE xera_task = 'Referral Task' AND xera_points = 0
+              AND xera_completed_date BETWEEN '2025-02-25' AND '2025-05-30'
+        `);
+
+        // Calculate recovered_xp
+        const recoveredXp = countData[0].referral_task_count * 5000;
+        if (countData.length > 0) {
+            res.status(200).json({ success: true, message: "Recovered Exp retrieved", recoveredExp: recoveredXp });
+        } else {
+            res.status(400).json({ success: false, message: "No watch data retrieved" });
+        }
+    } catch (error) {
+        return res.status(500).json({ success: false, message: "Request error", error: error.message });
+    }
+});
 
 app.post('/xera/v1/api/watcher/activate-node', authenticateToken, async (req,res) => {
     const { user } = req.body;

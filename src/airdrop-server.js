@@ -230,6 +230,124 @@ app.post('/xera/v1/api/users/airdrop/phase1', async (req,res) => {
     
 })
 
+app.post('/xera/v1/api/users/airdrop/phase2', async (req,res) => {
+    const { request } = req.body;
+
+    if (!request) {
+        return res.status(400).json({ success: false, message: "No request found" });
+    }
+
+    const apikey = request.api;
+    const limit = parseInt(request.limit, 10) || 10; 
+    const page = parseInt(request.page, 10) || 1;
+
+    if (!apikey) {
+        return res.status(403).json({ success: false, message: "Invalid or missing API key" });
+    }
+    await getDevFromCache(apikey);
+
+    const offset = (page - 1) * limit; 
+
+    try {
+        
+        const [rows] = await db.query(`
+            SELECT t.username, 
+                MAX(t.xera_wallet) AS xera_wallet, 
+                SUM(t.xera_points) AS total_points, 
+                SUM(CASE WHEN t.xera_task = 'Referral Task' THEN 1 ELSE 0 END) AS referral_task_count
+            FROM xera_user_tasks t
+            WHERE DATE(t.xera_completed_date) BETWEEN '2024-12-19' AND '2025-02-25'
+            GROUP BY t.username
+            ORDER BY total_points DESC
+            LIMIT ? OFFSET ?`, [limit, offset]);
+
+        // Query to get total number of records
+        const [totalRows] = await db.query(`
+            SELECT COUNT(DISTINCT username) AS total
+            FROM xera_user_tasks
+            WHERE DATE(xera_completed_date) BETWEEN '2024-12-19' AND '2025-02-25'
+        `);
+
+        const total = totalRows[0]?.total || 0;
+        const totalPages = Math.ceil(total / limit);
+
+        res.status(200).json({
+            success: true,
+            data: rows,
+            message: "data retrieved Successfully",
+            pagination: {
+                currentPage: page,
+                totalPages,
+                totalRecords: total,
+                limit
+            }
+        });
+    } catch (error) {
+        return res.status(500).json({ success: false, message: "Request error", error: error.message });
+    }
+
+    
+})
+
+app.post('/xera/v1/api/users/airdrop/phase3', async (req,res) => {
+    const { request } = req.body;
+
+    if (!request) {
+        return res.status(400).json({ success: false, message: "No request found" });
+    }
+
+    const apikey = request.api;
+    const limit = parseInt(request.limit, 10) || 10; 
+    const page = parseInt(request.page, 10) || 1;
+
+    if (!apikey) {
+        return res.status(403).json({ success: false, message: "Invalid or missing API key" });
+    }
+    await getDevFromCache(apikey);
+
+    const offset = (page - 1) * limit; 
+
+    try {
+        
+        const [rows] = await db.query(`
+            SELECT t.username, 
+                MAX(t.xera_wallet) AS xera_wallet, 
+                SUM(t.xera_points) AS total_points, 
+                SUM(CASE WHEN t.xera_task = 'Referral Task' THEN 1 ELSE 0 END) AS referral_task_count
+            FROM xera_user_tasks t
+            WHERE DATE(t.xera_completed_date) BETWEEN '2025-02-25' AND '2025-05-30'
+            GROUP BY t.username
+            ORDER BY total_points DESC
+            LIMIT ? OFFSET ?`, [limit, offset]);
+
+        // Query to get total number of records
+        const [totalRows] = await db.query(`
+            SELECT COUNT(DISTINCT username) AS total
+            FROM xera_user_tasks
+            WHERE DATE(xera_completed_date) BETWEEN '2025-02-25' AND '2025-05-30'
+        `);
+
+        const total = totalRows[0]?.total || 0;
+        const totalPages = Math.ceil(total / limit);
+
+        res.status(200).json({
+            success: true,
+            data: rows,
+            message: "data retrieved Successfully",
+            pagination: {
+                currentPage: page,
+                totalPages,
+                totalRecords: total,
+                limit
+            }
+        });
+    } catch (error) {
+        return res.status(500).json({ success: false, message: "Request error", error: error.message });
+    }
+
+    
+})
+
 app.post('/xera/v1/api/users/airdrop/participants', async (req,res) => {
     const { apikey } = req.body;
     
@@ -267,7 +385,7 @@ app.post('/xera/v1/api/users/total-points/phase1', async (req, res) => {
     await getDevFromCache(apikey);
 
     try {
-        const [userstask] = await db.query(`SELECT SUM(xera_points) AS total_points FROM xera_user_tasks WHERE xera_completed_date >= ? AND xera_completed_date <= ?`,['2024-11-01 01:01:01','2024-12-18 01:01:01']);
+        const [userstask] = await db.query(`SELECT SUM(xera_points) AS total_points FROM xera_user_tasks WHERE xera_completed_date BETWEEN ? AND ?`,['2024-11-01 01:01:01','2024-12-18 01:01:01']);
         
         if (userstask.length > 0) {
             const totalPoints = userstask[0].total_points
@@ -297,7 +415,7 @@ app.post('/xera/v1/api/users/total-points/phase2', async (req, res) => {
     await getDevFromCache(apikey);
 
     try {
-        const [userstask] = await db.query(`SELECT SUM(xera_points) AS total_points FROM xera_user_tasks WHERE xera_completed_date >= ? AND xera_completed_date <= ?`,['2024-12-19 01:01:01','2025-02-25 01:01:01']);
+        const [userstask] = await db.query(`SELECT SUM(xera_points) AS total_points FROM xera_user_tasks WHERE xera_completed_date BETWEEN ? AND ?`,['2024-12-19 01:01:01','2025-02-25 01:01:01']);
         
         if (userstask.length > 0) {
             const totalPoints = userstask[0].total_points
@@ -312,7 +430,7 @@ app.post('/xera/v1/api/users/total-points/phase2', async (req, res) => {
     }
 });
 
-app.post('/xera/v1/api/users/total-points/phase2', async (req, res) => {
+app.post('/xera/v1/api/users/total-points/phase3', async (req, res) => {
     const { apikey } = req.body;
     
 
@@ -327,7 +445,7 @@ app.post('/xera/v1/api/users/total-points/phase2', async (req, res) => {
     await getDevFromCache(apikey);
 
     try {
-        const [userstask] = await db.query(`SELECT SUM(xera_points) AS total_points FROM xera_user_tasks WHERE xera_completed_date >= ? AND xera_completed_date <= ?`,['2025-02-25 01:01:01','2025-05-30 01:01:01']);
+        const [userstask] = await db.query(`SELECT SUM(xera_points) AS total_points FROM xera_user_tasks WHERE xera_completed_date BETWEEN ? AND ?`,['2025-02-25 01:01:01','2025-05-30 01:01:01']);
         
         if (userstask.length > 0) {
             const totalPoints = userstask[0].total_points
