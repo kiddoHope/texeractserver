@@ -755,8 +755,6 @@ app.post('/xera/v1/api/user/faucet-claim', authenticateToken, async (req, res) =
 app.post('/xera/v1/api/user/coin/claim', authenticateToken, async (req, res) => {
     const { username, txHash, sender, receiver, command, amount, token, tokenId } = req.body;
     
-    console.log(username, txHash, sender, receiver, command, amount, token, tokenId );
-    
     if (!username || !txHash || !sender || !receiver || !command || !amount || !token || !tokenId) {
       return res.json({ success: false, message: 'Incomplete transaction data.' });
     }
@@ -804,11 +802,8 @@ app.post('/xera/v1/api/user/coin/claim', authenticateToken, async (req, res) => 
                         
                         if (currentToken.length > 0) {
                             const tokenCirculating = parseFloat(currentToken[0].token_circulating).toFixed(8);
-                            console.log(tokenCirculating);
                             const amountNumber = parseFloat(amount);
-                            console.log(amountNumber);
                             const newCirculating = parseFloat(tokenCirculating) + amountNumber;
-                            console.log(newCirculating);
                             
                             const [updateTokenCirculating] = await db.query(
                                 'UPDATE xera_asset_token SET token_circulating = ? WHERE token_id = ?',
