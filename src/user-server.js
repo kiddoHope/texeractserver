@@ -441,7 +441,7 @@ app.post('/xera/v1/api/user/rank-phase1', authenticateToken, async (req, res) =>
              SELECT t.username, MAX(t.xera_wallet) AS xera_wallet, SUM(t.xera_points) AS total_points, 
                 SUM(CASE WHEN t.xera_task = 'Referral Task' THEN 1 ELSE 0 END) AS referral_task_count
             FROM xera_user_tasks t
-            WHERE DATE(t.xera_completed_date) BETWEEN '2024-09-28' AND '2024-12-20'
+            WHERE DATE(t.xera_completed_date) BETWEEN '2024-09-28' AND '2024-12-18'
             GROUP BY t.username
             ORDER BY total_points DESC
         `);

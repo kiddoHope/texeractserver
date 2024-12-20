@@ -214,7 +214,7 @@ app.post('/xera/v1/api/watcher/recovered-exp/phase1', async (req, res) => {
             SELECT COUNT(*) AS referral_task_count
             FROM xera_user_tasks
             WHERE xera_task = 'Referral Task' AND xera_points = 0
-              AND xera_completed_date BETWEEN '2024-09-28' AND '2024-12-20'
+              AND xera_completed_date BETWEEN '2024-09-28' AND '2024-12-18'
         `);
 
         // Calculate recovered_xp
