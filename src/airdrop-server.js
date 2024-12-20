@@ -192,13 +192,11 @@ app.post('/xera/v1/api/users/airdrop/phase1', async (req,res) => {
     try {
         
         const [rows] = await db.query(`
-            SELECT t.username, 
-                MAX(t.xera_wallet) AS xera_wallet, 
-                SUM(t.xera_points) AS total_points, 
-                SUM(CASE WHEN t.xera_task = 'Referral Task' THEN 1 ELSE 0 END) AS referral_task_count
-            FROM xera_user_tasks t
-            WHERE DATE(t.xera_completed_date) BETWEEN '2024-09-28' AND '2024-12-18'
-            GROUP BY t.username
+            SELECT MAX(username) AS username, MAX(xera_wallet) AS xera_wallet, SUM(CAST(xera_points AS DECIMAL(10))) AS total_points, 
+                SUM(CASE WHEN xera_task = 'Referral Task' THEN 1 ELSE 0 END) AS referral_task_count
+            FROM xera_user_tasks
+            WHERE DATE(xera_completed_date) BETWEEN '2024-09-28' AND '2024-12-18'
+            GROUP BY BINARY username
             ORDER BY total_points DESC
             LIMIT ? OFFSET ?`, [limit, offset]);
 
@@ -251,13 +249,11 @@ app.post('/xera/v1/api/users/airdrop/phase2', async (req,res) => {
     try {
         
         const [rows] = await db.query(`
-            SELECT t.username, 
-                MAX(t.xera_wallet) AS xera_wallet, 
-                SUM(t.xera_points) AS total_points, 
-                SUM(CASE WHEN t.xera_task = 'Referral Task' THEN 1 ELSE 0 END) AS referral_task_count
-            FROM xera_user_tasks t
-            WHERE DATE(t.xera_completed_date) BETWEEN '2024-12-19' AND '2025-02-25'
-            GROUP BY t.username
+            SELECT MAX(username) AS username, MAX(xera_wallet) AS xera_wallet, SUM(CAST(xera_points AS DECIMAL(10))) AS total_points, 
+                SUM(CASE WHEN xera_task = 'Referral Task' THEN 1 ELSE 0 END) AS referral_task_count
+            FROM xera_user_tasks
+            WHERE DATE(xera_completed_date) BETWEEN '2024-12-19' AND '2025-02-25'
+            GROUP BY BINARY username
             ORDER BY total_points DESC
             LIMIT ? OFFSET ?`, [limit, offset]);
 
@@ -310,13 +306,11 @@ app.post('/xera/v1/api/users/airdrop/phase3', async (req,res) => {
     try {
         
         const [rows] = await db.query(`
-            SELECT t.username, 
-                MAX(t.xera_wallet) AS xera_wallet, 
-                SUM(t.xera_points) AS total_points, 
-                SUM(CASE WHEN t.xera_task = 'Referral Task' THEN 1 ELSE 0 END) AS referral_task_count
-            FROM xera_user_tasks t
-            WHERE DATE(t.xera_completed_date) BETWEEN '2025-02-25' AND '2025-05-30'
-            GROUP BY t.username
+            SELECT MAX(username) AS username, MAX(xera_wallet) AS xera_wallet, SUM(CAST(xera_points AS DECIMAL(10))) AS total_points, 
+                SUM(CASE WHEN xera_task = 'Referral Task' THEN 1 ELSE 0 END) AS referral_task_count
+            FROM xera_user_tasks
+            WHERE DATE(xera_completed_date) BETWEEN '2025-02-25' AND '2025-05-30'
+            GROUP BY BINARY username
             ORDER BY total_points DESC
             LIMIT ? OFFSET ?`, [limit, offset]);
 
@@ -385,7 +379,9 @@ app.post('/xera/v1/api/users/total-points/phase1', async (req, res) => {
     await getDevFromCache(apikey);
 
     try {
-        const [userstask] = await db.query(`SELECT SUM(xera_points) AS total_points FROM xera_user_tasks WHERE xera_completed_date BETWEEN ? AND ?`,['2024-11-01 01:01:01','2024-12-18 01:01:01']);
+        const [userstask] = await db.query(`
+            SELECT SUM(xera_points) AS total_points 
+            FROM xera_user_tasks WHERE xera_completed_date BETWEEN ? AND ?`,['2024-11-01 01:01:01','2024-12-18 01:01:01']);
         
         if (userstask.length > 0) {
             const totalPoints = userstask[0].total_points
