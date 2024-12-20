@@ -802,7 +802,8 @@ app.post('/xera/v1/api/user/coin/claim', authenticateToken, async (req, res) => 
                         );
                         
                         if (currentToken.length > 0) {
-                            const newCirculating = parseInt(currentToken[0].token_circulating) + amount;
+                            const tokenCirculating = parseFloat(currentToken[0].token_circulating).toFixed(8);
+                            const newCirculating = parseFloat(tokenCirculating) + amount;
             
                             const [updateTokenCirculating] = await db.query(
                                 'UPDATE xera_asset_token SET token_circulating = ? WHERE token_id = ?',
