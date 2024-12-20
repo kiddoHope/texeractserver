@@ -1021,6 +1021,58 @@ app.post('/xera/v1/api/user/task/social', authenticateToken, async (req, res) =>
     }
 });
 
+app.post('/xera/v1/api/user/task/connect-wallet', authenticateToken, async (req, res) => {
+    const { user } = req.body;
+
+    if (!user || !user.ethWallet || !user.solWallet || !user.xeraWallet || !user.xeraUsername) {
+        return res.status(400).json({ success: false, message: 'Incomplete data' });
+    }
+
+    const ethWallet = user.ethWallet;
+    const solWallet = user.solWallet;
+    const xeraWallet = user.xeraWallet; 
+    const xeraUsername = user.xeraUsername;
+    const xeraStatus = 'ok';
+    const xeraTask = 'Wallet Connect Task';
+    const xeraPoints = '10000';
+    try {
+
+        // Check if both eth_wallet and sol_wallet already exist in another account
+        const [existingWallet] = await db.query(`
+            SELECT * FROM xera_user_accounts WHERE eth_wallet = ? AND sol_wallet = ? AND xera_wallet != ?
+        `, [ethWallet, solWallet, xeraWallet]);
+
+        if (existingWallet.length > 0) {
+            // Both wallets are already bound to another XERA wallet
+            return res.json({ success: false, message: 'Wallet already binded on other XERA Wallet' });
+        } else {
+            // Proceed with the update
+            await db.query(`
+                UPDATE xera_user_accounts SET eth_wallet = ?, sol_wallet = ? WHERE xera_wallet = ?
+            `, [ethWallet, solWallet, xeraWallet]);
+
+            if (ethWallet || solWallet) {
+                // Check if an entry with the same username, xera_wallet, and xera_task "Wallet Connect Task" already exists
+                const [existingTask] = await db.query(`
+                    SELECT COUNT(*) AS count FROM xera_user_tasks WHERE username = ? AND xera_wallet = ? AND xera_task = 'Wallet Connect Task'
+                `, [xeraUsername, xeraWallet]);
+
+                // Proceed only if no matching entry was found
+                if (existingTask[0].count == 0) {
+                    await db.query(`
+                        INSERT INTO xera_user_tasks (username, xera_wallet, xera_task, xera_status, xera_points, xera_telegram_id, xera_twitter_username) 
+                        VALUES (?, ?, ?, ?, ?, '', '')
+                    `, [xeraUsername, xeraWallet, xeraTask, xeraStatus, xeraPoints, '', '']);
+                }
+            }
+
+            return res.json({ success: true, message: 'Wallet successfully updated and task recorded' });
+        }
+    } catch (error) {
+        return res.json({ success: false, message: 'Request error', error: error.message });
+    }
+});
+
 app.listen(port, () => {
     console.log(`Server is running on http://localhost:${port}`);
 });
