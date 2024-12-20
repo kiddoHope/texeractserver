@@ -982,13 +982,13 @@ app.post('/xera/v1/api/user/task/twitter', async (req, res) => {
     }
 });
 
-app.post('/xeraUserAirdropSocialTask', async (req, res) => {
+app.post('/xera/v1/api/user/task/social', async (req, res) => {
     const { user } = req.body;
     if (!user || !user.username || !user.wallet) {
         return res.status(400).json({ success: false, message: 'Incomplete data' });
     }
 
-    const taskTitle = 'Twitter Task';
+    const taskTitle = user.taskTitle;
     const username = user.username;
     const wallet = user.wallet;
     const xeraStatus = 'ok';
@@ -998,7 +998,7 @@ app.post('/xeraUserAirdropSocialTask', async (req, res) => {
 
         // Check if the task already exists
         const [checkResult] = await db.query(`
-            SELECT COUNT(*) AS count 
+            SELECT COUNT(*) 
             FROM xera_user_tasks 
             WHERE xera_task = ? AND username = ? AND xera_wallet = ?
         `, [taskTitle, username, wallet]);
@@ -1009,9 +1009,9 @@ app.post('/xeraUserAirdropSocialTask', async (req, res) => {
 
         // Insert the new task
         await db.query(`
-            INSERT INTO xera_user_tasks (xera_task, username, xera_wallet, xera_status, xera_points) 
+            INSERT INTO xera_user_tasks (xera_task, username, xera_wallet, xera_status, xera_points, xera_telegram_id, xera_twitter_username) 
             VALUES (?, ?, ?, ?, ?)
-        `, [taskTitle, username, wallet, xeraStatus, xeraPoints]);
+        `, [taskTitle, username, wallet, xeraStatus, xeraPoints, '', '']);
 
         res.json({ success: true, message: 'Task successfully added' });
     } catch (error) {
