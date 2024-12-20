@@ -755,6 +755,7 @@ app.post('/xera/v1/api/user/faucet-claim', authenticateToken, async (req, res) =
 app.post('/xera/v1/api/user/coin/claim', authenticateToken, async (req, res) => {
     const { username, txHash, sender, receiver, command, amount, token, tokenId } = req.body;
     
+    console.log(username, txHash, sender, receiver, command, amount, token, tokenId );
     
     if (!username || !txHash || !sender || !receiver || !command || !amount || !token || !tokenId) {
       return res.json({ success: false, message: 'Incomplete transaction data.' });
@@ -803,8 +804,12 @@ app.post('/xera/v1/api/user/coin/claim', authenticateToken, async (req, res) => 
                         
                         if (currentToken.length > 0) {
                             const tokenCirculating = parseFloat(currentToken[0].token_circulating).toFixed(8);
-                            const newCirculating = parseFloat(tokenCirculating) + amount;
-            
+                            console.log(tokenCirculating);
+                            const amountNumber = parseFloat(amount);
+                            console.log(amountNumber);
+                            const newCirculating = parseFloat(tokenCirculating) + amountNumber;
+                            console.log(newCirculating);
+                            
                             const [updateTokenCirculating] = await db.query(
                                 'UPDATE xera_asset_token SET token_circulating = ? WHERE token_id = ?',
                                 [newCirculating, tokenId]
@@ -813,25 +818,25 @@ app.post('/xera/v1/api/user/coin/claim', authenticateToken, async (req, res) => 
                             if (updateTokenCirculating.affectedRows > 0) {
                                 res.json({ success: true, message: 'Coin Claimed Successfully.' });
                             } else {
-                                res.json({success:false, message: "Error updating token circulation"})
+                                return res.json({success:false, message: "Error updating token circulation"})
                             }
                         } else {
-                            res.json({success:false, message: "Token not found or mismatched token symbol."})
+                            return res.json({success:false, message: "Token not found or mismatched token symbol."})
                         }
                     } else {
-                        res.json({success:false, message: "Error adding transaction"})
+                        return res.json({success:false, message: "Error adding transaction"})
                     }
                 } else {
-                res.json({ success: false, message: "Error increment count"})
+                    return res.json({ success: false, message: "Error increment count"})
                 }
             } else {
-                res.json({ success:false, message: 'Block data not found. Transaction aborted.'});
+                return res.json({ success:false, message: 'Block data not found. Transaction aborted.'});
             }
         }
   
       }
     } catch (err) {
-      res.json({ success: false, message: err.message });
+        return res.json({ success: false, message: err.message });
     }
 });
 
