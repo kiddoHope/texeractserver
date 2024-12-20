@@ -294,6 +294,7 @@ app.post('/xera/v1/api/user/tasks/all-task', authenticateToken, async (req,res) 
 
     try {
         const [transactions] = await db.query('SELECT * FROM xera_user_tasks WHERE BINARY username = ?',[user]);
+        
         const [connectedWallet] = await db.query('SELECT * FROM xera_user_accounts WHERE BINARY username = ?',[user]);
         
         if (transactions) {
@@ -311,9 +312,9 @@ app.post('/xera/v1/api/user/tasks/all-task', authenticateToken, async (req,res) 
             const filterTelegram2 = transactions.filter(data => data.xera_task === "Telegram 2 Task")
             const filterTiktok = transactions.filter(data => data.xera_task === "TikTok Task")
             const filterBluesky = transactions.filter(data => data.xera_task === "Bluesky Task")
+            const filterYoutube = transactions.filter(data => data.xera_task === "YouTube Task");
             const filterTXERA = transactions.filter(data => data.xera_task === "TXERA Claim Task");
-            const filterYoutube = transactions.filter(data => data.xera_task === "Youtube Task");
-
+            
             let alltask = {};
 
             if (filterTXERA.length > 0) {
