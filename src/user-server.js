@@ -431,36 +431,36 @@ app.post('/xera/v1/api/user/tasks/all-task', authenticateToken, async (req,res) 
 
 app.post('/xera/v1/api/user/rank-phase1', authenticateToken, async (req, res) => {
     const { user } = req.body;
-
+    
     if (!user) {
         return res.json({ success: false, message: "Invalid request" });
     }
 
-    try 
-        {const [userRankings] = await db.query(`
-             SELECT t.username, MAX(t.xera_wallet) AS xera_wallet, SUM(t.xera_points) AS total_points, 
-                SUM(CASE WHEN t.xera_task = 'Referral Task' THEN 1 ELSE 0 END) AS referral_task_count
-            FROM xera_user_tasks t
-            WHERE DATE(t.xera_completed_date) BETWEEN '2024-09-28' AND '2024-12-18'
-            GROUP BY t.username
+    try {
+        const [userRanking] = await db.query(`
+            SELECT MAX(username) AS username, MAX(xera_wallet) AS xera_wallet, SUM(CAST(xera_points AS DECIMAL(10))) AS total_points, 
+                SUM(CASE WHEN xera_task = 'Referral Task' THEN 1 ELSE 0 END) AS referral_task_count
+            FROM xera_user_tasks
+            WHERE DATE(xera_completed_date) BETWEEN '2024-09-28' AND '2024-12-18'
+            GROUP BY BINARY username
             ORDER BY total_points DESC
         `);
         
-        // Find the specific user's rank
-        const userRank = userRankings.findIndex(rankUser => rankUser.username === user) + 1;
-        const userTotalPoints = userRankings.find(rankUser => rankUser.username === user)?.total_points;
-        
-        if (userRank > 0 && userTotalPoints) {
-            return res.json({ 
-                success: true, 
-                message: "Successfully retrieved user rank", 
-                username: user, 
-                rank: userRank,
-                totalPoints: userTotalPoints 
-            });
-        } else {
-            return res.json({ success: false, message: "User not found" });
-        }
+         // Find the specific user's rank
+         const userRank = userRanking.findIndex(rankUser => rankUser.username === user) + 1;
+         const userTotalPoints = userRanking.find(rankUser => rankUser.username === user)?.total_points;
+         
+         if (userRank > 0 && userTotalPoints) {
+             return res.json({ 
+                 success: true, 
+                 message: "Successfully retrieved user rank", 
+                 username: user, 
+                 rank: userRank,
+                 totalPoints: userTotalPoints 
+             });
+         } else {
+             return res.json({ success: false, message: "User not found" });
+         }
         
     } catch (error) {
         return res.json({ success: false, message: "Request error", error: error.message });
@@ -474,19 +474,19 @@ app.post('/xera/v1/api/user/rank-phase2', authenticateToken, async (req, res) =>
         return res.json({ success: false, message: "Invalid request" });
     }
 
-    try 
-        {const [userRankings] = await db.query(`
-             SELECT t.username, MAX(t.xera_wallet) AS xera_wallet, SUM(t.xera_points) AS total_points, 
-                SUM(CASE WHEN t.xera_task = 'Referral Task' THEN 1 ELSE 0 END) AS referral_task_count
-            FROM xera_user_tasks t
-            WHERE DATE(t.xera_completed_date) BETWEEN '2024-12-19' AND '2025-02-25'
-            GROUP BY t.username
+    try {
+        const [userRanking] = await db.query(`
+            SELECT MAX(username) AS username, MAX(xera_wallet) AS xera_wallet, SUM(CAST(xera_points AS DECIMAL(10))) AS total_points, 
+                SUM(CASE WHEN xera_task = 'Referral Task' THEN 1 ELSE 0 END) AS referral_task_count
+            FROM xera_user_tasks
+            WHERE DATE(xera_completed_date) BETWEEN '2024-12-19' AND '2025-02-25'
+            GROUP BY BINARY username
             ORDER BY total_points DESC
         `);
-        
+
         // Find the specific user's rank
-        const userRank = userRankings.findIndex(rankUser => rankUser.username === user) + 1;
-        const userTotalPoints = userRankings.find(rankUser => rankUser.username === user)?.total_points;
+        const userRank = userRanking.findIndex(rankUser => rankUser.username === user) + 1;
+        const userTotalPoints = userRanking.find(rankUser => rankUser.username === user)?.total_points;
         
         if (userRank > 0 && userTotalPoints) {
             return res.json({ 
@@ -512,19 +512,19 @@ app.post('/xera/v1/api/user/rank-phase3', authenticateToken, async (req, res) =>
         return res.json({ success: false, message: "Invalid request" });
     }
 
-    try 
-        {const [userRankings] = await db.query(`
-            SELECT t.username, MAX(t.xera_wallet) AS xera_wallet, SUM(t.xera_points) AS total_points, 
-                SUM(CASE WHEN t.xera_task = 'Referral Task' THEN 1 ELSE 0 END) AS referral_task_count
-            FROM xera_user_tasks t
-            WHERE DATE(t.xera_completed_date) BETWEEN '2025-02-25' AND '2025-05-30'
-            GROUP BY t.username
+    try {
+        const [userRanking] = await db.query(`
+            SELECT MAX(username) AS username, MAX(xera_wallet) AS xera_wallet, SUM(CAST(xera_points AS DECIMAL(10))) AS total_points, 
+                SUM(CASE WHEN xera_task = 'Referral Task' THEN 1 ELSE 0 END) AS referral_task_count
+            FROM xera_user_tasks
+            WHERE DATE(xera_completed_date) BETWEEN '2025-02-25' AND '2025-05-30'
+            GROUP BY BINARY username
             ORDER BY total_points DESC
         `);
-        
+
         // Find the specific user's rank
-        const userRank = userRankings.findIndex(rankUser => rankUser.username === user) + 1;
-        const userTotalPoints = userRankings.find(rankUser => rankUser.username === user)?.total_points;
+        const userRank = userRanking.findIndex(rankUser => rankUser.username === user) + 1;
+        const userTotalPoints = userRanking.find(rankUser => rankUser.username === user)?.total_points;
         
         if (userRank > 0 && userTotalPoints) {
             return res.json({ 
