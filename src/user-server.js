@@ -876,7 +876,7 @@ app.post('/xera/v1/api/user/security', authenticateToken, async (req,res) => {
     }
 })
 
-app.post('/xera/v1/api/user/task/telegram', async (req, res) => {
+app.post('/xera/v1/api/user/task/telegram', authenticateToken, async (req, res) => {
     const { user } = req.body;
 
     if (!telegramID || !username || !wallet || !user) {
@@ -930,7 +930,7 @@ app.post('/xera/v1/api/user/task/telegram', async (req, res) => {
     }
 });
 
-app.post('/xera/v1/api/user/task/twitter', async (req, res) => {
+app.post('/xera/v1/api/user/task/twitter', authenticateToken, async (req, res) => {
     const { user } = req.body;
 
     if (!user || !user.username || !user.wallet) {
