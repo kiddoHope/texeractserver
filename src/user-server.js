@@ -982,7 +982,7 @@ app.post('/xera/v1/api/user/task/twitter', async (req, res) => {
     }
 });
 
-app.post('/xera/v1/api/user/task/social', async (req, res) => {
+app.post('/xera/v1/api/user/task/social', authenticateToken, async (req, res) => {
     const { user } = req.body;
     
     if (!user || !user.username || !user.wallet) {
