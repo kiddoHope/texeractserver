@@ -89,11 +89,11 @@ const getDevFromCache = async (api) => {
             dev = dbDev[0];
             cache.set(api, dev);
         } else {
-            return res.status(401).json({ success: false, message: "Invalid request" });
+            return res.json({ success: false, message: "Invalid request" });
         }
     }
     if (dev.xera_moderation !== 'creator') {
-        return res.status(401).json({ success: false, message: "Invalid request" });
+        return res.json({ success: false, message: "Invalid request" });
     }
 };
 
@@ -101,7 +101,7 @@ app.post('/xera/v1/api/token/asset-tokens', async(req,res) => {
     const { apikey } = req.body
 
     if (!apikey) {
-        return res.status(400).json({ success: false, message: "No request found" });
+        return res.json({ success: false, message: "No request found" });
     }
     await getDevFromCache(apikey)
     try {
@@ -110,13 +110,13 @@ app.post('/xera/v1/api/token/asset-tokens', async(req,res) => {
         if (assetTokens.length > 0) {
             const cleanedData = assetTokens.map(({id, ...clean}) => clean)
             
-            return res.status(200).json({ success: true, data: cleanedData})
+            return res.json({ success: true, data: cleanedData})
         } else {
-            return res.status(404).json({ success:false, message : "no tokens found"})
+            return res.json({ success:false, message : "no tokens found"})
         }
     
     } catch (error) {
-        return res.status(500).json({ success: false, message: "request error", error: error})
+        return res.json({ success: false, message: "request error", error: error})
     }
 })
 

@@ -81,11 +81,11 @@ const getDevFromCache = async (api) => {
             dev = dbDev[0];
             cache.set(api, dev);
         } else {
-            return res.status(401).json({ success: false, message: "Invalid request" });
+            return res.json({ success: false, message: "Invalid request" });
         }
     }
     if (dev.xera_moderation !== 'creator') {
-        return res.status(401).json({ success: false, message: "Invalid request" });
+        return res.json({ success: false, message: "Invalid request" });
     }
 };
 
@@ -93,7 +93,7 @@ app.post('/xera/v1/api/users/airdrop/full-stats', async (req, res) => {
     const { apikey } = req.body;
     
     if (!apikey) {
-        return res.status(400).json({ success: false, message: "No request found" });
+        return res.json({ success: false, message: "No request found" });
     }
 
     
@@ -160,14 +160,14 @@ app.post('/xera/v1/api/users/airdrop/full-stats', async (req, res) => {
         }
 
         // Send the response after the loop finishes
-        return res.status(200).json({
+        return res.json({
             success: true,
             message: "Successfully retrieved users data",
             usersData: results,
         });
 
     } catch (error) {
-        return res.status(500).json({ success: false, message: "Request error", error: error.message });
+        return res.json({ success: false, message: "Request error", error: error.message });
     }
 });
 
@@ -175,7 +175,7 @@ app.post('/xera/v1/api/users/airdrop/phase1', async (req,res) => {
     const { request } = req.body;
 
     if (!request) {
-        return res.status(400).json({ success: false, message: "No request found" });
+        return res.json({ success: false, message: "No request found" });
     }
 
     const apikey = request.api;
@@ -183,7 +183,7 @@ app.post('/xera/v1/api/users/airdrop/phase1', async (req,res) => {
     const page = parseInt(request.page, 10) || 1;
 
     if (!apikey) {
-        return res.status(403).json({ success: false, message: "Invalid or missing API key" });
+        return res.json({ success: false, message: "Invalid or missing API key" });
     }
     await getDevFromCache(apikey);
 
@@ -212,7 +212,7 @@ app.post('/xera/v1/api/users/airdrop/phase1', async (req,res) => {
         const total = totalRows[0]?.total || 0;
         const totalPages = Math.ceil(total / limit);
 
-        res.status(200).json({
+        res.json({
             success: true,
             data: rows,
             message: "data retrieved Successfully",
@@ -224,7 +224,7 @@ app.post('/xera/v1/api/users/airdrop/phase1', async (req,res) => {
             }
         });
     } catch (error) {
-        return res.status(500).json({ success: false, message: "Request error", error: error.message });
+        return res.json({ success: false, message: "Request error", error: error.message });
     }
 
     
@@ -234,7 +234,7 @@ app.post('/xera/v1/api/users/airdrop/phase2', async (req,res) => {
     const { request } = req.body;
 
     if (!request) {
-        return res.status(400).json({ success: false, message: "No request found" });
+        return res.json({ success: false, message: "No request found" });
     }
 
     const apikey = request.api;
@@ -242,7 +242,7 @@ app.post('/xera/v1/api/users/airdrop/phase2', async (req,res) => {
     const page = parseInt(request.page, 10) || 1;
 
     if (!apikey) {
-        return res.status(403).json({ success: false, message: "Invalid or missing API key" });
+        return res.json({ success: false, message: "Invalid or missing API key" });
     }
     await getDevFromCache(apikey);
 
@@ -271,7 +271,7 @@ app.post('/xera/v1/api/users/airdrop/phase2', async (req,res) => {
         const total = totalRows[0]?.total || 0;
         const totalPages = Math.ceil(total / limit);
 
-        res.status(200).json({
+        res.json({
             success: true,
             data: rows,
             message: "data retrieved Successfully",
@@ -283,7 +283,7 @@ app.post('/xera/v1/api/users/airdrop/phase2', async (req,res) => {
             }
         });
     } catch (error) {
-        return res.status(500).json({ success: false, message: "Request error", error: error.message });
+        return res.json({ success: false, message: "Request error", error: error.message });
     }
 
     
@@ -293,7 +293,7 @@ app.post('/xera/v1/api/users/airdrop/phase3', async (req,res) => {
     const { request } = req.body;
 
     if (!request) {
-        return res.status(400).json({ success: false, message: "No request found" });
+        return res.json({ success: false, message: "No request found" });
     }
 
     const apikey = request.api;
@@ -301,7 +301,7 @@ app.post('/xera/v1/api/users/airdrop/phase3', async (req,res) => {
     const page = parseInt(request.page, 10) || 1;
 
     if (!apikey) {
-        return res.status(403).json({ success: false, message: "Invalid or missing API key" });
+        return res.json({ success: false, message: "Invalid or missing API key" });
     }
     await getDevFromCache(apikey);
 
@@ -330,7 +330,7 @@ app.post('/xera/v1/api/users/airdrop/phase3', async (req,res) => {
         const total = totalRows[0]?.total || 0;
         const totalPages = Math.ceil(total / limit);
 
-        res.status(200).json({
+        res.json({
             success: true,
             data: rows,
             message: "data retrieved Successfully",
@@ -342,7 +342,7 @@ app.post('/xera/v1/api/users/airdrop/phase3', async (req,res) => {
             }
         });
     } catch (error) {
-        return res.status(500).json({ success: false, message: "Request error", error: error.message });
+        return res.json({ success: false, message: "Request error", error: error.message });
     }
 
     
@@ -352,7 +352,7 @@ app.post('/xera/v1/api/users/airdrop/participants', async (req,res) => {
     const { apikey } = req.body;
     
     if (!apikey) {
-        return res.status(400).json({ success: false, message: "No request found" });
+        return res.json({ success: false, message: "No request found" });
     }
     await getDevFromCache(apikey);
 
@@ -361,12 +361,12 @@ app.post('/xera/v1/api/users/airdrop/participants', async (req,res) => {
         if (userTask.length > 0) {
             const participantData = userTask[0].user_participants
             
-            res.status(200).json({ success: true, message: "User tasks successfully retrieve", participants :participantData})
+            res.json({ success: true, message: "User tasks successfully retrieve", participants :participantData})
         } else {
-            return res.status(400).json({ success: false, message: "No data retrieve" });
+            return res.json({ success: false, message: "No data retrieve" });
         }
     } catch (error) {
-        return res.status(500).json({ success: false, message: "Request error", error: error.message });
+        return res.json({ success: false, message: "Request error", error: error.message });
     }
 })
 
@@ -375,11 +375,11 @@ app.post('/xera/v1/api/users/total-points/phase1', async (req, res) => {
     
 
     if (!apikey) {
-        return res.status(400).json({ success: false, message: "No request found" });
+        return res.json({ success: false, message: "No request found" });
     }
 
     if (!apikey) {
-        return res.status(400).json({ success: false, message: "No request found" });
+        return res.json({ success: false, message: "No request found" });
     }
 
     await getDevFromCache(apikey);
@@ -390,13 +390,13 @@ app.post('/xera/v1/api/users/total-points/phase1', async (req, res) => {
         if (userstask.length > 0) {
             const totalPoints = userstask[0].total_points
             
-            return res.status(200).json({ success: true, totalPoints });
+            return res.json({ success: true, totalPoints });
         } else {
-            return res.status(404).json({ success: false, message: "No tasks found" });
+            return res.json({ success: false, message: "No tasks found" });
         }
            
     } catch (error) {
-        return res.status(500).json({ success: false, message: "Request error", error: error });
+        return res.json({ success: false, message: "Request error", error: error });
     }
 });
 
@@ -405,11 +405,11 @@ app.post('/xera/v1/api/users/total-points/phase2', async (req, res) => {
     
 
     if (!apikey) {
-        return res.status(400).json({ success: false, message: "No request found" });
+        return res.json({ success: false, message: "No request found" });
     }
 
     if (!apikey) {
-        return res.status(400).json({ success: false, message: "No request found" });
+        return res.json({ success: false, message: "No request found" });
     }
 
     await getDevFromCache(apikey);
@@ -420,13 +420,13 @@ app.post('/xera/v1/api/users/total-points/phase2', async (req, res) => {
         if (userstask.length > 0) {
             const totalPoints = userstask[0].total_points
             
-            return res.status(200).json({ success: true, totalPoints });
+            return res.json({ success: true, totalPoints });
         } else {
-            return res.status(404).json({ success: false, message: "No tasks found" });
+            return res.json({ success: false, message: "No tasks found" });
         }
            
     } catch (error) {
-        return res.status(500).json({ success: false, message: "Request error", error: error });
+        return res.json({ success: false, message: "Request error", error: error });
     }
 });
 
@@ -435,11 +435,11 @@ app.post('/xera/v1/api/users/total-points/phase3', async (req, res) => {
     
 
     if (!apikey) {
-        return res.status(400).json({ success: false, message: "No request found" });
+        return res.json({ success: false, message: "No request found" });
     }
 
     if (!apikey) {
-        return res.status(400).json({ success: false, message: "No request found" });
+        return res.json({ success: false, message: "No request found" });
     }
 
     await getDevFromCache(apikey);
@@ -450,13 +450,13 @@ app.post('/xera/v1/api/users/total-points/phase3', async (req, res) => {
         if (userstask.length > 0) {
             const totalPoints = userstask[0].total_points
             
-            return res.status(200).json({ success: true, totalPoints });
+            return res.json({ success: true, totalPoints });
         } else {
-            return res.status(404).json({ success: false, message: "No tasks found" });
+            return res.json({ success: false, message: "No tasks found" });
         }
            
     } catch (error) {
-        return res.status(500).json({ success: false, message: "Request error", error: error });
+        return res.json({ success: false, message: "Request error", error: error });
     }
 });
 
@@ -464,7 +464,7 @@ app.post('/xera/v1/api/users/all-wallet',async (req,res) => {
     const {apikey} = req.body; 
     
     if (!apikey) {
-        return res.status(400).json({ success: false, message: "No request found" });
+        return res.json({ success: false, message: "No request found" });
     }
     await getDevFromCache(apikey);
     try {
@@ -472,11 +472,11 @@ app.post('/xera/v1/api/users/all-wallet',async (req,res) => {
         
         if (countWallet.length > 0) {
             const walletCount = countWallet[0].user_count
-            res.status(200).json({ success:true, message: "Successfully count all wallet", walletCount: walletCount})
+            res.json({ success:true, message: "Successfully count all wallet", walletCount: walletCount})
         }
             
     } catch (error) {
-        return res.status(500).json({ success: false, message: "request error", error: error });
+        return res.json({ success: false, message: "request error", error: error });
     }
 })
 
@@ -484,7 +484,7 @@ app.post('/xera/v1/api/users/airdrop/recent-participant', async (req,res) => {
     const { apikey } = req.body;
     
     if (!apikey) {
-        return res.status(400).json({ success: false, message: "No request found" });
+        return res.json({ success: false, message: "No request found" });
     }
     await getDevFromCache(apikey);
     try {
@@ -497,12 +497,12 @@ app.post('/xera/v1/api/users/airdrop/recent-participant', async (req,res) => {
 
         if (recentParticipants.length > 0) {
             const participantsData = recentParticipants[0].recent_participants
-            res.status(200).json({ success: true, message: "Participants successfully retrieve", recentparticipants: participantsData})
+            res.json({ success: true, message: "Participants successfully retrieve", recentparticipants: participantsData})
         } else {
-            return res.status(400).json({ success: false, message: "No data retrieve" });
+            return res.json({ success: false, message: "No data retrieve" });
         }
     } catch (error) {
-        return res.status(500).json({ success: false, message: "Request error", error: error.message });
+        return res.json({ success: false, message: "Request error", error: error.message });
     }
 })
 
@@ -510,7 +510,7 @@ app.post('/xera/v1/api/users/node/transaction-history', async (req,res) => {
     const { apikey } = req.body;
     
     if (!apikey) {
-        return res.status(400).json({ success: false, message: "No request found" });
+        return res.json({ success: false, message: "No request found" });
     }
     await getDevFromCache(apikey);
     try {
@@ -523,12 +523,12 @@ app.post('/xera/v1/api/users/node/transaction-history', async (req,res) => {
         `,[currentDate]);
 
         if (transactionNode.length > 0) {
-            res.status(200).json({ success: true, message: "User tasks successfully retrieve", transaction : transactionNode})
+            res.json({ success: true, message: "User tasks successfully retrieve", transaction : transactionNode})
         } else {
-            return res.status(400).json({ success: false, message: "No data retrieve" });
+            return res.json({ success: false, message: "No data retrieve" });
         }
     } catch (error) {
-        return res.status(500).json({ success: false, message: "Request error", error: error.message });
+        return res.json({ success: false, message: "Request error", error: error.message });
     }
 })
 

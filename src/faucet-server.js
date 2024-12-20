@@ -84,7 +84,7 @@ app.post('/xera/v1/api/token/faucet-transaction', async (req, res) => {
     const { request } = req.body;
     
     if (!request) {
-        res.status(400).json({ success: false, message: "no request found"})
+        res.json({ success: false, message: "no request found"})
     }
     const apikey = request.api
     const limit = request.limit
@@ -102,12 +102,12 @@ app.post('/xera/v1/api/token/faucet-transaction', async (req, res) => {
             console.log(paginatedData);
             
 
-            return res.status(200).json({ success: true, data: paginatedData });
+            return res.json({ success: true, data: paginatedData });
         } else {
-            return res.status(404).json({ success: false, message: "No tokens found" });
+            return res.json({ success: false, message: "No tokens found" });
         }
     } catch (error) {
-        return res.status(500).json({ success: false, message: "Request error", error: error });
+        return res.json({ success: false, message: "Request error", error: error });
     }
 });
 

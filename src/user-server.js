@@ -69,21 +69,21 @@ const authenticateToken = (req, res, next) => {
     const token = authHeader && authHeader.split(" ")[1]; // Extract token from "Bearer <token>"
 
     if (!token) {
-        return res.status(401).json({ success: false, message: "Authentication token is required" });
+        return res.json({ success: false, message: "Authentication token is required" });
     }
 
     jwt.verify(token, jwtSecret, (err, decoded) => {
         if (err) {
             if (err.name === "TokenExpiredError") {
                 // Handle expired token case
-                return res.status(401).json({ success: false, message: "Token has expired" });
+                return res.json({ success: false, message: "Token has expired" });
             }
             if (err.name === "JsonWebTokenError") {
                 // Handle invalid token case
-                return res.status(403).json({ success: false, message: "Invalid token" });
+                return res.json({ success: false, message: "Invalid token" });
             }
             // Handle other errors
-            return res.status(403).json({ success: false, message: "Token verification failed" });
+            return res.json({ success: false, message: "Token verification failed" });
         }
         
         req.user = decoded; // Attach decoded user information to the request object
@@ -119,7 +119,7 @@ const getUserFromCache = async (username) => {
 //     const {apikey} = req.body;
     
 //     if (!apikey) {
-//         return res.status(400).json({ success: false, message: "API key is required" });
+//         return res.json({ success: false, message: "API key is required" });
 //     }
 
 //     try {
@@ -127,12 +127,12 @@ const getUserFromCache = async (username) => {
 //         if (apikeyCheck.length > 0) {
 //             const xera_wallet = apikeyCheck[0].xera_wallet
 //             const authToken = jwt.sign({ xera_wallet }, jwtAPISecret, { expiresIn: "1d" });
-//             return res.status(200).json({ success: true, accessToken: authToken})
+//             return res.json({ success: true, accessToken: authToken})
 //         } else {
-//             return res.status(401).json({ success: false, message: "Invalid api key"})
+//             return res.json({ success: false, message: "Invalid api key"})
 //         }
 //     } catch (error) {
-//         return res.status(500).json({ success: false, message: "request error"})
+//         return res.json({ success: false, message: "request error"})
 //     }
 // })
 
@@ -140,19 +140,19 @@ app.post("/xera/v1/api/user/check-username" ,async (req,res) => {
     const {username} = req.body;
     
     if (!username) {
-        return res.status(400).json({ success: false, message: "please complete all the fields"});
+        return res.json({ success: false, message: "please complete all the fields"});
     }
 
     try {
         const user = await getUserFromCache(username) 
         
         if (user) {
-            return res.status(200).json({ success: false, message: 'Username already exists' });
+            return res.json({ success: false, message: 'Username already exists' });
         } else {
-            return res.status(200).json({ success: true, message: 'Username is available' });
+            return res.json({ success: true, message: 'Username is available' });
         }
     } catch (error) {
-        res.status(500).json({ success: false, message: 'request error' }); 
+        res.json({ success: false, message: 'request error' }); 
     }
 })
 
@@ -160,7 +160,7 @@ app.post('/xera/v1/api/user/login-basic', async (req, res) => {
     const { username, password } = req.body;
 
     if (!username || !password) {
-        return res.status(403).json({ success: false, message: "Request Error. Input Field"})
+        return res.json({ success: false, message: "Request Error. Input Field"})
     }
     
     try {
@@ -181,9 +181,9 @@ app.post('/xera/v1/api/user/login-basic', async (req, res) => {
                         myXeraAddress : userData.xera_wallet
                     }
                     const authToken = jwt.sign({ xeraJWT }, jwtSecret, { expiresIn: "2d" });
-                    return res.status(200).json({ success: true, message: `${userData.username} Successfully Login`, authToken: authToken})
+                    return res.json({ success: true, message: `${userData.username} Successfully Login`, authToken: authToken})
                 } else {
-                    return res.status(401).json({ success: false, message: 'Wrong password' });
+                    return res.json({ success: false, message: 'Wrong password' });
                 }
             } else {
                 if (await bcrypt.compare(password, dataPass)) {
@@ -194,17 +194,17 @@ app.post('/xera/v1/api/user/login-basic', async (req, res) => {
                         myXeraAddress : userData.xera_wallet
                     }
                     const authToken = jwt.sign({ xeraJWT }, jwtSecret, { expiresIn: "2d" });
-                    return res.status(200).json({ success: true, message: `${userData.username} Successfully Login Basic Account`, authToken: authToken})
+                    return res.json({ success: true, message: `${userData.username} Successfully Login Basic Account`, authToken: authToken})
                 } else {
-                    return res.status(401).json({ success: false, message: 'Wrong password' });
+                    return res.json({ success: false, message: 'Wrong password' });
                 }
             }
             
         } else {
-            return res.status(403).json({ success: false, message: "no user found"})
+            return res.json({ success: false, message: "no user found"})
         }
     } catch (error) {
-        return res.status(500).json({ success: false, message: "request error"})
+        return res.json({ success: false, message: "request error"})
     }
 })
 
@@ -213,7 +213,7 @@ app.post('/xera/v1/api/user/login-prKey', async (req, res) => {
     
     
     if (!privateKey) {
-        return res.status(403).json({ success: false, message: "Request Error. No private key received"})
+        return res.json({ success: false, message: "Request Error. No private key received"})
     }
 
     try {
@@ -232,15 +232,15 @@ app.post('/xera/v1/api/user/login-prKey', async (req, res) => {
                     myXeraAddress : userData.public_key
                 }
                 const authToken = jwt.sign({ xeraJWT }, jwtSecret, { expiresIn: "2d" });
-                return res.status(200).json({ success: true, message: `${username} Successfully Login Full Access`, authToken: authToken})
+                return res.json({ success: true, message: `${username} Successfully Login Full Access`, authToken: authToken})
             } else {
-                return res.status(400).json({ success: false, message: "No user found in that key phrase"})
+                return res.json({ success: false, message: "No user found in that key phrase"})
             }
         } else {
-            return res.status(403).json({ success: false, message: "invalid key phrase"})
+            return res.json({ success: false, message: "invalid key phrase"})
         }
     } catch (error) {
-        return res.status(500).json({ success: false, message: "request error", error: error})
+        return res.json({ success: false, message: "request error", error: error})
     }
 })
 
@@ -248,7 +248,7 @@ app.post('/xera/v1/api/user/login-phrase', async (req, res) => {
     const { seedPhrase } = req.body;
 
     if (!seedPhrase) {
-        return res.status(403).json({ success: false, message: "Request Error. No private key received"})
+        return res.json({ success: false, message: "Request Error. No private key received"})
     }
     
     const seed = JSON.parse(seedPhrase)
@@ -273,15 +273,15 @@ app.post('/xera/v1/api/user/login-phrase', async (req, res) => {
                     myXeraAddress : userData.public_key
                 }
                 const authToken = jwt.sign({ xeraJWT }, jwtSecret, { expiresIn: "2d" });
-                return res.status(200).json({ success: true, message: `${username} Successfully Login Full Access`, authToken: authToken})
+                return res.json({ success: true, message: `${username} Successfully Login Full Access`, authToken: authToken})
             } else {
-                return res.status(400).json({ success: false, message: "No user found in that key phrase"})
+                return res.json({ success: false, message: "No user found in that key phrase"})
             }
         } else {
-            return res.status(400).json({ success: false, message: "No user found in that key phrase"})
+            return res.json({ success: false, message: "No user found in that key phrase"})
         }
     } catch (error) {
-        return res.status(500).json({ success: false, message: "request error"})
+        return res.json({ success: false, message: "request error"})
     }
 })
 
@@ -289,7 +289,7 @@ app.post('/xera/v1/api/user/tasks/all-task', authenticateToken, async (req,res) 
     const {user} = req.body;
     
     if (!user) {
-        return res.status(403).json({ success: false, message: "invalid request"})
+        return res.json({ success: false, message: "invalid request"})
     }
 
     try {
@@ -310,8 +310,9 @@ app.post('/xera/v1/api/user/tasks/all-task', authenticateToken, async (req,res) 
             const filterFacebook = transactions.filter(data => data.xera_task === "Facebook Task")
             const filterTelegram2 = transactions.filter(data => data.xera_task === "Telegram 2 Task")
             const filterTiktok = transactions.filter(data => data.xera_task === "TikTok Task")
-            const ffilterBluesky = transactions.filter(data => data.xera_task === "Bluesky Task")
+            const filterBluesky = transactions.filter(data => data.xera_task === "Bluesky Task")
             const filterTXERA = transactions.filter(data => data.xera_task === "TXERA Claim Task");
+            const filterYoutube = transactions.filter(data => data.xera_task === "Youtube Task");
 
             let alltask = {};
 
@@ -340,9 +341,15 @@ app.post('/xera/v1/api/user/tasks/all-task', authenticateToken, async (req,res) 
                 });
             }
 
-            if (ffilterBluesky.length > 0) {
-                ffilterBluesky.forEach(item => {
+            if (filterBluesky.length > 0) {
+                filterBluesky.forEach(item => {
                     alltask.blueskytask = item.xera_status;
+                });
+            }
+
+            if (filterYoutube.length > 0) {
+                filterYoutube.forEach(item => {
+                    alltask.youtubetask = item.xera_status;
                 });
             }
 
@@ -413,12 +420,12 @@ app.post('/xera/v1/api/user/tasks/all-task', authenticateToken, async (req,res) 
                 }
             }
 
-            return res.status(200).json({ success: true, data: alltask, claimData: filterTXERA.xera_completed_date})
+            return res.json({ success: true, data: alltask, claimData: filterTXERA.xera_completed_date})
         } else {
-            return res.status(404).json({ success:false, message : "no transaction found"})
+            return res.json({ success:false, message : "no transaction found"})
         }
     } catch (error) {
-        return res.status(500).json({ success: false, message: "request error", error: error})
+        return res.json({ success: false, message: "request error", error: error})
     }
 })
 
@@ -426,7 +433,7 @@ app.post('/xera/v1/api/user/rank-phase1', authenticateToken, async (req, res) =>
     const { user } = req.body;
 
     if (!user) {
-        return res.status(403).json({ success: false, message: "Invalid request" });
+        return res.json({ success: false, message: "Invalid request" });
     }
 
     try 
@@ -444,7 +451,7 @@ app.post('/xera/v1/api/user/rank-phase1', authenticateToken, async (req, res) =>
         const userTotalPoints = userRankings.find(rankUser => rankUser.username === user)?.total_points;
         
         if (userRank > 0 && userTotalPoints) {
-            return res.status(200).json({ 
+            return res.json({ 
                 success: true, 
                 message: "Successfully retrieved user rank", 
                 username: user, 
@@ -452,11 +459,11 @@ app.post('/xera/v1/api/user/rank-phase1', authenticateToken, async (req, res) =>
                 totalPoints: userTotalPoints 
             });
         } else {
-            return res.status(404).json({ success: false, message: "User not found" });
+            return res.json({ success: false, message: "User not found" });
         }
         
     } catch (error) {
-        return res.status(500).json({ success: false, message: "Request error", error: error.message });
+        return res.json({ success: false, message: "Request error", error: error.message });
     }
 });
 
@@ -464,7 +471,7 @@ app.post('/xera/v1/api/user/rank-phase2', authenticateToken, async (req, res) =>
     const { user } = req.body;
 
     if (!user) {
-        return res.status(403).json({ success: false, message: "Invalid request" });
+        return res.json({ success: false, message: "Invalid request" });
     }
 
     try 
@@ -482,7 +489,7 @@ app.post('/xera/v1/api/user/rank-phase2', authenticateToken, async (req, res) =>
         const userTotalPoints = userRankings.find(rankUser => rankUser.username === user)?.total_points;
         
         if (userRank > 0 && userTotalPoints) {
-            return res.status(200).json({ 
+            return res.json({ 
                 success: true, 
                 message: "Successfully retrieved user rank", 
                 username: user, 
@@ -490,11 +497,11 @@ app.post('/xera/v1/api/user/rank-phase2', authenticateToken, async (req, res) =>
                 totalPoints: userTotalPoints 
             });
         } else {
-            return res.status(404).json({ success: false, message: "User not found" });
+            return res.json({ success: false, message: "User not found" });
         }
         
     } catch (error) {
-        return res.status(500).json({ success: false, message: "Request error", error: error.message });
+        return res.json({ success: false, message: "Request error", error: error.message });
     }
 });
 
@@ -502,7 +509,7 @@ app.post('/xera/v1/api/user/rank-phase3', authenticateToken, async (req, res) =>
     const { user } = req.body;
 
     if (!user) {
-        return res.status(403).json({ success: false, message: "Invalid request" });
+        return res.json({ success: false, message: "Invalid request" });
     }
 
     try 
@@ -520,7 +527,7 @@ app.post('/xera/v1/api/user/rank-phase3', authenticateToken, async (req, res) =>
         const userTotalPoints = userRankings.find(rankUser => rankUser.username === user)?.total_points;
         
         if (userRank > 0 && userTotalPoints) {
-            return res.status(200).json({ 
+            return res.json({ 
                 success: true, 
                 message: "Successfully retrieved user rank", 
                 username: user, 
@@ -528,11 +535,11 @@ app.post('/xera/v1/api/user/rank-phase3', authenticateToken, async (req, res) =>
                 totalPoints: userTotalPoints 
             });
         } else {
-            return res.status(404).json({ success: false, message: "User not found" });
+            return res.json({ success: false, message: "User not found" });
         }
         
     } catch (error) {
-        return res.status(500).json({ success: false, message: "Request error", error: error.message });
+        return res.json({ success: false, message: "Request error", error: error.message });
     }
 });
 
@@ -540,7 +547,7 @@ app.post('/xera/v1/api/user/transactions', authenticateToken,async (req, res) =>
     const { user } = req.body;
     
     if (!user) {
-        return res.status(403).json({ success: false, message: "Invalid request" });
+        return res.json({ success: false, message: "Invalid request" });
     }
     const page = 1
     const limit = 50
@@ -553,20 +560,20 @@ app.post('/xera/v1/api/user/transactions', authenticateToken,async (req, res) =>
 
         if (transactions.length > 0) {
             const cleanedData = transactions.map(({ id, transaction_origin, transaction_token_id, transaction_validator, transaction_date, ...clean }) => clean);
-            return res.status(200).json({ success: true, data: cleanedData });
+            return res.json({ success: true, data: cleanedData });
         } else {
-            return res.status(404).json({ success: false, message: "No transactions found" });
+            return res.json({ success: false, message: "No transactions found" });
         }
         
     } catch (error) {
-        return res.status(500).json({ success: false, message: "Request error", error: error });
+        return res.json({ success: false, message: "Request error", error: error });
     }
 });
 
 app.post('/xera/v1/api/user/balance', authenticateToken,async (req,res) => {
     const {user} = req.body;
     if (!user) {
-        return res.status(403).json({ success: false, message: "invalid request"})
+        return res.json({ success: false, message: "invalid request"})
     }
 
     try {
@@ -602,13 +609,13 @@ app.post('/xera/v1/api/user/balance', authenticateToken,async (req,res) => {
             
             const cleanedData = balances.map(({ id, token_id, token_owner, token_symbol, token_decimal, token_supply, token_circulating, token_info, ...clean}) => clean)
             
-            return res.status(200).json({ success: true, data: cleanedData})
+            return res.json({ success: true, data: cleanedData})
         } else {
-            return res.status(404).json({ success:false, message : "no balance found"})
+            return res.json({ success:false, message : "no balance found"})
         }
         
     } catch (error) {
-        return res.status(500).json({ success: false, message: "request error", error: error})
+        return res.json({ success: false, message: "request error", error: error})
     }
     
 })
@@ -616,7 +623,7 @@ app.post('/xera/v1/api/user/balance', authenticateToken,async (req,res) => {
 app.post('/xera/v1/api/user/following', authenticateToken, async (req,res) => {
     const {user} = req.body;
     if (!user) {
-        return res.status(403).json({ success: false, message: "invalid request"})
+        return res.json({ success: false, message: "invalid request"})
     }
 
     try {
@@ -631,12 +638,12 @@ app.post('/xera/v1/api/user/following', authenticateToken, async (req,res) => {
         `);
         if (userFollower.length > 0) {
             const cleanedData = userFollower.map(({ id, ...clean}) => clean)
-            return res.status(200).json({ success: true, data: cleanedData})
+            return res.json({ success: true, data: cleanedData})
         } else {
-            return res.status(404).json({ success:false, message : "no followers found"})
+            return res.json({ success:false, message : "no followers found"})
         }
     } catch (error) {
-        return res.status(500).json({ success: false, message: "request error", error: error})
+        return res.json({ success: false, message: "request error", error: error})
     }
     
 })
@@ -646,7 +653,7 @@ app.post('/xera/v1/api/user/faucet-claim', authenticateToken, async (req, res) =
     
     
     if (!username || !txHash || !sender || !receiver || !command || !amount || !token || !tokenId) {
-      return res.status(400).json({ success: false, message: 'Incomplete transaction data.' });
+      return res.json({ success: false, message: 'Incomplete transaction data.' });
     }
   
     const txLocalDate = new Date().toISOString().slice(0, 19).replace('T', ' ');
@@ -661,17 +668,21 @@ app.post('/xera/v1/api/user/faucet-claim', authenticateToken, async (req, res) =
   
       let transactionOrigin = 'Genesis Transaction';
       if (lastTransaction.length > 0) {
-        const lastTxDate = new Date(lastTransaction[0].transaction_date).getTime()
-        const dateNow = (new Date()).getTime()
-        
+        const lastTxDate = new Date(lastTransaction[0].transaction_date).getTime();
+        const dateNow = (new Date()).getTime();
+
         const timeDiff = dateNow - lastTxDate;
-        
-  
+
         // Block if the last transaction is within 12 hours
-        if (timeDiff < 43200000) { // 12 hours in milliseconds
-          const timeRemaining = new Date(timeDiff).toISOString().substr(11, 8);
-          
-          return res.status(400).json({success: false, message: `Claim again after ${timeRemaining}`,});
+        if (timeDiff < 21600000) { // 6 hours in milliseconds
+            const timeRemainingMs = 21600000 - timeDiff;
+            const hours = Math.floor(timeRemainingMs / 3600000);
+            const minutes = Math.floor((timeRemainingMs % 3600000) / 60000);
+            const seconds = Math.floor((timeRemainingMs % 60000) / 1000);
+
+            const timeRemaining = `${hours}h ${minutes}m ${seconds}s`;
+
+            return res.json({ success: false, message: `Claim again after ${timeRemaining}` });
         } else {
             transactionOrigin = lastTransaction[0].transaction_hash;
             // Step 2: Retrieve block details
@@ -713,31 +724,31 @@ app.post('/xera/v1/api/user/faucet-claim', authenticateToken, async (req, res) =
                                 );
                                 
                                 if (recordTask.affectedRows > 0) {
-                                    res.status(200).json({ success: true, message: '1 TXERA Claimed Successfully.' });
+                                    res.json({ success: true, message: '1 TXERA Claimed Successfully.' });
                                     
                                 } else {
-                                    res.status(400).json({success:false, message: "Error inserting record"})
+                                    res.json({success:false, message: "Error inserting record"})
                                 }
                             } else {
-                                res.status(400).json({success:false, message: "Error updating token circulation"})
+                                res.json({success:false, message: "Error updating token circulation"})
                             }
                         } else {
-                            res.status(400).json({success:false, message: "Token not found or mismatched token symbol."})
+                            res.json({success:false, message: "Token not found or mismatched token symbol."})
                         }
                     } else {
-                        res.status(400).json({success:false, message: "Error adding transaction"})
+                        res.json({success:false, message: "Error adding transaction"})
                     }
                 } else {
-                res.status(400).json({ success: false, message: "Error increment count"})
+                res.json({ success: false, message: "Error increment count"})
                 }
             } else {
-                res.status(400).json({ success:false, message: 'Block data not found. Transaction aborted.'});
+                res.json({ success:false, message: 'Block data not found. Transaction aborted.'});
             }
         }
   
       }
     } catch (err) {
-      res.status(400).json({ success: false, message: err.message });
+      res.json({ success: false, message: err.message });
     }
 });
 
@@ -746,7 +757,7 @@ app.post('/xera/v1/api/user/coin/claim', authenticateToken, async (req, res) => 
     
     
     if (!username || !txHash || !sender || !receiver || !command || !amount || !token || !tokenId) {
-      return res.status(400).json({ success: false, message: 'Incomplete transaction data.' });
+      return res.json({ success: false, message: 'Incomplete transaction data.' });
     }
   
     const txLocalDate = new Date().toISOString().slice(0, 19).replace('T', ' ');
@@ -764,7 +775,7 @@ app.post('/xera/v1/api/user/coin/claim', authenticateToken, async (req, res) => 
         const [tokenClaimedcheck] = await db.query(`SELECT * FROM xera_network_transactions WHERE sender_address = ? AND receiver_address = ?`,[sender,receiver]);
         // Block if the last transaction is within 12 hours
         if (tokenClaimedcheck.length > 0) { // 12 hours in milliseconds
-          return res.status(400).json({success: false, message: `Xera Coin already claimed`,});
+          return res.json({success: false, message: `Xera Coin already claimed`,});
         } else {
             transactionOrigin = lastTransaction[0].transaction_hash;
             // Step 2: Retrieve block details
@@ -799,27 +810,27 @@ app.post('/xera/v1/api/user/coin/claim', authenticateToken, async (req, res) => 
                             );
                             
                             if (updateTokenCirculating.affectedRows > 0) {
-                                res.status(200).json({ success: true, message: 'Coin Claimed Successfully.' });
+                                res.json({ success: true, message: 'Coin Claimed Successfully.' });
                             } else {
-                                res.status(400).json({success:false, message: "Error updating token circulation"})
+                                res.json({success:false, message: "Error updating token circulation"})
                             }
                         } else {
-                            res.status(400).json({success:false, message: "Token not found or mismatched token symbol."})
+                            res.json({success:false, message: "Token not found or mismatched token symbol."})
                         }
                     } else {
-                        res.status(400).json({success:false, message: "Error adding transaction"})
+                        res.json({success:false, message: "Error adding transaction"})
                     }
                 } else {
-                res.status(400).json({ success: false, message: "Error increment count"})
+                res.json({ success: false, message: "Error increment count"})
                 }
             } else {
-                res.status(400).json({ success:false, message: 'Block data not found. Transaction aborted.'});
+                res.json({ success:false, message: 'Block data not found. Transaction aborted.'});
             }
         }
   
       }
     } catch (err) {
-      res.status(400).json({ success: false, message: err.message });
+      res.json({ success: false, message: err.message });
     }
 });
 
@@ -827,19 +838,19 @@ app.post('/xera/v1/api/user/nodes', authenticateToken, async (req,res) => {
     const { user } = req.body
 
     if (!user) {
-      return res.status(400).json({ success: false, message: 'No address get' });
+      return res.json({ success: false, message: 'No address get' });
     }
 
     try {
         const [getUsernode] = await db.query('SELECT * FROM xera_asset_nodes WHERE node_owner = ?',[user])
         if (getUsernode.length > 0) {
             const clean = getUsernode.map(({id, ...clean}) => clean)
-            res.status(200).json({success:true, message :`Successfully retrieved node. wallet: ${user}`, node: clean})
+            res.json({success:true, message :`Successfully retrieved node. wallet: ${user}`, node: clean})
         } else {
-            res.status(400).json({ success: false, message: "No node retrieved"})
+            res.json({ success: false, message: "No node retrieved"})
         }
     } catch (error) {
-        res.status(500).json({ success: false, message: err.message });
+        res.json({ success: false, message: err.message });
     }
 })
 
@@ -847,21 +858,165 @@ app.post('/xera/v1/api/user/security', authenticateToken, async (req,res) => {
     const { user } = req.body
 
     if (!user) {
-      return res.status(400).json({ success: false, message: 'No address get' });
+      return res.json({ success: false, message: 'No address get' });
     }
 
     try {
         const [getUserSecurity] = await db.query('SELECT * FROM xera_user_security WHERE xera_wallet = ?',[user])
         if (getUserSecurity.length > 0) {
             const clean = getUserSecurity.map(({id, ip_address, date_verified, ...clean}) => clean)
-            return res.status(200).json({success:true, message :`Successfully retrieved security. wallet: ${user}`, security: clean})
+            return res.json({success:true, message :`Successfully retrieved security. wallet: ${user}`, security: clean})
         } else {
-            return res.status(400).json({ success: false, message: "No security retrieved"})
+            return res.json({ success: false, message: "No security retrieved"})
         }
     } catch (error) {
-        res.status(500).json({ success: false, message: err.message });
+        res.json({ success: false, message: err.message });
     }
 })
+
+app.post('/xera/v1/api/user/task/telegram', async (req, res) => {
+    const { user } = req.body;
+
+    if (!telegramID || !username || !wallet || !user) {
+        return res.json({ success: false, message: 'Incomplete data' });
+    }
+
+    const telegramID = user.telegramID;
+    const username = user.username;
+    const wallet = user.wallet;
+    const xeraStatus = 'ok';
+    const xeraTask = 'Telegram Task';
+    const xeraPoints = '10000';
+
+    try {
+
+        // Check if the combination of username, wallet, and task already exists
+        const [duplicateCheck] = await db.query(`
+            SELECT * 
+            FROM xera_user_tasks 
+            WHERE username = ? 
+              AND xera_wallet = ? 
+              AND xera_task = ?
+        `, [username, wallet, xeraTask]);
+
+        if (duplicateCheck.length > 0) {
+            return res.json({ success: false, message: 'You already finished this task' });
+        }
+
+        // Check if the telegram ID already exists
+        const [telegramCheck] = await db.query(`
+            SELECT * 
+            FROM xera_user_tasks 
+            WHERE xera_telegram_id = ?
+        `, [telegramID]);
+
+        if (telegramCheck.length > 0) {
+            return res.json({ success: false, message: 'User ID already exists' });
+        }
+
+        // Insert into xera_user_tasks if telegramID has a value
+        if (telegramID) {
+            await db.query(`
+                INSERT INTO xera_user_tasks (username, xera_wallet, xera_telegram_id, xera_twitter_username, xera_task, xera_status, xera_points) 
+                VALUES (?, ?, ?, ?, ?, ?, ?)
+            `, [username, wallet, telegramID, '', xeraTask, xeraStatus, xeraPoints]);
+        }
+
+        res.json({ success: true, message: 'Telegram User Successfully Verified' });
+    } catch (error) {
+        res.json({ success: false, message: 'Request error', error: error.message });
+    }
+});
+
+app.post('/xera/v1/api/user/task/twitter', async (req, res) => {
+    const { user } = req.body;
+
+    if (!user || !user.username || !user.wallet) {
+        return res.json({ success: false, message: 'Incomplete data' });
+    }
+
+    const twitterUsername = user.twitterUsername;
+    const username = user.username;
+    const wallet = user.wallet;
+    const xeraStatus = 'pending';
+    const xeraTask = 'Twitter Task';
+
+    try {
+
+        // Check if the combination of username, wallet, and task already exists
+        const [duplicateCheck] = await db.query(`
+            SELECT * 
+            FROM xera_user_tasks 
+            WHERE username = ? 
+              AND xera_wallet = ? 
+              AND xera_task = ?
+        `, [username, wallet, xeraTask]);
+
+        if (duplicateCheck.length > 0) {
+            return res.json({ success: false, message: 'You already did this task' });
+        }
+
+        // Check if the twitter username already exists
+        const [twitterCheck] = await db.query(`
+            SELECT * 
+            FROM xera_user_tasks 
+            WHERE xera_twitter_username = ?
+        `, [twitterUsername]);
+
+        if (twitterCheck.length > 0) {
+            return res.json({ success: false, message: 'Twitter username already exists' });
+        }
+
+        // Insert into xera_user_tasks if twitterUsername has a value
+        if (twitterUsername) {
+            await db.query(`
+                INSERT INTO xera_user_tasks (username, xera_wallet, xera_telegram_id, xera_twitter_username, xera_task, xera_status, xera_points) 
+                VALUES (?, ?, ?, ?, ?, ?, ?)
+            `, [username, wallet, '', twitterUsername, xeraTask, xeraStatus, '']);
+        }
+
+        res.json({ success: true, message: 'Twitter User Successfully Verified' });
+    } catch (error) {
+        res.json({ success: false, message: 'Request error', error: error.message });
+    }
+});
+
+app.post('/xeraUserAirdropSocialTask', async (req, res) => {
+    const { user } = req.body;
+    if (!user || !user.username || !user.wallet) {
+        return res.status(400).json({ success: false, message: 'Incomplete data' });
+    }
+
+    const taskTitle = 'Twitter Task';
+    const username = user.username;
+    const wallet = user.wallet;
+    const xeraStatus = 'ok';
+    const xeraPoints = '1250';
+
+    try {
+
+        // Check if the task already exists
+        const [checkResult] = await db.query(`
+            SELECT COUNT(*) AS count 
+            FROM xera_user_tasks 
+            WHERE xera_task = ? AND username = ? AND xera_wallet = ?
+        `, [taskTitle, username, wallet]);
+
+        if (checkResult[0].count > 0) {
+            return res.json({ success: false, message: 'You already did this task' });
+        }
+
+        // Insert the new task
+        await db.query(`
+            INSERT INTO xera_user_tasks (xera_task, username, xera_wallet, xera_status, xera_points) 
+            VALUES (?, ?, ?, ?, ?)
+        `, [taskTitle, username, wallet, xeraStatus, xeraPoints]);
+
+        res.json({ success: true, message: 'Task successfully added' });
+    } catch (error) {
+        res.json({ success: false, message: 'Request error', error: error.message });
+    }
+});
 
 app.listen(port, () => {
     console.log(`Server is running on http://localhost:${port}`);

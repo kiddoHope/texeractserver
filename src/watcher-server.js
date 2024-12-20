@@ -84,21 +84,21 @@ const authenticateToken = (req, res, next) => {
     const token = authHeader && authHeader.split(" ")[1]; // Extract token from "Bearer <token>"
 
     if (!token) {
-        return res.status(401).json({ success: false, message: "Authentication token is required" });
+        return res.json({ success: false, message: "Authentication token is required" });
     }
 
     jwt.verify(token, jwtSecret, (err, decoded) => {
         if (err) {
             if (err.name === "TokenExpiredError") {
                 // Handle expired token case
-                return res.status(401).json({ success: false, message: "Token has expired" });
+                return res.json({ success: false, message: "Token has expired" });
             }
             if (err.name === "JsonWebTokenError") {
                 // Handle invalid token case
-                return res.status(403).json({ success: false, message: "Invalid token" });
+                return res.json({ success: false, message: "Invalid token" });
             }
             // Handle other errors
-            return res.status(403).json({ success: false, message: "Token verification failed" });
+            return res.json({ success: false, message: "Token verification failed" });
         }
         
         req.user = decoded; // Attach decoded user information to the request object
@@ -115,11 +115,11 @@ const getDevFromCache = async (api) => {
             dev = dbDev[0];
             cache.set(api, dev);
         } else {
-            return res.status(401).json({ success: false, message: "Invalid request" });
+            return res.json({ success: false, message: "Invalid request" });
         }
     }
     if (dev.xera_moderation !== 'creator') {
-        return res.status(401).json({ success: false, message: "Invalid request" });
+        return res.json({ success: false, message: "Invalid request" });
     }
 };
 
@@ -127,7 +127,7 @@ app.post('/xera/v1/api/watcher/active-nodes', async (req,res) => {
     const { apikey } = req.body;
     
     if (!apikey) {
-        return res.status(400).json({ success: false, message: "No request found" });
+        return res.json({ success: false, message: "No request found" });
     }
     
     await getDevFromCache(apikey);
@@ -163,9 +163,9 @@ app.post('/xera/v1/api/watcher/active-nodes', async (req,res) => {
             activated_details: activatedDetailsResult
         };
 
-        res.status(200).json({success: true, message: "Results retrieved", data:responseData })
+        res.json({success: true, message: "Results retrieved", data:responseData })
     } catch (error) {
-        return res.status(500).json({ success: false, message: "Request error", error: error.message });
+        return res.json({ success: false, message: "Request error", error: error.message });
     }
 })
 
@@ -173,7 +173,7 @@ app.post('/xera/v1/api/watcher/watch-result', async (req,res) => {
     const { apikey } = req.body;
     
     if (!apikey) {
-        return res.status(400).json({ success: false, message: "No request found" });
+        return res.json({ success: false, message: "No request found" });
     }
     
     await getDevFromCache(apikey);
@@ -191,12 +191,12 @@ app.post('/xera/v1/api/watcher/watch-result', async (req,res) => {
             ORDER BY DATE(date_verified) DESC
         `);
         if (watch.length > 0) {
-            res.status(200).json({success: true, message: "Watch results retrieved", stats:watch})
+            res.json({success: true, message: "Watch results retrieved", stats:watch})
         } else {
-            res.status(400).json({success: false, message: "No watch data retrieved"})
+            res.json({success: false, message: "No watch data retrieved"})
         }
     } catch (error) {
-        return res.status(500).json({ success: false, message: "Request error", error: error.message });
+        return res.json({ success: false, message: "Request error", error: error.message });
     }
 })
 
@@ -204,7 +204,7 @@ app.post('/xera/v1/api/watcher/recovered-exp/phase1', async (req, res) => {
     const { apikey } = req.body;
 
     if (!apikey) {
-        return res.status(400).json({ success: false, message: "No request found" });
+        return res.json({ success: false, message: "No request found" });
     }
 
     await getDevFromCache(apikey);
@@ -220,12 +220,12 @@ app.post('/xera/v1/api/watcher/recovered-exp/phase1', async (req, res) => {
         // Calculate recovered_xp
         const recoveredXp = countData[0].referral_task_count * 5000;
         if (countData.length > 0) {
-            res.status(200).json({ success: true, message: "Recovered Exp retrieved", recoveredExp: recoveredXp });
+            res.json({ success: true, message: "Recovered Exp retrieved", recoveredExp: recoveredXp });
         } else {
-            res.status(400).json({ success: false, message: "No watch data retrieved" });
+            res.json({ success: false, message: "No watch data retrieved" });
         }
     } catch (error) {
-        return res.status(500).json({ success: false, message: "Request error", error: error.message });
+        return res.json({ success: false, message: "Request error", error: error.message });
     }
 });
 
@@ -233,7 +233,7 @@ app.post('/xera/v1/api/watcher/recovered-exp/phase2', async (req, res) => {
     const { apikey } = req.body;
 
     if (!apikey) {
-        return res.status(400).json({ success: false, message: "No request found" });
+        return res.json({ success: false, message: "No request found" });
     }
 
     await getDevFromCache(apikey);
@@ -249,12 +249,12 @@ app.post('/xera/v1/api/watcher/recovered-exp/phase2', async (req, res) => {
         // Calculate recovered_xp
         const recoveredXp = countData[0].referral_task_count * 5000;
         if (countData.length > 0) {
-            res.status(200).json({ success: true, message: "Recovered Exp retrieved", recoveredExp: recoveredXp });
+            res.json({ success: true, message: "Recovered Exp retrieved", recoveredExp: recoveredXp });
         } else {
-            res.status(400).json({ success: false, message: "No watch data retrieved" });
+            res.json({ success: false, message: "No watch data retrieved" });
         }
     } catch (error) {
-        return res.status(500).json({ success: false, message: "Request error", error: error.message });
+        return res.json({ success: false, message: "Request error", error: error.message });
     }
 });
 
@@ -262,7 +262,7 @@ app.post('/xera/v1/api/watcher/recovered-exp/phase3', async (req, res) => {
     const { apikey } = req.body;
 
     if (!apikey) {
-        return res.status(400).json({ success: false, message: "No request found" });
+        return res.json({ success: false, message: "No request found" });
     }
 
     await getDevFromCache(apikey);
@@ -278,12 +278,12 @@ app.post('/xera/v1/api/watcher/recovered-exp/phase3', async (req, res) => {
         // Calculate recovered_xp
         const recoveredXp = countData[0].referral_task_count * 5000;
         if (countData.length > 0) {
-            res.status(200).json({ success: true, message: "Recovered Exp retrieved", recoveredExp: recoveredXp });
+            res.json({ success: true, message: "Recovered Exp retrieved", recoveredExp: recoveredXp });
         } else {
-            res.status(400).json({ success: false, message: "No watch data retrieved" });
+            res.json({ success: false, message: "No watch data retrieved" });
         }
     } catch (error) {
-        return res.status(500).json({ success: false, message: "Request error", error: error.message });
+        return res.json({ success: false, message: "Request error", error: error.message });
     }
 });
 
@@ -291,7 +291,7 @@ app.post('/xera/v1/api/watcher/activate-node', authenticateToken, async (req,res
     const { user } = req.body;
     
     if (!user || !user.wallet || !user.username) {
-        return res.status(400).json({
+        return res.json({
             success: false,
             message: "Invalid request: Missing user details (wallet or nodeName)."
         });
@@ -339,21 +339,21 @@ app.post('/xera/v1/api/watcher/activate-node', authenticateToken, async (req,res
                         INSERT INTO xera_user_tasks (username, xera_wallet, xera_telegram_id, xera_twitter_username, xera_task, xera_status, xera_points) VALUES ( ?, ?, ?, ?, ?, ?, ?)`,
                         [username, owner, '' , '', nodename, 'ok', nodePoints] )
                     if (insertTask.affectedRows > 0) {
-                        res.status(200).json({success: true, message: `Successfully activated 1 ${nodename}`, start: formattedDateTime, expire: formattedUpdatedDateTime  })
+                        res.json({success: true, message: `Successfully activated 1 ${nodename}`, start: formattedDateTime, expire: formattedUpdatedDateTime  })
                     } else {
-                        res.status(400).json({success: true, message: `Error adding in users node` })
+                        res.json({success: true, message: `Error adding in users node` })
                     }
                 } else {
-                    res.status(400).json({success: true, message: `Error adding in users node` })
+                    res.json({success: true, message: `Error adding in users node` })
                 }
             } else {
-                res.status(400).json({ success: false, message: `Failed to activate ${nodename}`})
+                res.json({ success: false, message: `Failed to activate ${nodename}`})
             }
         } else {
-            return res.status(400).json({ success: false, message: `No ${nodename} available`})
+            return res.json({ success: false, message: `No ${nodename} available`})
         }
     } catch (error) {
-        return res.status(500).json({ success: false, message: "Request error", error: error.message });
+        return res.json({ success: false, message: "Request error", error: error.message });
     }
 })
 
@@ -361,7 +361,7 @@ app.post('/xera/v1/api/watcher/operate', async (req,res) => {
     const { apikey } = req.body;
     
     if (!apikey) {
-        return res.status(400).json({ success: false, message: "No request found" });
+        return res.json({ success: false, message: "No request found" });
     }
     
     await getDevFromCache(apikey);
@@ -379,12 +379,12 @@ app.post('/xera/v1/api/watcher/operate', async (req,res) => {
             LIMIT 1 FOR UPDATE
         `);
         if (rows.length > 0) {
-            res.status(200).json({success: true, message: "User found", data:rows})
+            res.json({success: true, message: "User found", data:rows})
         } else {
-            res.status(400).json({success: false, message: "No user found"})
+            res.json({success: false, message: "No user found"})
         }
     } catch (error) {
-        return res.status(500).json({ success: false, message: "Request error", error: error.message });
+        return res.json({ success: false, message: "Request error", error: error.message });
     }
 })
 

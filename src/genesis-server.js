@@ -84,21 +84,21 @@ const authenticateToken = (req, res, next) => {
     const token = authHeader && authHeader.split(" ")[1]; // Extract token from "Bearer <token>"
 
     if (!token) {
-        return res.status(401).json({ success: false, message: "Authentication token is required" });
+        return res.json({ success: false, message: "Authentication token is required" });
     }
 
     jwt.verify(token, jwtSecret, (err, decoded) => {
         if (err) {
             if (err.name === "TokenExpiredError") {
                 // Handle expired token case
-                return res.status(401).json({ success: false, message: "Token has expired" });
+                return res.json({ success: false, message: "Token has expired" });
             }
             if (err.name === "JsonWebTokenError") {
                 // Handle invalid token case
-                return res.status(403).json({ success: false, message: "Invalid token" });
+                return res.json({ success: false, message: "Invalid token" });
             }
             // Handle other errors
-            return res.status(403).json({ success: false, message: "Token verification failed" });
+            return res.json({ success: false, message: "Token verification failed" });
         }
         
         req.user = decoded; // Attach decoded user information to the request object
@@ -115,11 +115,11 @@ const getDevFromCache = async (api) => {
             dev = dbDev[0];
             cache.set(api, dev);
         } else {
-            return res.status(401).json({ success: false, message: "Invalid request" });
+            return res.json({ success: false, message: "Invalid request" });
         }
     }
     if (dev.xera_moderation !== 'creator') {
-        return res.status(401).json({ success: false, message: "Invalid request" });
+        return res.json({ success: false, message: "Invalid request" });
     }
 };
 
@@ -127,7 +127,7 @@ app.post('/xera/v1/api/genesis/active-nodes', async (req,res) => {
     const { apikey } = req.body;
     
     if (!apikey) {
-        return res.status(400).json({ success: false, message: "No request found" });
+        return res.json({ success: false, message: "No request found" });
     }
     
     await getDevFromCache(apikey);
@@ -151,9 +151,9 @@ app.post('/xera/v1/api/genesis/active-nodes', async (req,res) => {
             nodes: totalResult[0].total_nodes
         };
 
-        res.status(200).json({success: true, message: "Results retrieved", data:responseData })
+        res.json({success: true, message: "Results retrieved", data:responseData })
     } catch (error) {
-        return res.status(500).json({ success: false, message: "Request error", error: error.message });
+        return res.json({ success: false, message: "Request error", error: error.message });
     }
 })
 
@@ -161,7 +161,7 @@ app.post('/xera/v1/api/genesis/claim-node', authenticateToken, async (req,res) =
     const { user } = req.body;
     
     if (!user || !user.wallet || !user.nodeName) {
-        return res.status(400).json({
+        return res.json({
             success: false,
             message: "Invalid request: Missing user details (wallet or nodeName)."
         });
@@ -184,15 +184,15 @@ app.post('/xera/v1/api/genesis/claim-node', authenticateToken, async (req,res) =
             );
             
             if (updateNode.affectedRows > 0) {
-                res.status(200).json({success: true, message: `Successfully Claim 1 ${nodename}` })
+                res.json({success: true, message: `Successfully Claim 1 ${nodename}` })
             } else {
-                res.status(400).json({ success: false, message: `Failed to claim ${nodename}`})
+                res.json({ success: false, message: `Failed to claim ${nodename}`})
             }
         } else {
-            return res.status(400).json({ success: false, message: `No ${nodename} available`})
+            return res.json({ success: false, message: `No ${nodename} available`})
         }
     } catch (error) {
-        return res.status(500).json({ success: false, message: "Request error", error: error.message });
+        return res.json({ success: false, message: "Request error", error: error.message });
     }
 })
 
@@ -200,7 +200,7 @@ app.post('/xera/v1/api/genesis/activate-node', authenticateToken, async (req,res
     const { user } = req.body;
     
     if (!user || !user.wallet || !user.username) {
-        return res.status(400).json({
+        return res.json({
             success: false,
             message: "Invalid request: Missing user details (wallet or nodeName)."
         });
@@ -248,21 +248,21 @@ app.post('/xera/v1/api/genesis/activate-node', authenticateToken, async (req,res
                         INSERT INTO xera_user_tasks (username, xera_wallet, xera_telegram_id, xera_twitter_username, xera_task, xera_status, xera_points) VALUES ( ?, ?, ?, ?, ?, ?, ?)`,
                         [username, owner, '' , '', nodename, 'ok', nodePoints] )
                     if (insertTask.affectedRows > 0) {
-                        res.status(200).json({success: true, message: `Successfully activated 1 ${nodename}`, start: formattedDateTime, expire: formattedUpdatedDateTime  })
+                        res.json({success: true, message: `Successfully activated 1 ${nodename}`, start: formattedDateTime, expire: formattedUpdatedDateTime  })
                     } else {
-                        res.status(400).json({success: true, message: `Error adding in users node` })
+                        res.json({success: true, message: `Error adding in users node` })
                     }
                 } else {
-                    res.status(400).json({success: true, message: `Error adding in users node` })
+                    res.json({success: true, message: `Error adding in users node` })
                 }
             } else {
-                res.status(400).json({ success: false, message: `Failed to activate ${nodename}`})
+                res.json({ success: false, message: `Failed to activate ${nodename}`})
             }
         } else {
-            return res.status(400).json({ success: false, message: `No ${nodename} available`})
+            return res.json({ success: false, message: `No ${nodename} available`})
         }
     } catch (error) {
-        return res.status(500).json({ success: false, message: "Request error", error: error.message });
+        return res.json({ success: false, message: "Request error", error: error.message });
     }
 })
 
@@ -270,7 +270,7 @@ app.post('/xera/v1/api/genesis/operate', async (req,res) => {
     const { user } = req.body;
     
     if (!user || !user.apikey || !user.nodeID || !user.nodeTXHash) {
-        return res.status(400).json({success: false, message: "Invalid request: Missing user details"});
+        return res.json({success: false, message: "Invalid request: Missing user details"});
     }
 
     const apikey = user.apikey
@@ -289,10 +289,10 @@ app.post('/xera/v1/api/genesis/operate', async (req,res) => {
                 LIMIT 1
             `, [nodeid]);
         } else {
-            return res.status(400).json({ success: false, message: "Invalid transaction" });
+            return res.json({ success: false, message: "Invalid transaction" });
         }
     } catch (error) {
-        return res.status(500).json({ success: false, message: "Request error", error: error.message });
+        return res.json({ success: false, message: "Request error", error: error.message });
     }
 })
 
