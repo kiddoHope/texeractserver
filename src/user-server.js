@@ -1003,7 +1003,6 @@ app.post('/xera/v1/api/user/task/social', async (req, res) => {
             FROM xera_user_tasks 
             WHERE xera_task = ? AND username = ? AND xera_wallet = ?
         `, [taskTitle, username, wallet]);
-        console.log(checkResult);
         
         if (checkResult[0].count > 0) {
             return res.json({ success: false, message: 'You already did this task' });
