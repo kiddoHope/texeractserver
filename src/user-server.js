@@ -1095,7 +1095,7 @@ app.post('/xera/v1/api/user/register', async (req, res) => {
         }
 
         const hashedPassword = await bcrypt.hash(password, 10);
-
+        
         // Proceed with the registration
         const [result] = await db.query(`
             INSERT INTO xera_user_accounts (username, password, xera_wallet, eth_wallet, bsc_wallet, pol_wallet, avax_wallet,arb_wallet, op_wallet, zks_wallet, sol_wallet, near_wallet, xera_referral, xera_account_ip, failed_attempts)
