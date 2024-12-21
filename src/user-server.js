@@ -651,103 +651,163 @@ app.post('/xera/v1/api/user/following', authenticateToken, async (req,res) => {
 
 app.post('/xera/v1/api/user/faucet-claim', authenticateToken, async (req, res) => {
     const { username, txHash, sender, receiver, command, amount, token, tokenId } = req.body;
-
+    
     if (!username || !txHash || !sender || !receiver || !command || !amount || !token || !tokenId) {
-        return res.status(400).json({ success: false, message: 'Incomplete transaction data.' });
+      return res.json({ success: false, message: 'Incomplete transaction data.' });
     }
-
+  
     const txLocalDate = new Date().toISOString().slice(0, 19).replace('T', ' ');
-
+    
     try {
-        // Step 1: Check for recent transactions
-        const [lastTransaction] = await db.query(
-            'SELECT transaction_date, transaction_hash FROM xera_network_transactions WHERE receiver_address = ? ORDER BY transaction_date DESC LIMIT 1',
-            [receiver]
-        );
+  
+      // Step 1: Check for recent transactions
+      const [lastTransaction] = await db.query(
+        'SELECT transaction_date, transaction_hash FROM xera_network_transactions WHERE receiver_address = ? ORDER BY transaction_date DESC LIMIT 1',
+        [receiver]
+      );
+  
+      let transactionOrigin = 'Genesis Transaction';
+      if (lastTransaction.length > 0) {
+        const lastTxDate = new Date(lastTransaction[0].transaction_date).getTime();
+        const dateNow = (new Date()).getTime();
 
-        let transactionOrigin = 'Genesis Transaction';
-        
-        if (lastTransaction.length > 0) {
-            const lastTxDate = new Date(lastTransaction[0].transaction_date).getTime();
-            const dateNow = new Date().getTime();
+        const timeDiff = dateNow - lastTxDate;
 
-            const timeDiff = dateNow - lastTxDate;
+        // Block if the last transaction is within 12 hours
+        if (timeDiff < 21600000) { // 6 hours in milliseconds
+            const timeRemainingMs = 21600000 - timeDiff;
+            const hours = Math.floor(timeRemainingMs / 3600000);
+            const minutes = Math.floor((timeRemainingMs % 3600000) / 60000);
+            const seconds = Math.floor((timeRemainingMs % 60000) / 1000);
 
-            if (timeDiff < 21600000) { // 6 hours in milliseconds
-                const timeRemainingMs = 21600000 - timeDiff;
-                const hours = Math.floor(timeRemainingMs / 3600000);
-                const minutes = Math.floor((timeRemainingMs % 3600000) / 60000);
-                const seconds = Math.floor((timeRemainingMs % 60000) / 1000);
+            const timeRemaining = `${hours}h ${minutes}m ${seconds}s`;
 
-                const timeRemaining = `${hours}h ${minutes}m ${seconds}s`;
-
-                return res.status(400).json({ success: false, message: `Claim again after ${timeRemaining}` });
+            return res.json({ success: false, message: `Claim again after ${timeRemaining}` });
+        } else {
+            transactionOrigin = lastTransaction[0].transaction_hash;
+            // Step 2: Retrieve block details
+            const [blockData] = await db.query(
+                'SELECT current_block, block_validator FROM xera_network_blocks ORDER BY id DESC LIMIT 1'
+            );
+            
+            if (blockData.length > 0) {
+                const { current_block: txBlock, block_validator: validator } = blockData[0];
+                const [incrementBlockCount] = await db.query('UPDATE xera_network_blocks SET block_transactions = block_transactions + 1 WHERE current_block = ?',[txBlock]);
+                
+                if (incrementBlockCount.affectedRows > 0) {
+                    // Step 3: Insert new transaction
+                    const [addTransaction] = await db.query(
+                        'INSERT INTO xera_network_transactions (transaction_block, transaction_origin, transaction_hash, sender_address, receiver_address, transaction_command, transaction_amount, transaction_token, transaction_token_id, transaction_validator, transaction_date, transaction_fee_amount,transaction_fee_token,transaction_fee_token_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+                        [txBlock, transactionOrigin, txHash, sender, receiver, command, amount, token, tokenId, validator, txLocalDate, 0.00, '', '']
+                    );
+                    
+                    if (addTransaction.affectedRows > 0) {
+                        // Step 4: Update token circulation
+                        const [currentToken] = await db.query(
+                            'SELECT token_circulating FROM xera_asset_token WHERE token_symbol = ?',
+                            [token]
+                        );
+                        
+                        if (currentToken.length > 0) {
+                            const newCirculating = parseInt(currentToken[0].token_circulating) + amount;
+            
+                            const [updateTokenCirculating] = await db.query(
+                                'UPDATE xera_asset_token SET token_circulating = ? WHERE token_id = ?',
+                                [newCirculating, tokenId]
+                            );
+                            
+                            if (updateTokenCirculating.affectedRows > 0) {
+                                // Step 5: Record task completion
+                                const [recordTask] = await db.query(
+                                    'INSERT INTO xera_user_tasks (username, xera_wallet, xera_task, xera_status, xera_points, xera_telegram_id, xera_twitter_username) VALUES (?, ?, ?, ?, ?, ?, ?)',
+                                    [username, receiver, 'TXERA Claim Task', 'ok', '1250', '', '']
+                                );
+                                
+                                if (recordTask.affectedRows > 0) {
+                                    res.json({ success: true, message: '1 TXERA Claimed Successfully.' });
+                                    
+                                } else {
+                                    res.json({success:false, message: "Error inserting record"})
+                                }
+                            } else {
+                                res.json({success:false, message: "Error updating token circulation"})
+                            }
+                        } else {
+                            res.json({success:false, message: "Token not found or mismatched token symbol."})
+                        }
+                    } else {
+                        res.json({success:false, message: "Error adding transaction"})
+                    }
+                } else {
+                res.json({ success: false, message: "Error increment count"})
+                }
             } else {
-                transactionOrigin = lastTransaction[0].transaction_hash;
+                res.json({ success:false, message: 'Block data not found. Transaction aborted.'});
             }
         }
-
+      } else {
         // Step 2: Retrieve block details
         const [blockData] = await db.query(
             'SELECT current_block, block_validator FROM xera_network_blocks ORDER BY id DESC LIMIT 1'
         );
-
+        
         if (blockData.length > 0) {
             const { current_block: txBlock, block_validator: validator } = blockData[0];
-            const [incrementBlockCount] = await db.query('UPDATE xera_network_blocks SET block_transactions = block_transactions + 1 WHERE current_block = ?', [txBlock]);
-
+            const [incrementBlockCount] = await db.query('UPDATE xera_network_blocks SET block_transactions = block_transactions + 1 WHERE current_block = ?',[txBlock]);
+            
             if (incrementBlockCount.affectedRows > 0) {
                 // Step 3: Insert new transaction
                 const [addTransaction] = await db.query(
-                    'INSERT INTO xera_network_transactions (transaction_block, transaction_origin, transaction_hash, sender_address, receiver_address, transaction_command, transaction_amount, transaction_token, transaction_token_id, transaction_validator, transaction_date, transaction_fee_amount, transaction_fee_token, transaction_fee_token_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+                    'INSERT INTO xera_network_transactions (transaction_block, transaction_origin, transaction_hash, sender_address, receiver_address, transaction_command, transaction_amount, transaction_token, transaction_token_id, transaction_validator, transaction_date, transaction_fee_amount,transaction_fee_token,transaction_fee_token_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
                     [txBlock, transactionOrigin, txHash, sender, receiver, command, amount, token, tokenId, validator, txLocalDate, 0.00, '', '']
                 );
-
+                
                 if (addTransaction.affectedRows > 0) {
                     // Step 4: Update token circulation
                     const [currentToken] = await db.query(
                         'SELECT token_circulating FROM xera_asset_token WHERE token_symbol = ?',
                         [token]
                     );
-
+                    
                     if (currentToken.length > 0) {
-                        const newCirculating = parseFloat(currentToken[0].token_circulating) + parseFloat(amount);
-
+                        const newCirculating = parseInt(currentToken[0].token_circulating) + amount;
+        
                         const [updateTokenCirculating] = await db.query(
                             'UPDATE xera_asset_token SET token_circulating = ? WHERE token_id = ?',
-                            [newCirculating.toFixed(8), tokenId]
+                            [newCirculating, tokenId]
                         );
-
+                        
                         if (updateTokenCirculating.affectedRows > 0) {
                             // Step 5: Record task completion
                             const [recordTask] = await db.query(
                                 'INSERT INTO xera_user_tasks (username, xera_wallet, xera_task, xera_status, xera_points, xera_telegram_id, xera_twitter_username) VALUES (?, ?, ?, ?, ?, ?, ?)',
                                 [username, receiver, 'TXERA Claim Task', 'ok', '1250', '', '']
                             );
-
+                            
                             if (recordTask.affectedRows > 0) {
-                                return res.json({ success: true, message: '1 TXERA Claimed Successfully.' });
+                                res.json({ success: true, message: '1 TXERA Claimed Successfully.' });
+                                
                             } else {
-                                return res.status(500).json({ success: false, message: "Error inserting record" });
+                                res.json({success:false, message: "Error inserting record"})
                             }
                         } else {
-                            return res.status(500).json({ success: false, message: "Error updating token circulation" });
+                            res.json({success:false, message: "Error updating token circulation"})
                         }
                     } else {
-                        return res.status(404).json({ success: false, message: "Token not found or mismatched token symbol." });
+                        res.json({success:false, message: "Token not found or mismatched token symbol."})
                     }
                 } else {
-                    return res.status(500).json({ success: false, message: "Error adding transaction" });
+                    res.json({success:false, message: "Error adding transaction"})
                 }
             } else {
-                return res.status(500).json({ success: false, message: "Error incrementing block count" });
+            res.json({ success: false, message: "Error increment count"})
             }
         } else {
-            return res.status(404).json({ success: false, message: 'Block data not found. Transaction aborted.' });
+            res.json({ success:false, message: 'Block data not found. Transaction aborted.'});
         }
+    }
     } catch (err) {
-        console.log(err);
-        return res.status(500).json({ success: false, message: err.message });
+      res.json({ success: false, message: err.message });
     }
 });
 
