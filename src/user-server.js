@@ -1096,9 +1096,9 @@ app.post('/xera/v1/api/user/register', async (req, res) => {
 
         // Proceed with the registration
         const [result] = await db.query(`
-            INSERT INTO xera_user_accounts (username, password, xera_wallet, eth_wallet, bsc_wallet, pol_wallet, avax_wallet,arb_wallet, op_wallet, zks_wallet, sol_wallet, near_wallet, xera_referral, xera_account_ip)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        `, [username, password, publicAddress, '', '', '', '', '', '', '', '', '', referral, userIP]);
+            INSERT INTO xera_user_accounts (username, password, xera_wallet, eth_wallet, bsc_wallet, pol_wallet, avax_wallet,arb_wallet, op_wallet, zks_wallet, sol_wallet, near_wallet, xera_referral, xera_account_ip, failed_attempts)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        `, [username, password, publicAddress, '', '', '', '', '', '', '', '', '', referral, userIP, 0]);
         
         if (result.affectedRows > 0) {
             const [result2] = await db.query(`INSERT INTO xera_user_wallet (private_key, public_key, word1, word2, word3, word4, word5, word6, word7, word8, word9, word10, word11, word12) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`, [privateAddress, publicAddress, seedKey1, seedKey2, seedKey3, seedKey4, seedKey5, seedKey6, seedKey7, seedKey8, seedKey9, seedKey10, seedKey11, seedKey12]);
