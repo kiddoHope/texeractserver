@@ -1073,6 +1073,54 @@ app.post('/xera/v1/api/user/task/connect-wallet', authenticateToken, async (req,
     }
 });
 
+app.post('/xera/v1/api/user/register', async (req, res) => {
+    const {
+        username, password, userIP, referral, privateAddress, publicAddress,
+        seedKey1, seedKey2, seedKey3, seedKey4, seedKey5, seedKey6, seedKey7, seedKey8, seedKey9, seedKey10, seedKey11, seedKey12
+    } = req.body;
+
+    if (!username || !password || !userIP || !privateAddress || !publicAddress) {
+        return res.json({ success: false, message: 'Incomplete data' });
+    }
+    try {
+
+        // Check if the IP address exists 3 times
+        const [ipResult] = await db.query(`
+            SELECT COUNT(*) AS ip_count FROM xera_user_accounts WHERE xera_account_ip = ?
+        `, [userIP]);
+
+        if (ipResult[0].ip_count >= 3) {
+            // If the IP is found 3 times or more, respond with an error
+            return res.json({ success: false, message: 'IP address already used 3 times' });
+        }
+
+        // Proceed with the registration
+        const [result] = await db.query(`
+            INSERT INTO xera_user_accounts (username, password, xera_wallet, eth_wallet, bsc_wallet, pol_wallet, avax_wallet,arb_wallet, op_wallet, zks_wallet, sol_wallet, near_wallet, xera_referral, xera_account_ip)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        `, [username, password, publicAddress, '', '', '', '', '', '', '', '', '', referral, userIP]);
+        
+        if (result.affectedRows > 0) {
+            const [result2] = await db.query(`INSERT INTO xera_user_wallet (private_key, public_key, word1, word2, word3, word4, word5, word6, word7, word8, word9, word10, word11, word12) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`, [privateAddress, publicAddress, seedKey1, seedKey2, seedKey3, seedKey4, seedKey5, seedKey6, seedKey7, seedKey8, seedKey9, seedKey10, seedKey11, seedKey12]);
+            if (result2.affectedRows > 0) {
+                return res.json({ success: true, message: 'User successfully registered' });
+                
+            } else {
+                return res.json({ success: false, message: 'Registration failed' });
+            }
+        } else {
+            return res.json({ success: false, message: 'Registration failed' });
+        }
+    } catch (error) {
+        return res.json({ success: false, message: 'Request error', error: error.message });
+    }
+});
+
+const PORT = process.env.PORT || 3000;
+app.listen(PORT, () => {
+    console.log(`Server is running on port ${PORT}`);
+});
+
 app.listen(port, () => {
     console.log(`Server is running on http://localhost:${port}`);
 });
