@@ -1163,9 +1163,9 @@ app.post('/xera/v1/api/user/register', async (req, res) => {
             const [result2] = await db.query(`INSERT INTO xera_user_wallet (private_key, public_key, word1, word2, word3, word4, word5, word6, word7, word8, word9, word10, word11, word12) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`, [privateAddress, publicAddress, seedKey1, seedKey2, seedKey3, seedKey4, seedKey5, seedKey6, seedKey7, seedKey8, seedKey9, seedKey10, seedKey11, seedKey12]);
             if (result2.affectedRows > 0) {
                 if (referral) {
-                    const [findUser] = await db.query(`SELECT username FROM xera_user_accounts WHERE username = ?`, [referral]);
+                    const [findUser] = await db.query(`SELECT * FROM xera_user_accounts WHERE username = ?`, [referral]);
                     if (findUser.length > 0) {
-                        const [refres] = await db.query(`INSERT INTO xera_user_tasks (username, xera_wallet, xera_telegram_id, xera_twitter_username, xera_task, xera_status, xera_points) VALUES (?, ?, ?, ?, ?, ?, ?)`, [username, publicAddress, '', '', 'Referral Task', 'ok', '5000']);
+                        const [refres] = await db.query(`INSERT INTO xera_user_tasks (username, xera_wallet, xera_telegram_id, xera_twitter_username, xera_task, xera_status, xera_points) VALUES (?, ?, ?, ?, ?, ?, ?)`, [findUser[0].username, findUser[0].xera_wallet, '', '', 'Referral Task', 'ok', '5000']);
                         if (refres.affectedRows > 0) {
                             return res.json({ success: true, message: 'User successfully registered' });
                         }
