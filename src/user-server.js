@@ -937,10 +937,6 @@ app.post('/xera/v1/api/user/security', authenticateToken, async (req,res) => {
 app.post('/xera/v1/api/user/task/telegram', authenticateToken, async (req, res) => {
     const { user } = req.body;
 
-    if (!telegramID || !username || !wallet || !user) {
-        return res.json({ success: false, message: 'Incomplete data' });
-    }
-
     const telegramID = user.telegramID;
     const username = user.username;
     const wallet = user.wallet;
@@ -948,6 +944,9 @@ app.post('/xera/v1/api/user/task/telegram', authenticateToken, async (req, res) 
     const xeraTask = 'Telegram Task';
     const xeraPoints = '10000';
 
+    if (!telegramID || !username || !wallet || !user) {
+        return res.json({ success: false, message: 'Incomplete data' });
+    }
     try {
 
         // Check if the combination of username, wallet, and task already exists
