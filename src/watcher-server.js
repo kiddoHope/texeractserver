@@ -1,125 +1,138 @@
 const express = require("express");
 const bodyParser = require("body-parser");
 const jwt = require("jsonwebtoken");
-const mysql = require('mysql2/promise')
+const mysql = require("mysql2/promise");
 const cors = require("cors");
-require('dotenv').config();
-const rateLimit = require('express-rate-limit')
-const app = express();
-const port = 5005;
-const compression = require('compression');
-const NodeCache = require('node-cache');
-const cache = new NodeCache({ stdTTL: 60 });
+const rateLimit = require("express-rate-limit");
+const compression = require("compression");
+const NodeCache = require("node-cache");
+require("dotenv").config();
 
+const app = express();
+const port = process.env.PORT || 5005;
+const jwtSecret = process.env.MAIN_JWT_SECRET;
+
+// Validate essential environment variables
+if (!jwtSecret || !process.env.DB_HOST || !process.env.DB_USER || !process.env.DB_PASSWORD || !process.env.DB_DATABASE) {
+    console.error("Missing required environment variables. Please check your .env file.");
+    process.exit(1);
+}
+
+// Initialize caching
+const cache = new NodeCache({ stdTTL: 60, checkperiod: 120 });
+
+// Apply middleware
 app.use(compression());
 app.use(bodyParser.json());
 
-const allowedOrigins = ['https://texeract.network', 'http://localhost:3000', 'http://localhost:3001', 'https://texeract-network-beta.vercel.app','https://tg-texeract-beta.vercel.app','https://texeractbot.xyz'];
+// Rate limiting
+const limiter = rateLimit({
+    windowMs: 15 * 60 * 1000, // 15 minutes
+    max: 100, // Limit each IP to 100 requests per window
+    message: { success: false, message: "Too many requests, please try again later." },
+});
+app.use(limiter);
 
-app.use(cors({
-  origin: (origin, callback) => {
-    // Allow requests with no origin, like mobile apps or curl requests
-    if (!origin) return callback(null, true);
-    if (allowedOrigins.includes(origin)) {
-      return callback(null, true);
-    } else {
-      return callback(new Error('Not allowed by CORS'));
-    }
-  },
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH'],
-  allowedHeaders: ['Content-Type', 'Authorization', 'x-access-token', 'X-Requested-With', 'Accept'],
-  credentials: true, // Allow credentials (cookies, etc.) in CORS requests
-}));
+// CORS setup
+const allowedOrigins = [
+    "https://texeract.network",
+    "http://localhost:3000",
+    "http://localhost:3001",
+    "https://texeract-network-beta.vercel.app",
+    "https://tg-texeract-beta.vercel.app",
+    "https://texeractbot.xyz",
+];
 
-app.options('*', (req, res) => {
-  res.header('Access-Control-Allow-Origin', req.headers.origin);
-  res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE', 'PATCH');
-  res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization, x-access-token, X-Requested-With, Accept');
-  res.header('Access-Control-Allow-Credentials', 'true');
-  res.sendStatus(204);
+app.use(
+    cors({
+        origin: (origin, callback) => {
+            if (!origin || allowedOrigins.includes(origin)) {
+                return callback(null, true);
+            }
+            callback(new Error("Not allowed by CORS"));
+        },
+        methods: ["GET", "POST", "PUT", "DELETE", "PATCH"],
+        allowedHeaders: ["Content-Type", "Authorization", "x-access-token", "X-Requested-With", "Accept"],
+        credentials: true,
+    })
+);
+
+app.options("*", (req, res) => {
+    res.header("Access-Control-Allow-Origin", req.headers.origin || "*");
+    res.header("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, PATCH");
+    res.header("Access-Control-Allow-Headers", "Content-Type, Authorization, x-access-token, X-Requested-With, Accept");
+    res.header("Access-Control-Allow-Credentials", "true");
+    res.sendStatus(204);
 });
 
-app.use((req, res, next) => {
-  res.header('Vary', 'Origin');
-  next();
-});
-
-// 46.202.129.137
-// 2a02:4780:28:feaa::1
-
-// database
+// Database connection pool
 const db = mysql.createPool({
-    // host: '2a02:4780:28:feaa::1',  // use this in production
-    host: process.env.DB_HOST ,
-    user: process.env.DB_USER ,
-    password: process.env.DB_PASSWORD ,
-    database: process.env.DB_DATABASE ,
+    host: process.env.DB_HOST,
+    user: process.env.DB_USER,
+    password: process.env.DB_PASSWORD,
+    database: process.env.DB_DATABASE,
     port: 3306,
     waitForConnections: true,
-    connectTimeout: 20000,      
-    connectionLimit: 10,  
-    queueLimit: 0          
+    connectionLimit: 10,
+    queueLimit: 0,
 });
 
-process.on('uncaughtException', function (err) {
-    console.log(err);
-});
-
-async function testConnection() {
+// Test database connection
+(async function testConnection() {
     try {
         const connection = await db.getConnection();
-        console.log('Database connection successful!');
-        connection.release(); // Release the connection back to the pool
+        console.log("Database connection successful!");
+        connection.release();
     } catch (error) {
-        console.error('Database connection failed:', error);
+        console.error("Database connection failed:", error.message);
+        process.exit(1);
     }
-}
+})();
 
-testConnection();
-
-const jwtSecret = process.env.MAIN_JWT_SECRET
-
+// JWT Authentication Middleware
 const authenticateToken = (req, res, next) => {
     const authHeader = req.headers["authorization"];
-    const token = authHeader && authHeader.split(" ")[1]; // Extract token from "Bearer <token>"
+    const token = authHeader && authHeader.split(" ")[1];
 
     if (!token) {
-        return res.json({ success: false, message: "Authentication token is required" });
+        return res.status(401).json({ success: false, message: "Authentication token is required" });
     }
 
     jwt.verify(token, jwtSecret, (err, decoded) => {
         if (err) {
-            if (err.name === "TokenExpiredError") {
-                // Handle expired token case
-                return res.json({ success: false, message: "Token has expired" });
-            }
-            if (err.name === "JsonWebTokenError") {
-                // Handle invalid token case
-                return res.json({ success: false, message: "Invalid token" });
-            }
-            // Handle other errors
-            return res.json({ success: false, message: "Token verification failed" });
+            const errorMessage = err.name === "TokenExpiredError" ? "Token has expired" : "Invalid token";
+            return res.status(403).json({ success: false, message: errorMessage });
         }
-        
-        req.user = decoded; // Attach decoded user information to the request object
-        next(); // Proceed to the next middleware or route handler
+
+        req.user = decoded;
+        next();
     });
 };
 
-const getDevFromCache = async (api) => {
-    let dev = cache.get(api);
+// Fetch developer data from cache or database
+const getDevFromCache = async (api, res) => {
+    try {
+        let dev = cache.get(api);
 
-    if (!dev) {
-        const [dbDev] = await db.query('SELECT * FROM xera_developer WHERE BINARY xera_api = ?', [api]);
-        if (dbDev.length > 0) {
-            dev = dbDev[0];
+        if (!dev) {
+            const [rows] = await db.query("SELECT * FROM xera_developer WHERE BINARY xera_api = ?", [api]);
+
+            if (rows.length === 0) {
+                return res.status(400).json({ success: false, message: "Invalid API key" });
+            }
+
+            dev = rows[0];
             cache.set(api, dev);
-        } else {
-            return res.json({ success: false, message: "Invalid request" });
         }
-    }
-    if (dev.xera_moderation !== 'creator') {
-        return res.json({ success: false, message: "Invalid request" });
+
+        if (dev.xera_moderation !== "creator") {
+            return res.status(403).json({ success: false, message: "Access denied" });
+        }
+
+        return dev;
+    } catch (error) {
+        console.error("Error fetching developer data:", error.message);
+        return res.status(500).json({ success: false, message: "Internal server error" });
     }
 };
 
@@ -388,6 +401,15 @@ app.post('/xera/v1/api/watcher/operate', async (req,res) => {
     }
 })
 
+
+
+// Global error handling middleware
+app.use((err, req, res, next) => {
+    console.error("Global error:", err.message);
+    res.status(500).json({ success: false, message: "An internal error occurred" });
+});
+
+// Start the server
 app.listen(port, () => {
-    console.log(`Server is running on http://localhost:${port}`);
+    console.log(`Server is running on port ${port}`);
 });

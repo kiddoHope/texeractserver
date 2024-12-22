@@ -1,165 +1,203 @@
 const express = require("express");
 const bodyParser = require("body-parser");
-const mysql = require('mysql2/promise')
+const jwt = require("jsonwebtoken");
+const mysql = require("mysql2/promise");
 const cors = require("cors");
-require('dotenv').config();
-const moment = require('moment');
-const app = express();
-const port = 5002;
-const NodeCache = require('node-cache');
-const cache = new NodeCache({ stdTTL: 60 });
-const compression = require('compression');
+const rateLimit = require("express-rate-limit");
+const compression = require("compression");
+const NodeCache = require("node-cache");
+require("dotenv").config();
 
+const app = express();
+const port = process.env.PORT || 5005;
+const jwtSecret = process.env.MAIN_JWT_SECRET;
+
+// Validate essential environment variables
+if (!jwtSecret || !process.env.DB_HOST || !process.env.DB_USER || !process.env.DB_PASSWORD || !process.env.DB_DATABASE) {
+    console.error("Missing required environment variables. Please check your .env file.");
+    process.exit(1);
+}
+
+// Initialize caching
+const cache = new NodeCache({ stdTTL: 60, checkperiod: 120 });
+
+// Apply middleware
 app.use(compression());
 app.use(bodyParser.json());
 
-const allowedOrigins = ['https://texeract.network', 'http://localhost:3000', 'http://localhost:3001', 'https://texeract-network-beta.vercel.app','https://tg-texeract-beta.vercel.app','https://texeractbot.xyz'];
+// Rate limiting
+const limiter = rateLimit({
+    windowMs: 15 * 60 * 1000, // 15 minutes
+    max: 100, // Limit each IP to 100 requests per window
+    message: { success: false, message: "Too many requests, please try again later." },
+});
+app.use(limiter);
 
-app.use(cors({
-  origin: (origin, callback) => {
-    // Allow requests with no origin, like mobile apps or curl requests
-    if (!origin) return callback(null, true);
-    if (allowedOrigins.includes(origin)) {
-      return callback(null, true);
-    } else {
-      return callback(new Error('Not allowed by CORS'));
-    }
-  },
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH'],
-  allowedHeaders: ['Content-Type', 'Authorization', 'x-access-token', 'X-Requested-With', 'Accept'],
-  credentials: true, // Allow credentials (cookies, etc.) in CORS requests
-}));
+// CORS setup
+const allowedOrigins = [
+    "https://texeract.network",
+    "http://localhost:3000",
+    "http://localhost:3001",
+    "https://texeract-network-beta.vercel.app",
+    "https://tg-texeract-beta.vercel.app",
+    "https://texeractbot.xyz",
+];
 
-app.options('*', (req, res) => {
-  res.header('Access-Control-Allow-Origin', req.headers.origin);
-  res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE', 'PATCH');
-  res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization, x-access-token, X-Requested-With, Accept');
-  res.header('Access-Control-Allow-Credentials', 'true');
-  res.sendStatus(204);
+app.use(
+    cors({
+        origin: (origin, callback) => {
+            if (!origin || allowedOrigins.includes(origin)) {
+                return callback(null, true);
+            }
+            callback(new Error("Not allowed by CORS"));
+        },
+        methods: ["GET", "POST", "PUT", "DELETE", "PATCH"],
+        allowedHeaders: ["Content-Type", "Authorization", "x-access-token", "X-Requested-With", "Accept"],
+        credentials: true,
+    })
+);
+
+app.options("*", (req, res) => {
+    res.header("Access-Control-Allow-Origin", req.headers.origin || "*");
+    res.header("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, PATCH");
+    res.header("Access-Control-Allow-Headers", "Content-Type, Authorization, x-access-token, X-Requested-With, Accept");
+    res.header("Access-Control-Allow-Credentials", "true");
+    res.sendStatus(204);
 });
 
-app.use((req, res, next) => {
-  res.header('Vary', 'Origin');
-  next();
-});
-
+// Database connection pool
 const db = mysql.createPool({
-    // host: '2a02:4780:28:feaa::1',  // use this in production
-    host: process.env.DB_HOST ,
-    user: process.env.DB_USER ,
-    password: process.env.DB_PASSWORD ,
-    database: process.env.DB_DATABASE ,
+    host: process.env.DB_HOST,
+    user: process.env.DB_USER,
+    password: process.env.DB_PASSWORD,
+    database: process.env.DB_DATABASE,
     port: 3306,
     waitForConnections: true,
-    connectTimeout: 20000,      
-    connectionLimit: 10,  
-    queueLimit: 0          
+    connectionLimit: 10,
+    queueLimit: 0,
 });
 
-process.on('uncaughtException', function (err) {
-    console.log(err);
-});
-
-async function testConnection() {
+// Test database connection
+(async function testConnection() {
     try {
         const connection = await db.getConnection();
-        console.log('Database connection successful!');
-        connection.release(); // Release the connection back to the pool
+        console.log("Database connection successful!");
+        connection.release();
     } catch (error) {
-        console.error('Database connection failed:', error);
+        console.error("Database connection failed:", error.message);
+        process.exit(1);
     }
-}
+})();
 
-testConnection();
+// JWT Authentication Middleware
+const authenticateToken = (req, res, next) => {
+    const authHeader = req.headers["authorization"];
+    const token = authHeader && authHeader.split(" ")[1];
 
-const getDevFromCache = async (api) => {
-    let dev = cache.get(api);
+    if (!token) {
+        return res.status(401).json({ success: false, message: "Authentication token is required" });
+    }
 
-    if (!dev) {
-        const [dbDev] = await db.query('SELECT * FROM xera_developer WHERE BINARY xera_api = ?', [api]);
-        if (dbDev.length > 0) {
-            dev = dbDev[0];
-            cache.set(api, dev);
-        } else {
-            return res.json({ success: false, message: "Invalid request" });
+    jwt.verify(token, jwtSecret, (err, decoded) => {
+        if (err) {
+            const errorMessage = err.name === "TokenExpiredError" ? "Token has expired" : "Invalid token";
+            return res.status(403).json({ success: false, message: errorMessage });
         }
-    }
-    if (dev.xera_moderation !== 'creator') {
-        return res.json({ success: false, message: "Invalid request" });
+
+        req.user = decoded;
+        next();
+    });
+};
+
+// Fetch developer data from cache or database
+const getDevFromCache = async (api, res) => {
+    try {
+        let dev = cache.get(api);
+
+        if (!dev) {
+            const [rows] = await db.query("SELECT * FROM xera_developer WHERE BINARY xera_api = ?", [api]);
+
+            if (rows.length === 0) {
+                return res.status(400).json({ success: false, message: "Invalid API key" });
+            }
+
+            dev = rows[0];
+            cache.set(api, dev);
+        }
+
+        if (dev.xera_moderation !== "creator") {
+            return res.status(403).json({ success: false, message: "Access denied" });
+        }
+
+        return dev;
+    } catch (error) {
+        console.error("Error fetching developer data:", error.message);
+        return res.status(500).json({ success: false, message: "Internal server error" });
     }
 };
 
-app.post('/xera/v1/api/users/airdrop/full-stats', async (req, res) => {
+
+
+// Function to handle API key check and cache fetching
+const validateApiKey = async (req, res) => {
     const { apikey } = req.body;
-    
     if (!apikey) {
         return res.json({ success: false, message: "No request found" });
     }
-
-    
     await getDevFromCache(apikey);
-    
+};
+
+
+// Airdrop Full Stats - Optimized for Efficiency
+app.post('/xera/v1/api/users/airdrop/full-stats', async (req, res) => {
+    await validateApiKey(req, res); // Centralized API Key validation
+
     try {
         const results = [];
 
-        for (let i = 0; i < 10; i++) {
-            const date = moment().subtract(i, 'days').format('YYYY-MM-DD');
-            const startDate = `${date} 00:00:00`;
-            const endDate = `${date} 23:59:59`;
+        // Perform a single query to get all the necessary data for the last 10 days
+        const dates = Array.from({ length: 10 }, (_, i) => moment().subtract(i, 'days').format('YYYY-MM-DD'));
+        const startDateRange = dates.map(date => `${date} 00:00:00`);
+        const endDateRange = dates.map(date => `${date} 23:59:59`);
 
-            // Get total points for the day
-            const [pointsRows] = await db.query(
-                `SELECT SUM(xera_points) AS totalPoints
-                    FROM xera_user_tasks
-                    WHERE xera_completed_date BETWEEN ? AND ?`,
-                [startDate, endDate]
-            );
+        const [pointsRows, usersRows, referralRows, txeraClaimRows] = await Promise.all([
+            db.query(`
+                SELECT xera_completed_date, SUM(xera_points) AS totalPoints
+                FROM xera_user_tasks
+                WHERE xera_completed_date BETWEEN ? AND ?
+                GROUP BY xera_completed_date
+            `, [startDateRange[0], endDateRange[0]]),
+            db.query(`
+                SELECT xera_completed_date, COUNT(DISTINCT username) AS dailyParticipants
+                FROM xera_user_tasks
+                WHERE xera_completed_date BETWEEN ? AND ?
+                GROUP BY xera_completed_date
+            `, [startDateRange[0], endDateRange[0]]),
+            db.query(`
+                SELECT xera_completed_date, COUNT(*) AS newUsers
+                FROM xera_user_tasks
+                WHERE xera_task = 'Referral Task' AND xera_completed_date BETWEEN ? AND ?
+                GROUP BY xera_completed_date
+            `, [startDateRange[0], endDateRange[0]]),
+            db.query(`
+                SELECT xera_completed_date, COUNT(*) AS txeraClaimTasks
+                FROM xera_user_tasks
+                WHERE xera_task = 'TXERA Claim Task' AND xera_completed_date BETWEEN ? AND ?
+                GROUP BY xera_completed_date
+            `, [startDateRange[0], endDateRange[0]]),
+        ]);
 
-            const totalPoints = pointsRows[0]?.totalPoints || 0;
-
-            // Get daily participants
-            const [usersRows] = await db.query(
-                `SELECT COUNT(DISTINCT username) AS dailyParticipants
-                    FROM xera_user_tasks
-                    WHERE xera_completed_date BETWEEN ? AND ?`,
-                [startDate, endDate]
-            );
-
-            const dailyParticipants = usersRows[0]?.dailyParticipants || 0;
-
-            // Get new users from referral tasks
-            const [referralRows] = await db.query(
-                `SELECT COUNT(*) AS newUsers
-                    FROM xera_user_tasks
-                    WHERE xera_completed_date BETWEEN ? AND ?
-                    AND xera_task = 'Referral Task'`,
-                [startDate, endDate]
-            );
-
-            const newUsers = referralRows[0]?.newUsers || 0;
-
-            // Get TXERA claim tasks
-            const [txeraClaimRows] = await db.query(
-                `SELECT COUNT(*) AS txeraClaimTasks
-                    FROM xera_user_tasks
-                    WHERE xera_completed_date BETWEEN ? AND ?
-                    AND xera_task = 'TXERA Claim Task'`,
-                [startDate, endDate]
-            );
-
-            const txeraClaimTasks = txeraClaimRows[0]?.txeraClaimTasks || 0;
-
-            // Add the data for the current date to the results array
+        for (let i = 0; i < dates.length; i++) {
+            const date = dates[i];
             results.push({
                 date,
-                totalPoints,
-                dailyParticipants,
-                newUsers,
-                txeraClaimTasks,
+                totalPoints: pointsRows[i]?.totalPoints || 0,
+                dailyParticipants: usersRows[i]?.dailyParticipants || 0,
+                newUsers: referralRows[i]?.newUsers || 0,
+                txeraClaimTasks: txeraClaimRows[i]?.txeraClaimTasks || 0,
             });
         }
 
-        // Send the response after the loop finishes
         return res.json({
             success: true,
             message: "Successfully retrieved users data",
@@ -167,45 +205,40 @@ app.post('/xera/v1/api/users/airdrop/full-stats', async (req, res) => {
         });
 
     } catch (error) {
+        console.error("Error in full-stats:", error);
         return res.json({ success: false, message: "Request error", error: error.message });
     }
 });
 
-app.post('/xera/v1/api/users/airdrop/phase1', async (req,res) => {
+// Airdrop Phase1, Phase2, and Phase3 Optimized
+const handleAirdropPhase = async (req, res, phaseStartDate, phaseEndDate) => {
     const { request } = req.body;
+    const { api, limit = 10, page = 1 } = request;
 
-    if (!request) {
-        return res.json({ success: false, message: "No request found" });
-    }
-
-    const apikey = request.api;
-    const limit = parseInt(request.limit, 10) || 10; 
-    const page = parseInt(request.page, 10) || 1;
-
-    if (!apikey) {
+    if (!api) {
         return res.json({ success: false, message: "Invalid or missing API key" });
     }
-    await getDevFromCache(apikey);
 
-    const offset = (page - 1) * limit; 
+    await getDevFromCache(api, res);
+    const offset = (page - 1) * limit;
 
     try {
-        
         const [rows] = await db.query(`
             SELECT MAX(username) AS username, MAX(xera_wallet) AS xera_wallet, SUM(CAST(xera_points AS DECIMAL(10))) AS total_points, 
                 SUM(CASE WHEN xera_task = 'Referral Task' THEN 1 ELSE 0 END) AS referral_task_count
             FROM xera_user_tasks
-            WHERE DATE(xera_completed_date) BETWEEN '2024-09-28' AND '2024-12-18'
+            WHERE DATE(xera_completed_date) BETWEEN ? AND ?
             GROUP BY BINARY username
             ORDER BY total_points DESC
-            LIMIT ? OFFSET ?`, [limit, offset]);
+            LIMIT ? OFFSET ?`, 
+            [phaseStartDate, phaseEndDate, limit, offset]
+        );
 
-        // Query to get total number of records
         const [totalRows] = await db.query(`
             SELECT COUNT(DISTINCT username) AS total
             FROM xera_user_tasks
-            WHERE DATE(xera_completed_date) BETWEEN '2024-09-28' AND '2024-12-18'
-        `);
+            WHERE DATE(xera_completed_date) BETWEEN ? AND ?
+        `, [phaseStartDate, phaseEndDate]);
 
         const total = totalRows[0]?.total || 0;
         const totalPages = Math.ceil(total / limit);
@@ -213,276 +246,94 @@ app.post('/xera/v1/api/users/airdrop/phase1', async (req,res) => {
         res.json({
             success: true,
             data: rows,
-            message: "data retrieved Successfully",
+            message: "Data retrieved successfully",
             pagination: {
                 currentPage: page,
                 totalPages,
                 totalRecords: total,
-                limit
-            }
+                limit,
+            },
         });
     } catch (error) {
+        console.error("Error in phase handler:", error);
         return res.json({ success: false, message: "Request error", error: error.message });
     }
+};
+app.post('/xera/v1/api/users/airdrop/phase1', (req, res) => handleAirdropPhase(req, res, '2024-09-28', '2024-12-18'));
+app.post('/xera/v1/api/users/airdrop/phase2', (req, res) => handleAirdropPhase(req, res, '2024-12-19', '2025-02-25'));
+app.post('/xera/v1/api/users/airdrop/phase3', (req, res) => handleAirdropPhase(req, res, '2025-02-25', '2025-05-30'));
 
-    
-})
-
-app.post('/xera/v1/api/users/airdrop/phase2', async (req,res) => {
-    const { request } = req.body;
-
-    if (!request) {
-        return res.json({ success: false, message: "No request found" });
-    }
-
-    const apikey = request.api;
-    const limit = parseInt(request.limit, 10) || 10; 
-    const page = parseInt(request.page, 10) || 1;
-
-    if (!apikey) {
-        return res.json({ success: false, message: "Invalid or missing API key" });
-    }
-    await getDevFromCache(apikey);
-
-    const offset = (page - 1) * limit; 
+//  Airdrop Participants
+app.post('/xera/v1/api/users/airdrop/participants', async (req, res) => {
+    await validateApiKey(req, res); // Centralized API Key validation
 
     try {
+        const [userTask] = await db.query('SELECT COUNT(DISTINCT BINARY username) AS user_participants FROM xera_user_tasks');
         
-        const [rows] = await db.query(`
-            SELECT MAX(username) AS username, MAX(xera_wallet) AS xera_wallet, SUM(CAST(xera_points AS DECIMAL(10))) AS total_points, 
-                SUM(CASE WHEN xera_task = 'Referral Task' THEN 1 ELSE 0 END) AS referral_task_count
-            FROM xera_user_tasks
-            WHERE DATE(xera_completed_date) BETWEEN '2024-12-19' AND '2025-02-25'
-            GROUP BY BINARY username
-            ORDER BY total_points DESC
-            LIMIT ? OFFSET ?`, [limit, offset]);
-
-        // Query to get total number of records
-        const [totalRows] = await db.query(`
-            SELECT COUNT(DISTINCT username) AS total
-            FROM xera_user_tasks
-            WHERE DATE(xera_completed_date) BETWEEN '2024-12-19' AND '2025-02-25'
-        `);
-
-        const total = totalRows[0]?.total || 0;
-        const totalPages = Math.ceil(total / limit);
-
-        res.json({
-            success: true,
-            data: rows,
-            message: "data retrieved Successfully",
-            pagination: {
-                currentPage: page,
-                totalPages,
-                totalRecords: total,
-                limit
-            }
-        });
-    } catch (error) {
-        return res.json({ success: false, message: "Request error", error: error.message });
-    }
-
-    
-})
-
-app.post('/xera/v1/api/users/airdrop/phase3', async (req,res) => {
-    const { request } = req.body;
-
-    if (!request) {
-        return res.json({ success: false, message: "No request found" });
-    }
-
-    const apikey = request.api;
-    const limit = parseInt(request.limit, 10) || 10; 
-    const page = parseInt(request.page, 10) || 1;
-
-    if (!apikey) {
-        return res.json({ success: false, message: "Invalid or missing API key" });
-    }
-    await getDevFromCache(apikey);
-
-    const offset = (page - 1) * limit; 
-
-    try {
-        
-        const [rows] = await db.query(`
-            SELECT MAX(username) AS username, MAX(xera_wallet) AS xera_wallet, SUM(CAST(xera_points AS DECIMAL(10))) AS total_points, 
-                SUM(CASE WHEN xera_task = 'Referral Task' THEN 1 ELSE 0 END) AS referral_task_count
-            FROM xera_user_tasks
-            WHERE DATE(xera_completed_date) BETWEEN '2025-02-25' AND '2025-05-30'
-            GROUP BY BINARY username
-            ORDER BY total_points DESC
-            LIMIT ? OFFSET ?`, [limit, offset]);
-
-        // Query to get total number of records
-        const [totalRows] = await db.query(`
-            SELECT COUNT(DISTINCT username) AS total
-            FROM xera_user_tasks
-            WHERE DATE(xera_completed_date) BETWEEN '2025-02-25' AND '2025-05-30'
-        `);
-
-        const total = totalRows[0]?.total || 0;
-        const totalPages = Math.ceil(total / limit);
-
-        res.json({
-            success: true,
-            data: rows,
-            message: "data retrieved Successfully",
-            pagination: {
-                currentPage: page,
-                totalPages,
-                totalRecords: total,
-                limit
-            }
-        });
-    } catch (error) {
-        return res.json({ success: false, message: "Request error", error: error.message });
-    }
-
-    
-})
-
-app.post('/xera/v1/api/users/airdrop/participants', async (req,res) => {
-    const { apikey } = req.body;
-    
-    if (!apikey) {
-        return res.json({ success: false, message: "No request found" });
-    }
-    await getDevFromCache(apikey);
-
-    try {
-        const [userTask] = await db.query('SELECT COUNT(DISTINCT BINARY username) AS user_participants FROM xera_user_tasks')
         if (userTask.length > 0) {
-            const participantData = userTask[0].user_participants
-            
-            res.json({ success: true, message: "User tasks successfully retrieve", participants :participantData})
+            const participantData = userTask[0].user_participants;
+            res.json({ success: true, message: "User tasks successfully retrieved", participants: participantData });
         } else {
-            return res.json({ success: false, message: "No data retrieve" });
+            return res.json({ success: false, message: "No data retrieved" });
         }
     } catch (error) {
         return res.json({ success: false, message: "Request error", error: error.message });
     }
-})
+});
 
-app.post('/xera/v1/api/users/total-points/phase1', async (req, res) => {
-    const { apikey } = req.body;
-    
-
-    if (!apikey) {
-        return res.json({ success: false, message: "No request found" });
-    }
-
-    if (!apikey) {
-        return res.json({ success: false, message: "No request found" });
-    }
-
-    await getDevFromCache(apikey);
+// Function to handle total points for a given phase
+const getTotalPoints = async (req, res, startDate, endDate) => {
+    await validateApiKey(req, res); // Centralized API Key validation
 
     try {
         const [userstask] = await db.query(`
             SELECT SUM(xera_points) AS total_points 
-            FROM xera_user_tasks WHERE xera_completed_date BETWEEN ? AND ?`,['2024-11-01 01:01:01','2024-12-18 01:01:01']);
-        
+            FROM xera_user_tasks 
+            WHERE xera_completed_date BETWEEN ? AND ?`, 
+            [startDate, endDate]
+        );
+
         if (userstask.length > 0) {
-            const totalPoints = userstask[0].total_points
-            
+            const totalPoints = userstask[0].total_points;
             return res.json({ success: true, totalPoints });
         } else {
             return res.json({ success: false, message: "No tasks found" });
         }
-           
     } catch (error) {
-        return res.json({ success: false, message: "Request error", error: error });
+        return res.json({ success: false, message: "Request error", error: error.message });
     }
+};
+// Routes for each phase using the optimized function
+app.post('/xera/v1/api/users/total-points/phase1', (req, res) => {
+    getTotalPoints(req, res, '2024-11-01 01:01:01', '2024-12-18 01:01:01');
+});
+app.post('/xera/v1/api/users/total-points/phase2', (req, res) => {
+    getTotalPoints(req, res, '2024-12-19 01:01:01', '2025-02-25 01:01:01');
+});
+app.post('/xera/v1/api/users/total-points/phase3', (req, res) => {
+    getTotalPoints(req, res, '2025-02-25 01:01:01', '2025-05-30 01:01:01');
 });
 
-app.post('/xera/v1/api/users/total-points/phase2', async (req, res) => {
-    const { apikey } = req.body;
-    
-
-    if (!apikey) {
-        return res.json({ success: false, message: "No request found" });
-    }
-
-    if (!apikey) {
-        return res.json({ success: false, message: "No request found" });
-    }
-
-    await getDevFromCache(apikey);
-
+// Route to get the total count of wallets
+app.post('/xera/v1/api/users/all-wallet', async (req, res) => {
+    await validateApiKey(req, res); // Centralized API Key validation
     try {
-        const [userstask] = await db.query(`SELECT SUM(xera_points) AS total_points FROM xera_user_tasks WHERE xera_completed_date BETWEEN ? AND ?`,['2024-12-19 01:01:01','2025-02-25 01:01:01']);
-        
-        if (userstask.length > 0) {
-            const totalPoints = userstask[0].total_points
-            
-            return res.json({ success: true, totalPoints });
-        } else {
-            return res.json({ success: false, message: "No tasks found" });
-        }
-           
-    } catch (error) {
-        return res.json({ success: false, message: "Request error", error: error });
-    }
-});
-
-app.post('/xera/v1/api/users/total-points/phase3', async (req, res) => {
-    const { apikey } = req.body;
-    
-
-    if (!apikey) {
-        return res.json({ success: false, message: "No request found" });
-    }
-
-    if (!apikey) {
-        return res.json({ success: false, message: "No request found" });
-    }
-
-    await getDevFromCache(apikey);
-
-    try {
-        const [userstask] = await db.query(`SELECT SUM(xera_points) AS total_points FROM xera_user_tasks WHERE xera_completed_date BETWEEN ? AND ?`,['2025-02-25 01:01:01','2025-05-30 01:01:01']);
-        
-        if (userstask.length > 0) {
-            const totalPoints = userstask[0].total_points
-            
-            return res.json({ success: true, totalPoints });
-        } else {
-            return res.json({ success: false, message: "No tasks found" });
-        }
-           
-    } catch (error) {
-        return res.json({ success: false, message: "Request error", error: error });
-    }
-});
-
-app.post('/xera/v1/api/users/all-wallet',async (req,res) => {
-    const {apikey} = req.body; 
-    
-    if (!apikey) {
-        return res.json({ success: false, message: "No request found" });
-    }
-    await getDevFromCache(apikey);
-    try {
-        const [countWallet] = await db.query('SELECT COUNT(*) AS user_count FROM xera_user_accounts')
+        const [countWallet] = await db.query('SELECT COUNT(*) AS user_count FROM xera_user_accounts');
         
         if (countWallet.length > 0) {
-            const walletCount = countWallet[0].user_count
-            res.json({ success:true, message: "Successfully count all wallet", walletCount: walletCount})
+            const walletCount = countWallet[0].user_count;
+            res.json({ success: true, message: "Successfully counted all wallets", walletCount });
+        } else {
+            res.json({ success: false, message: "No data found" });
         }
-            
     } catch (error) {
-        return res.json({ success: false, message: "request error", error: error });
+        return res.json({ success: false, message: "Request error", error: error.message });
     }
-})
+});
 
-app.post('/xera/v1/api/users/airdrop/recent-participant', async (req,res) => {
-    const { apikey } = req.body;
-    
-    if (!apikey) {
-        return res.json({ success: false, message: "No request found" });
-    }
-    await getDevFromCache(apikey);
+// Route to get the count of recent participants
+app.post('/xera/v1/api/users/airdrop/recent-participant', async (req, res) => {
+    await validateApiKey(req, res); // Centralized API Key validation
     try {
         const [recentParticipants] = await db.query(`
             SELECT COUNT(DISTINCT BINARY username) AS recent_participants
@@ -492,42 +343,45 @@ app.post('/xera/v1/api/users/airdrop/recent-participant', async (req,res) => {
         `);
 
         if (recentParticipants.length > 0) {
-            const participantsData = recentParticipants[0].recent_participants
-            res.json({ success: true, message: "Participants successfully retrieve", recentparticipants: participantsData})
+            const participantsData = recentParticipants[0].recent_participants;
+            res.json({ success: true, message: "Participants successfully retrieved", recentparticipants: participantsData });
         } else {
-            return res.json({ success: false, message: "No data retrieve" });
+            res.json({ success: false, message: "No data found" });
         }
     } catch (error) {
         return res.json({ success: false, message: "Request error", error: error.message });
     }
-})
+});
 
-app.post('/xera/v1/api/users/node/transaction-history', async (req,res) => {
-    const { apikey } = req.body;
-    
-    if (!apikey) {
-        return res.json({ success: false, message: "No request found" });
-    }
-    await getDevFromCache(apikey);
+// Route to get transaction history of nodes
+app.post('/xera/v1/api/users/node/transaction-history', async (req, res) => {
+    await validateApiKey(req, res); // Centralized API Key validation
     try {
-       
-        const currentDate = new Date().toISOString().split('T')[0];
+        const currentDate = new Date().toISOString().split('T')[0]; // Get current date in YYYY-MM-DD format
         const [transactionNode] = await db.query(`
             SELECT node_id, node_name, node_owner, node_points, node_txhash, node_txdate
             FROM xera_user_node
             WHERE node_txdate >= ?
-        `,[currentDate]);
+        `, [currentDate]);
 
         if (transactionNode.length > 0) {
-            res.json({ success: true, message: "User tasks successfully retrieve", transaction : transactionNode})
+            res.json({ success: true, message: "User transactions successfully retrieved", transaction: transactionNode });
         } else {
-            return res.json({ success: false, message: "No data retrieve" });
+            res.json({ success: false, message: "No data found" });
         }
     } catch (error) {
         return res.json({ success: false, message: "Request error", error: error.message });
     }
-})
+});
 
+
+// Global error handling middleware
+app.use((err, req, res, next) => {
+    console.error("Global error:", err.message);
+    res.status(500).json({ success: false, message: "An internal error occurred" });
+});
+
+// Start the server
 app.listen(port, () => {
-    console.log(`Server is running on http://localhost:${port}`);
+    console.log(`Server is running on port ${port}`);
 });

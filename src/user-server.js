@@ -1,118 +1,121 @@
 const express = require("express");
 const bodyParser = require("body-parser");
 const jwt = require("jsonwebtoken");
-const mysql = require('mysql2/promise')
+const mysql = require("mysql2/promise");
 const cors = require("cors");
-const { body, validationResult } = require('express-validator');
-require('dotenv').config();
-const bcrypt = require('bcrypt');
-const app = express();
-const port = 5001;
-const compression = require('compression');
-const NodeCache = require('node-cache');
-const cache = new NodeCache({ stdTTL: 60 });
+const compression = require("compression");
+const NodeCache = require("node-cache");
+const bcrypt = require("bcrypt");
+require("dotenv").config();
 
+const app = express();
+const port = process.env.PORT || 5001;
+const jwtSecret = process.env.MAIN_JWT_SECRET;
+
+// Validate required environment variables
+if (!jwtSecret || !process.env.DB_HOST || !process.env.DB_USER || !process.env.DB_PASSWORD || !process.env.DB_DATABASE) {
+    console.error("Missing required environment variables. Please check your .env file.");
+    process.exit(1);
+}
+
+// Caching setup
+const cache = new NodeCache({ stdTTL: 60, checkperiod: 120 });
+
+// Middleware setup
 app.use(compression());
 app.use(bodyParser.json());
 
-const allowedOrigins = ['https://texeract.network', 'http://localhost:3000', 'http://localhost:3001', 'https://texeract-network-beta.vercel.app','https://tg-texeract-beta.vercel.app','https://texeractbot.xyz'];
+const allowedOrigins = [
+    "https://texeract.network",
+    "http://localhost:3000",
+    "http://localhost:3001",
+    "https://texeract-network-beta.vercel.app",
+    "https://tg-texeract-beta.vercel.app",
+    "https://texeractbot.xyz",
+];
 
-app.use(cors({
-  origin: (origin, callback) => {
-    // Allow requests with no origin, like mobile apps or curl requests
-    if (!origin) return callback(null, true);
-    if (allowedOrigins.includes(origin)) {
-      return callback(null, true);
-    } else {
-      return callback(new Error('Not allowed by CORS'));
-    }
-  },
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH'],
-  allowedHeaders: ['Content-Type', 'Authorization', 'x-access-token', 'X-Requested-With', 'Accept'],
-  credentials: true, // Allow credentials (cookies, etc.) in CORS requests
-}));
+app.use(
+    cors({
+        origin: (origin, callback) => {
+            if (!origin || allowedOrigins.includes(origin)) {
+                return callback(null, true);
+            }
+            return callback(new Error("Not allowed by CORS"));
+        },
+        methods: ["GET", "POST", "PUT", "DELETE", "PATCH"],
+        allowedHeaders: ["Content-Type", "Authorization", "x-access-token", "X-Requested-With", "Accept"],
+        credentials: true,
+    })
+);
 
-app.options('*', (req, res) => {
-  res.header('Access-Control-Allow-Origin', req.headers.origin);
-  res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE', 'PATCH');
-  res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization, x-access-token, X-Requested-With, Accept');
-  res.header('Access-Control-Allow-Credentials', 'true');
-  res.sendStatus(204);
+app.options("*", (req, res) => {
+    res.header("Access-Control-Allow-Origin", req.headers.origin || "*");
+    res.header("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, PATCH");
+    res.header("Access-Control-Allow-Headers", "Content-Type, Authorization, x-access-token, X-Requested-With, Accept");
+    res.header("Access-Control-Allow-Credentials", "true");
+    res.sendStatus(204);
 });
 
-app.use((req, res, next) => {
-  res.header('Vary', 'Origin');
-  next();
-});
-
-const jwtSecret = process.env.MAIN_JWT_SECRET
-
+// Database pool setup
 const db = mysql.createPool({
-    // host: '2a02:4780:28:feaa::1',  // use this in production
-    host: process.env.DB_HOST ,
-    user: process.env.DB_USER ,
-    password: process.env.DB_PASSWORD ,
-    database: process.env.DB_DATABASE ,
+    host: process.env.DB_HOST,
+    user: process.env.DB_USER,
+    password: process.env.DB_PASSWORD,
+    database: process.env.DB_DATABASE,
     port: 3306,
     waitForConnections: true,
-    connectTimeout: 20000,      
-    connectionLimit: 10,  
-    queueLimit: 0          
+    connectionLimit: 10,
+    queueLimit: 0,
 });
 
-process.on('uncaughtException', function (err) {
-    console.log(err);
-});
+// Test database connection
+(async function testConnection() {
+    try {
+        const connection = await db.getConnection();
+        console.log("Database connection successful!");
+        connection.release();
+    } catch (error) {
+        console.error("Database connection failed:", error.message);
+        process.exit(1);
+    }
+})();
 
+// Authentication middleware
 const authenticateToken = (req, res, next) => {
     const authHeader = req.headers["authorization"];
-    const token = authHeader && authHeader.split(" ")[1]; // Extract token from "Bearer <token>"
+    const token = authHeader && authHeader.split(" ")[1];
 
     if (!token) {
-        return res.json({ success: false, message: "Authentication token is required" });
+        return res.status(401).json({ success: false, message: "Authentication token is required" });
     }
 
     jwt.verify(token, jwtSecret, (err, decoded) => {
         if (err) {
-            if (err.name === "TokenExpiredError") {
-                // Handle expired token case
-                return res.json({ success: false, message: "Token has expired" });
-            }
-            if (err.name === "JsonWebTokenError") {
-                // Handle invalid token case
-                return res.json({ success: false, message: "Invalid token" });
-            }
-            // Handle other errors
-            return res.json({ success: false, message: "Token verification failed" });
+            const errorMessage = err.name === "TokenExpiredError" ? "Token has expired" : "Invalid token";
+            return res.status(403).json({ success: false, message: errorMessage });
         }
-        
-        req.user = decoded; // Attach decoded user information to the request object
-        next(); // Proceed to the next middleware or route handler
+
+        req.user = decoded;
+        next();
     });
 };
 
-async function testConnection() {
-    try {
-        const connection = await db.getConnection();
-        console.log('Database connection successful!');
-        connection.release(); // Release the connection back to the pool
-    } catch (error) {
-        console.error('Database connection failed:', error);
-    }
-}
-
-testConnection();
-
+// Cache helper function
 const getUserFromCache = async (username) => {
-    let user = cache.get(username);
-    if (!user) {
-        const [dbUser] = await db.query("SELECT * FROM xera_user_accounts WHERE BINARY username = ?", [username]);
-        if (dbUser.length > 0) {
-            user = dbUser[0];
-            cache.set(username, user);
+    try {
+        let user = cache.get(username);
+        if (!user) {
+            const [dbUser] = await db.query("SELECT * FROM xera_user_accounts WHERE BINARY username = ?", [username]);
+            if (dbUser.length > 0) {
+                user = dbUser[0];
+                cache.set(username, user);
+            }
         }
+        return user;
+    } catch (error) {
+        console.error("Error fetching user:", error.message);
+        return null;
     }
-    return user;
 };
 
 // app.post("/xera/v1/api/generate/access-token", async (req,res) => {
@@ -136,333 +139,238 @@ const getUserFromCache = async (username) => {
 //     }
 // })
 
-app.post("/xera/v1/api/user/check-username" ,async (req,res) => {
-    const {username} = req.body;
+// Helper function to generate JWT token
+const generateAuthToken = (username, publicKey) => {
+    const xeraJWT = {
+        loginState: "basic",
+        isloggedIn: "true",
+        myXeraUsername: username,
+        myXeraAddress: publicKey
+    };
+    return jwt.sign({ xeraJWT }, jwtSecret, { expiresIn: "2d" });
+};
+
+// Helper function to handle user login and token generation
+const handleUserLogin = async (user, password, res) => {
+    const dataPass = user.password;
     
+    // Check and normalize password hash if needed
+    if (dataPass.slice(0, 4) === "$2y$") {
+        const normalizedHash = dataPass.replace("$2y$", "$2a$");
+        if (await bcrypt.compare(password, normalizedHash)) {
+            const authToken = generateAuthToken(user.username, user.xera_wallet);
+            return res.json({ success: true, message: `${user.username} Successfully Login`, authToken });
+        } else {
+            return res.json({ success: false, message: 'Wrong password' });
+        }
+    } else {
+        if (await bcrypt.compare(password, dataPass)) {
+            const authToken = generateAuthToken(user.username, user.xera_wallet);
+            return res.json({ success: true, message: `${user.username} Successfully Login Basic Account`, authToken });
+        } else {
+            return res.json({ success: false, message: 'Wrong password' });
+        }
+    }
+};
+
+// Route to check username availability
+app.post("/xera/v1/api/user/check-username", async (req, res) => {
+    const { username } = req.body;
+
     if (!username) {
-        return res.json({ success: false, message: "please complete all the fields"});
+        return res.json({ success: false, message: "Please complete all the fields" });
     }
 
     try {
-        const user = await getUserFromCache(username) 
-        
+        const user = await getUserFromCache(username);
         if (user) {
             return res.json({ success: false, message: 'Username already exists' });
         } else {
             return res.json({ success: true, message: 'Username is available' });
         }
     } catch (error) {
-        res.json({ success: false, message: 'request error' }); 
+        return res.json({ success: false, message: 'Request error' });
     }
-})
+});
 
+// Route for basic login using username and password
 app.post('/xera/v1/api/user/login-basic', async (req, res) => {
     const { username, password } = req.body;
 
     if (!username || !password) {
-        return res.json({ success: false, message: "Request Error. Input Field"})
+        return res.json({ success: false, message: "Request Error. Input Field missing" });
     }
-    
-    try {
 
+    try {
         const userData = await getUserFromCache(username);
         
         if (userData) {
-            const dataPass = userData.password
-            
-            if (dataPass.slice(0,4) === "$2y$") {
-                const normalizedHash = dataPass.replace("$2y$", "$2a$");
-                
-                if (await bcrypt.compare(password, normalizedHash)) {
-                    const xeraJWT = {
-                        loginState : "basic",
-                        isloggedIn : "true",
-                        myXeraUsername : userData.username,
-                        myXeraAddress : userData.xera_wallet
-                    }
-                    const authToken = jwt.sign({ xeraJWT }, jwtSecret, { expiresIn: "2d" });
-                    return res.json({ success: true, message: `${userData.username} Successfully Login`, authToken: authToken})
-                } else {
-                    return res.json({ success: false, message: 'Wrong password' });
-                }
-            } else {
-                if (await bcrypt.compare(password, dataPass)) {
-                    const xeraJWT = {
-                        loginState : "basic",
-                        isloggedIn : "true",
-                        myXeraUsername : userData.username,
-                        myXeraAddress : userData.xera_wallet
-                    }
-                    const authToken = jwt.sign({ xeraJWT }, jwtSecret, { expiresIn: "2d" });
-                    return res.json({ success: true, message: `${userData.username} Successfully Login Basic Account`, authToken: authToken})
-                } else {
-                    return res.json({ success: false, message: 'Wrong password' });
-                }
-            }
-            
+            await handleUserLogin(userData, password, res);
         } else {
-            return res.json({ success: false, message: "no user found"})
+            return res.json({ success: false, message: "No user found" });
         }
     } catch (error) {
-        return res.json({ success: false, message: "request error"})
+        return res.json({ success: false, message: "Request error" });
     }
-})
+});
 
+// Route for login using private key
 app.post('/xera/v1/api/user/login-prKey', async (req, res) => {
     const { privateKey } = req.body;
-    
-    
+
     if (!privateKey) {
-        return res.json({ success: false, message: "Request Error. No private key received"})
+        return res.json({ success: false, message: "Request Error. No private key received" });
     }
 
     try {
         const [user] = await db.query("SELECT * FROM xera_user_wallet WHERE BINARY private_key = ?", [privateKey]);
-        
+
         if (user.length > 0) {
-            const userData = user[0]
+            const userData = user[0];
             const [getUsername] = await db.query("SELECT * FROM xera_user_accounts WHERE BINARY xera_wallet = ?", [userData.public_key]);
+            
             if (getUsername.length > 0) {
-                const userarray = getUsername[0]
-                const username = userarray.username
-                const xeraJWT = {
-                    loginState : "basic",
-                    isloggedIn : "true",
-                    myXeraUsername : username,
-                    myXeraAddress : userData.public_key
-                }
-                const authToken = jwt.sign({ xeraJWT }, jwtSecret, { expiresIn: "2d" });
-                return res.json({ success: true, message: `${username} Successfully Login Full Access`, authToken: authToken})
+                const username = getUsername[0].username;
+                const authToken = generateAuthToken(username, userData.public_key);
+                return res.json({ success: true, message: `${username} Successfully Login Full Access`, authToken });
             } else {
-                return res.json({ success: false, message: "No user found in that key phrase"})
+                return res.json({ success: false, message: "No user found for that key phrase" });
             }
         } else {
-            return res.json({ success: false, message: "invalid key phrase"})
+            return res.json({ success: false, message: "Invalid key phrase" });
         }
     } catch (error) {
-        return res.json({ success: false, message: "request error", error: error})
+        return res.json({ success: false, message: "Request error", error });
     }
-})
+});
 
+// Route for login using seed phrase
 app.post('/xera/v1/api/user/login-phrase', async (req, res) => {
     const { seedPhrase } = req.body;
 
     if (!seedPhrase) {
-        return res.json({ success: false, message: "Request Error. No private key received"})
+        return res.json({ success: false, message: "Request Error. No seed phrase received" });
     }
-    
-    const seed = JSON.parse(seedPhrase)
+
+    const seed = JSON.parse(seedPhrase);
 
     try {
-        const sqlPhrase = "SELECT * FROM xera_user_wallet WHERE BINARY word1 = ? AND word2 = ? AND word3 = ? AND word4 = ? AND word5 = ? AND word6 = ? AND word7 = ? AND word8 = ? AND word9 = ? AND word10 = ? AND word11 = ? AND word12 = ?"
-        const [user] = await db.query(sqlPhrase, [seed.seedWord1,seed.seedWord2,seed.seedWord3,seed.seedWord4,seed.seedWord5,seed.seedWord6,seed.seedWord7,seed.seedWord8,seed.seedWord9,seed.seedWord10,seed.seedWord11,seed.seedWord12]);
+        const sqlPhrase = "SELECT * FROM xera_user_wallet WHERE BINARY word1 = ? AND word2 = ? AND word3 = ? AND word4 = ? AND word5 = ? AND word6 = ? AND word7 = ? AND word8 = ? AND word9 = ? AND word10 = ? AND word11 = ? AND word12 = ?";
+        const [user] = await db.query(sqlPhrase, [
+            seed.seedWord1, seed.seedWord2, seed.seedWord3, seed.seedWord4, seed.seedWord5, seed.seedWord6,
+            seed.seedWord7, seed.seedWord8, seed.seedWord9, seed.seedWord10, seed.seedWord11, seed.seedWord12
+        ]);
 
         if (user.length > 0) {
-            const userData = user[0]
-            
+            const userData = user[0];
             const [getUsername] = await db.query("SELECT * FROM xera_user_accounts WHERE BINARY xera_wallet = ?", [userData.public_key]);
-            
+
             if (getUsername.length > 0) {
-                const userarray = getUsername[0]
-                
-                const username = userarray.username
-                const xeraJWT = {
-                    loginState : "basic",
-                    isloggedIn : "true",
-                    myXeraUsername : username,
-                    myXeraAddress : userData.public_key
-                }
-                const authToken = jwt.sign({ xeraJWT }, jwtSecret, { expiresIn: "2d" });
-                return res.json({ success: true, message: `${username} Successfully Login Full Access`, authToken: authToken})
+                const username = getUsername[0].username;
+                const authToken = generateAuthToken(username, userData.public_key);
+                return res.json({ success: true, message: `${username} Successfully Login Full Access`, authToken });
             } else {
-                return res.json({ success: false, message: "No user found in that key phrase"})
+                return res.json({ success: false, message: "No user found for that key phrase" });
             }
         } else {
-            return res.json({ success: false, message: "No user found in that key phrase"})
+            return res.json({ success: false, message: "No user found for that key phrase" });
         }
     } catch (error) {
-        return res.json({ success: false, message: "request error"})
+        return res.json({ success: false, message: "Request error" });
     }
-})
+});
 
-app.post('/xera/v1/api/user/tasks/all-task', authenticateToken, async (req,res) => {
-    const {user} = req.body;
-    
+
+
+
+app.post('/xera/v1/api/user/tasks/all-task', authenticateToken, async (req, res) => {
+    const { user } = req.body;
+
     if (!user) {
-        return res.json({ success: false, message: "invalid request"})
+        return res.json({ success: false, message: "invalid request" });
     }
 
     try {
-        const [transactions] = await db.query('SELECT * FROM xera_user_tasks WHERE BINARY username = ?',[user]);
-        
-        const [connectedWallet] = await db.query('SELECT * FROM xera_user_accounts WHERE BINARY username = ?',[user]);
-        
-        if (transactions) {
-            const filterTelegram = transactions.filter(data => data.xera_task === "Telegram Task");
-            const filterTwitter = transactions.filter(data => data.xera_task === "Twitter Task");
-            const filterWalletConnect = transactions.filter(data => data.xera_task === "Wallet Connect Task");
-            
-            const filterSubsTamago = transactions.filter(data => data.xera_task === "Subscribe - @MikeTamago");
-            const filterAlrock = transactions.filter(data => data.xera_task === "Subscribe - @ALROCK");
-            const followTamago = transactions.filter(data => data.xera_task === "Follow - @BRGYTamago");
-            const followAlrock = transactions.filter(data => data.xera_task === "Follow - @ALrOck14");
-            const filterSubsCryp = transactions.filter(data => data.xera_task === "Subscribe - @CrypDropPh")
-            const filterSubsKim = transactions.filter(data => data.xera_task === "Subscribe - @kimporsha11")
-            const filterFacebook = transactions.filter(data => data.xera_task === "Facebook Task")
-            const filterTelegram2 = transactions.filter(data => data.xera_task === "Telegram 2 Task")
-            const filterTiktok = transactions.filter(data => data.xera_task === "TikTok Task")
-            const filterBluesky = transactions.filter(data => data.xera_task === "Bluesky Task")
-            const filterYoutube = transactions.filter(data => data.xera_task === "YouTube Task");
+        // Fetch user transactions and wallet information
+        const [transactions] = await db.query('SELECT * FROM xera_user_tasks WHERE BINARY username = ?', [user]);
+        const [connectedWallet] = await db.query('SELECT * FROM xera_user_accounts WHERE BINARY username = ?', [user]);
+
+        if (transactions && transactions.length > 0) {
+            const alltask = {};
+
+            // Task types and their corresponding names in the database
+            const taskTypes = [
+                "Telegram Task", "Twitter Task", "Wallet Connect Task", 
+                "Subscribe - @MikeTamago", "Subscribe - @ALROCK", 
+                "Follow - @BRGYTamago", "Follow - @ALrOck14",
+                "Subscribe - @CrypDropPh", "Subscribe - @kimporsha11", 
+                "Facebook Task", "Telegram 2 Task", "TikTok Task", 
+                "Bluesky Task", "YouTube Task", "TXERA Claim Task"
+            ];
+
+            // Iterate through each task type and filter the transactions
+            taskTypes.forEach(task => {
+                const filteredTasks = transactions.filter(data => data.xera_task === task);
+                if (filteredTasks.length > 0) {
+                    // Use the task name as the key in the alltask object, assigning the status of the last task completed
+                    alltask[task.replace(/[^a-zA-Z0-9]/g, '').toLowerCase()] = filteredTasks.reduce((latest, current) => {
+                        return new Date(current.xera_completed_date) > new Date(latest.xera_completed_date) ? current : latest;
+                    }).xera_status;
+                }
+            });
+
+            // Check if the user has connected wallets
+            if (connectedWallet && connectedWallet.length > 0) {
+                const ethWallet = connectedWallet[0].eth_wallet;
+                const solWallet = connectedWallet[0].sol_wallet;
+
+                if (ethWallet) alltask.ethWallet = "true";
+                if (solWallet) alltask.solWallet = "true";
+            }
+
+            // If TXERA claim task exists, include its completion date
             const filterTXERA = transactions.filter(data => data.xera_task === "TXERA Claim Task");
-            
-            let alltask = {};
-
             if (filterTXERA.length > 0) {
-                const txeracount = filterTXERA.reduce((latest, current) => {
-                    return new Date(current.xera_completed_date) > new Date(latest.xera_completed_date) ? current : latest;
-                })
-                alltask.claimtask = txeracount.xera_status;
-            }
-            
-            if (filterFacebook.length > 0) {
-                filterFacebook.forEach(item => {
-                    alltask.facebooktask = item.xera_status;
-                });
-            }
-            
-            if (filterTelegram2.length > 0) {
-                filterTelegram2.forEach(item => {
-                    alltask.telegramtask2 = item.xera_status;
-                });
-            }
-            
-            if (filterTiktok.length > 0) {
-                filterTiktok.forEach(item => {
-                    alltask.tiktoktask = item.xera_status;
-                });
+                alltask.claimData = filterTXERA[0].xera_completed_date;
             }
 
-            if (filterBluesky.length > 0) {
-                filterBluesky.forEach(item => {
-                    alltask.blueskytask = item.xera_status;
-                });
-            }
-
-            if (filterYoutube.length > 0) {
-                filterYoutube.forEach(item => {
-                    alltask.youtubetask = item.xera_status;
-                });
-            }
-
-            if (filterSubsCryp.length > 0) {
-                filterSubsCryp.forEach(item => {
-                    alltask.subsCrypdropPh = item.xera_status;
-                });
-            }
-            
-            if (filterSubsKim.length > 0) {
-                filterSubsKim.forEach(item => {
-                    alltask.subsKimporsha11 = item.xera_status;
-                });
-            }
-
-            if (filterTelegram.length > 0) {
-                filterTelegram.forEach(item => {
-                    alltask.telegramtask = item.xera_status;
-                });
-            }
-
-            if (filterSubsTamago.length > 0) {
-                filterSubsTamago.forEach(item => {
-                    alltask.subsTamago = item.xera_status;
-                });
-            }
-
-            if (filterAlrock.length > 0) {
-                filterAlrock.forEach(item => {
-                    alltask.subsalrock = item.xera_status;
-                });
-            }
-
-            if (followTamago.length > 0) {
-                followTamago.forEach(item => {
-                    alltask.followTamago = item.xera_status;
-                });
-            }
-
-            if (followAlrock.length > 0) {
-                followAlrock.forEach(item => {
-                    alltask.followalrock = item.xera_status;
-                });
-            }
-
-            if (filterTwitter.length > 0) {
-                filterTwitter.forEach(item => {
-                    alltask.twittertask = item.xera_status;
-                });
-            }
-
-            if (filterWalletConnect.length > 0) {
-                filterWalletConnect.forEach(item => {
-                    alltask.walletConnect = item.xera_status;
-                });
-            }
-
-            if (connectedWallet.length > 0) {
-                const ethWallet = connectedWallet[0].eth_wallet
-                if (ethWallet) {
-                    alltask.ethWallet = "true";
-                }
-            }
-            if (connectedWallet.length > 0) {
-                const ethWallet = connectedWallet[0].sol_wallet
-                if (ethWallet) {
-                    alltask.solWallet = "true";
-                }
-            }
-
-            return res.json({ success: true, data: alltask, claimData: filterTXERA.xera_completed_date})
+            return res.json({ success: true, data: alltask });
         } else {
-            return res.json({ success:false, message : "no transaction found"})
+            return res.json({ success: false, message: "no transaction found" });
         }
     } catch (error) {
-        return res.json({ success: false, message: "request error", error: error})
+        return res.json({ success: false, message: "request error", error: error });
     }
-})
+});
+
+async function getUserRank(user, startDate, endDate) {
+    const [userRanking] = await db.query(`
+        SELECT MAX(username) AS username, MAX(xera_wallet) AS xera_wallet, 
+               SUM(CAST(xera_points AS DECIMAL(10))) AS total_points,
+               SUM(CASE WHEN xera_task = 'Referral Task' THEN 1 ELSE 0 END) AS referral_task_count
+        FROM xera_user_tasks
+        WHERE DATE(xera_completed_date) BETWEEN ? AND ?
+        GROUP BY BINARY username
+        ORDER BY total_points DESC
+    `, [startDate, endDate]);
+    
+    const userRank = userRanking.findIndex(rankUser => rankUser.username === user) + 1;
+    const userTotalPoints = userRanking.find(rankUser => rankUser.username === user)?.total_points;
+    
+    if (userRank > 0 && userTotalPoints) {
+        return { success: true, rank: userRank, totalPoints: userTotalPoints };
+    } else {
+        return { success: false, message: "User not found" };
+    }
+}
 
 app.post('/xera/v1/api/user/rank-phase1', authenticateToken, async (req, res) => {
     const { user } = req.body;
-    
-    if (!user) {
-        return res.json({ success: false, message: "Invalid request" });
-    }
+    if (!user) return res.json({ success: false, message: "Invalid request" });
 
     try {
-        const [userRanking] = await db.query(`
-            SELECT MAX(username) AS username, MAX(xera_wallet) AS xera_wallet, SUM(CAST(xera_points AS DECIMAL(10))) AS total_points, 
-                SUM(CASE WHEN xera_task = 'Referral Task' THEN 1 ELSE 0 END) AS referral_task_count
-            FROM xera_user_tasks
-            WHERE DATE(xera_completed_date) BETWEEN '2024-09-28' AND '2024-12-18'
-            GROUP BY BINARY username
-            ORDER BY total_points DESC
-        `);
-        
-         // Find the specific user's rank
-         const userRank = userRanking.findIndex(rankUser => rankUser.username === user) + 1;
-         const userTotalPoints = userRanking.find(rankUser => rankUser.username === user)?.total_points;
-         
-         if (userRank > 0 && userTotalPoints) {
-             return res.json({ 
-                 success: true, 
-                 message: "Successfully retrieved user rank", 
-                 username: user, 
-                 rank: userRank,
-                 totalPoints: userTotalPoints 
-             });
-         } else {
-             return res.json({ success: false, message: "User not found" });
-         }
-        
+        const result = await getUserRank(user, '2024-09-28', '2024-12-18');
+        return res.json(result);
     } catch (error) {
         return res.json({ success: false, message: "Request error", error: error.message });
     }
@@ -470,37 +378,11 @@ app.post('/xera/v1/api/user/rank-phase1', authenticateToken, async (req, res) =>
 
 app.post('/xera/v1/api/user/rank-phase2', authenticateToken, async (req, res) => {
     const { user } = req.body;
-
-    if (!user) {
-        return res.json({ success: false, message: "Invalid request" });
-    }
+    if (!user) return res.json({ success: false, message: "Invalid request" });
 
     try {
-        const [userRanking] = await db.query(`
-            SELECT MAX(username) AS username, MAX(xera_wallet) AS xera_wallet, SUM(CAST(xera_points AS DECIMAL(10))) AS total_points, 
-                SUM(CASE WHEN xera_task = 'Referral Task' THEN 1 ELSE 0 END) AS referral_task_count
-            FROM xera_user_tasks
-            WHERE DATE(xera_completed_date) BETWEEN '2024-12-19' AND '2025-02-25'
-            GROUP BY BINARY username
-            ORDER BY total_points DESC
-        `);
-
-        // Find the specific user's rank
-        const userRank = userRanking.findIndex(rankUser => rankUser.username === user) + 1;
-        const userTotalPoints = userRanking.find(rankUser => rankUser.username === user)?.total_points;
-        
-        if (userRank > 0 && userTotalPoints) {
-            return res.json({ 
-                success: true, 
-                message: "Successfully retrieved user rank", 
-                username: user, 
-                rank: userRank,
-                totalPoints: userTotalPoints 
-            });
-        } else {
-            return res.json({ success: false, message: "User not found" });
-        }
-        
+        const result = await getUserRank(user, '2024-12-19', '2025-02-25');
+        return res.json(result);
     } catch (error) {
         return res.json({ success: false, message: "Request error", error: error.message });
     }
@@ -508,309 +390,215 @@ app.post('/xera/v1/api/user/rank-phase2', authenticateToken, async (req, res) =>
 
 app.post('/xera/v1/api/user/rank-phase3', authenticateToken, async (req, res) => {
     const { user } = req.body;
-
-    if (!user) {
-        return res.json({ success: false, message: "Invalid request" });
-    }
+    if (!user) return res.json({ success: false, message: "Invalid request" });
 
     try {
-        const [userRanking] = await db.query(`
-            SELECT MAX(username) AS username, MAX(xera_wallet) AS xera_wallet, SUM(CAST(xera_points AS DECIMAL(10))) AS total_points, 
-                SUM(CASE WHEN xera_task = 'Referral Task' THEN 1 ELSE 0 END) AS referral_task_count
-            FROM xera_user_tasks
-            WHERE DATE(xera_completed_date) BETWEEN '2025-02-25' AND '2025-05-30'
-            GROUP BY BINARY username
-            ORDER BY total_points DESC
-        `);
-
-        // Find the specific user's rank
-        const userRank = userRanking.findIndex(rankUser => rankUser.username === user) + 1;
-        const userTotalPoints = userRanking.find(rankUser => rankUser.username === user)?.total_points;
-        
-        if (userRank > 0 && userTotalPoints) {
-            return res.json({ 
-                success: true, 
-                message: "Successfully retrieved user rank", 
-                username: user, 
-                rank: userRank,
-                totalPoints: userTotalPoints 
-            });
-        } else {
-            return res.json({ success: false, message: "User not found" });
-        }
-        
+        const result = await getUserRank(user, '2025-02-25', '2025-05-30');
+        return res.json(result);
     } catch (error) {
         return res.json({ success: false, message: "Request error", error: error.message });
     }
 });
 
-app.post('/xera/v1/api/user/transactions', authenticateToken,async (req, res) => {
-    const { user } = req.body;
-    
+
+// Helper function for cleaning response data
+const cleanData = (data, fieldsToRemove = []) => {
+    return data.map(item => {
+        fieldsToRemove.forEach(field => delete item[field]);
+        return item;
+    });
+};
+
+// Endpoint for fetching transactions
+app.post('/xera/v1/api/user/transactions', authenticateToken, async (req, res) => {
+    const { user, page = 1, limit = 50 } = req.body;
+
     if (!user) {
         return res.json({ success: false, message: "Invalid request" });
     }
-    const page = 1
-    const limit = 50
+
     try {
         const offset = (page - 1) * limit;
         const [transactions] = await db.query(
-            'SELECT * FROM xera_network_transactions WHERE receiver_address = ? OR sender_address = ? ORDER BY transaction_date DESC LIMIT ? OFFSET ?', 
+            'SELECT * FROM xera_network_transactions WHERE receiver_address = ? OR sender_address = ? ORDER BY transaction_date DESC LIMIT ? OFFSET ?',
             [user, user, limit, offset]
         );
 
         if (transactions.length > 0) {
-            const cleanedData = transactions.map(({ id, transaction_origin, transaction_token_id, transaction_validator, transaction_date, ...clean }) => clean);
+            const cleanedData = cleanData(transactions, ['id', 'transaction_origin', 'transaction_token_id', 'transaction_validator', 'transaction_date']);
             return res.json({ success: true, data: cleanedData });
         } else {
             return res.json({ success: false, message: "No transactions found" });
         }
-        
     } catch (error) {
-        return res.json({ success: false, message: "Request error", error: error });
+        return res.json({ success: false, message: "Request error", error });
     }
 });
 
-app.post('/xera/v1/api/user/balance', authenticateToken,async (req,res) => {
-    const {user} = req.body;
+// Endpoint for fetching user balances
+app.post('/xera/v1/api/user/balance', authenticateToken, async (req, res) => {
+    const { user } = req.body;
+
     if (!user) {
-        return res.json({ success: false, message: "invalid request"})
+        return res.json({ success: false, message: "Invalid request" });
     }
 
     try {
-        const [transactions] = await db.query( 'SELECT * FROM xera_network_transactions WHERE receiver_address = ? OR sender_address = ?',[user,user]);
-        const [tokenList] = await db.query("SELECT * FROM xera_asset_token")
-        
-        if (tokenList.length > 0) {
-            const balances = tokenList.map((token) => {
-                const { token_id } = token;
-                
-                // Calculate total sent for the current token
-                const totalSend = transactions
-                .filter((tx) => 
-                    tx.transaction_token_id === token_id && 
-                    tx.sender_address === user
-                )
-                .reduce((total, tx) => total + parseFloat(tx.transaction_amount), 0);
+        // Fetch user transactions and token list in parallel
+        const [transactions] = await db.query('SELECT * FROM xera_network_transactions WHERE receiver_address = ? OR sender_address = ?', [user, user]);
+        const [tokenList] = await db.query('SELECT * FROM xera_asset_token');
 
-                // Calculate total received for the current token
+        if (tokenList.length > 0) {
+            const balances = tokenList.map(token => {
+                const { token_id } = token;
+
+                // Calculate total sent and received for each token
+                const totalSend = transactions
+                    .filter(tx => tx.transaction_token_id === token_id && tx.sender_address === user)
+                    .reduce((total, tx) => total + parseFloat(tx.transaction_amount), 0);
+
                 const totalReceive = transactions
-                .filter((tx) => 
-                    tx.transaction_token_id === token_id && 
-                    tx.receiver_address === user
-                )
-                .reduce((total, tx) => total + parseFloat(tx.transaction_amount), 0);
-                // Calculate net balance
+                    .filter(tx => tx.transaction_token_id === token_id && tx.receiver_address === user)
+                    .reduce((total, tx) => total + parseFloat(tx.transaction_amount), 0);
+
                 const totalBalance = (totalReceive - totalSend).toFixed(2);
-        
+
                 return { ...token, totalBalance };
             });
 
-            // npx update-browserslist-db@latest
-            
-            const cleanedData = balances.map(({ id, token_id, token_owner, token_symbol, token_decimal, token_supply, token_circulating, token_info, ...clean}) => clean)
-            
-            return res.json({ success: true, data: cleanedData})
+            // Clean the data to exclude unnecessary fields
+            const cleanedData = cleanData(balances, ['id', 'token_owner', 'token_symbol', 'token_decimal', 'token_supply', 'token_circulating', 'token_info']);
+            return res.json({ success: true, data: cleanedData });
         } else {
-            return res.json({ success:false, message : "no balance found"})
+            return res.json({ success: false, message: "No tokens found" });
         }
-        
     } catch (error) {
-        return res.json({ success: false, message: "request error", error: error})
+        return res.json({ success: false, message: "Request error", error });
     }
-    
-})
+});
 
-app.post('/xera/v1/api/user/following', authenticateToken, async (req,res) => {
-    const {user} = req.body;
+// Endpoint for fetching user's following list
+app.post('/xera/v1/api/user/following', authenticateToken, async (req, res) => {
+    const { user } = req.body;
+
     if (!user) {
-        return res.json({ success: false, message: "invalid request"})
+        return res.json({ success: false, message: "Invalid request" });
     }
 
     try {
         const [userFollower] = await db.query(`
             SELECT 
-            xera_user_following.xera_wallet,
-            xera_user_following.*, 
-            xera_user_display.*
+                xera_user_following.xera_wallet,
+                xera_user_following.*, 
+                xera_user_display.*
             FROM xera_user_following
             INNER JOIN xera_user_display 
-            ON xera_user_following.xera_wallet = xera_user_display.xera_wallet COLLATE utf8mb4_unicode_ci
+                ON xera_user_following.xera_wallet = xera_user_display.xera_wallet COLLATE utf8mb4_unicode_ci
         `);
+
         if (userFollower.length > 0) {
-            const cleanedData = userFollower.map(({ id, ...clean}) => clean)
-            return res.json({ success: true, data: cleanedData})
+            const cleanedData = cleanData(userFollower, ['id']);
+            return res.json({ success: true, data: cleanedData });
         } else {
-            return res.json({ success:false, message : "no followers found"})
+            return res.json({ success: false, message: "No followers found" });
         }
     } catch (error) {
-        return res.json({ success: false, message: "request error", error: error})
+        return res.json({ success: false, message: "Request error", error });
     }
-    
-})
+});
+
 
 app.post('/xera/v1/api/user/faucet-claim', authenticateToken, async (req, res) => {
     const { username, txHash, sender, receiver, command, amount, token, tokenId } = req.body;
-    
+
     if (!username || !txHash || !sender || !receiver || !command || !amount || !token || !tokenId) {
-      return res.json({ success: false, message: 'Incomplete transaction data.' });
+        return res.json({ success: false, message: 'Incomplete transaction data.' });
     }
-  
+
     const txLocalDate = new Date().toISOString().slice(0, 19).replace('T', ' ');
-    
+
     try {
-  
-      // Step 1: Check for recent transactions
-      const [lastTransaction] = await db.query(
-        'SELECT transaction_date, transaction_hash FROM xera_network_transactions WHERE receiver_address = ? ORDER BY transaction_date DESC LIMIT 1',
-        [receiver]
-      );
-  
-      let transactionOrigin = 'Genesis Transaction';
-      if (lastTransaction.length > 0) {
-        const lastTxDate = new Date(lastTransaction[0].transaction_date).getTime();
-        const dateNow = (new Date()).getTime();
+        // Check for recent transactions
+        const [lastTransaction] = await db.query(
+            'SELECT transaction_date, transaction_hash FROM xera_network_transactions WHERE receiver_address = ? ORDER BY transaction_date DESC LIMIT 1',
+            [receiver]
+        );
 
-        const timeDiff = dateNow - lastTxDate;
+        let transactionOrigin = 'Genesis Transaction';
+        if (lastTransaction.length > 0) {
+            const lastTxDate = new Date(lastTransaction[0].transaction_date).getTime();
+            const dateNow = (new Date()).getTime();
+            const timeDiff = dateNow - lastTxDate;
 
-        // Block if the last transaction is within 12 hours
-        if (timeDiff < 21600000) { // 6 hours in milliseconds
-            const timeRemainingMs = 21600000 - timeDiff;
-            const hours = Math.floor(timeRemainingMs / 3600000);
-            const minutes = Math.floor((timeRemainingMs % 3600000) / 60000);
-            const seconds = Math.floor((timeRemainingMs % 60000) / 1000);
+            // Block if the last transaction is within 6 hours
+            if (timeDiff < 21600000) {
+                const timeRemainingMs = 21600000 - timeDiff;
+                const hours = Math.floor(timeRemainingMs / 3600000);
+                const minutes = Math.floor((timeRemainingMs % 3600000) / 60000);
+                const seconds = Math.floor((timeRemainingMs % 60000) / 1000);
+                const timeRemaining = `${hours}h ${minutes}m ${seconds}s`;
 
-            const timeRemaining = `${hours}h ${minutes}m ${seconds}s`;
-
-            return res.json({ success: false, message: `Claim again after ${timeRemaining}` });
-        } else {
-            transactionOrigin = lastTransaction[0].transaction_hash;
-            // Step 2: Retrieve block details
-            const [blockData] = await db.query(
-                'SELECT current_block, block_validator FROM xera_network_blocks ORDER BY id DESC LIMIT 1'
-            );
-            
-            if (blockData.length > 0) {
-                const { current_block: txBlock, block_validator: validator } = blockData[0];
-                const [incrementBlockCount] = await db.query('UPDATE xera_network_blocks SET block_transactions = block_transactions + 1 WHERE current_block = ?',[txBlock]);
-                
-                if (incrementBlockCount.affectedRows > 0) {
-                    // Step 3: Insert new transaction
-                    const [addTransaction] = await db.query(
-                        'INSERT INTO xera_network_transactions (transaction_block, transaction_origin, transaction_hash, sender_address, receiver_address, transaction_command, transaction_amount, transaction_token, transaction_token_id, transaction_validator, transaction_date, transaction_fee_amount,transaction_fee_token,transaction_fee_token_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
-                        [txBlock, transactionOrigin, txHash, sender, receiver, command, amount, token, tokenId, validator, txLocalDate, 0.00, '', '']
-                    );
-                    
-                    if (addTransaction.affectedRows > 0) {
-                        // Step 4: Update token circulation
-                        const [currentToken] = await db.query(
-                            'SELECT token_circulating FROM xera_asset_token WHERE token_symbol = ?',
-                            [token]
-                        );
-                        
-                        if (currentToken.length > 0) {
-                            const newCirculating = parseInt(currentToken[0].token_circulating) + amount;
-            
-                            const [updateTokenCirculating] = await db.query(
-                                'UPDATE xera_asset_token SET token_circulating = ? WHERE token_id = ?',
-                                [newCirculating, tokenId]
-                            );
-                            
-                            if (updateTokenCirculating.affectedRows > 0) {
-                                // Step 5: Record task completion
-                                const [recordTask] = await db.query(
-                                    'INSERT INTO xera_user_tasks (username, xera_wallet, xera_task, xera_status, xera_points, xera_telegram_id, xera_twitter_username) VALUES (?, ?, ?, ?, ?, ?, ?)',
-                                    [username, receiver, 'TXERA Claim Task', 'ok', '1250', '', '']
-                                );
-                                
-                                if (recordTask.affectedRows > 0) {
-                                    res.json({ success: true, message: '1 TXERA Claimed Successfully.' });
-                                    
-                                } else {
-                                    res.json({success:false, message: "Error inserting record"})
-                                }
-                            } else {
-                                res.json({success:false, message: "Error updating token circulation"})
-                            }
-                        } else {
-                            res.json({success:false, message: "Token not found or mismatched token symbol."})
-                        }
-                    } else {
-                        res.json({success:false, message: "Error adding transaction"})
-                    }
-                } else {
-                res.json({ success: false, message: "Error increment count"})
-                }
+                return res.json({ success: false, message: `Claim again after ${timeRemaining}` });
             } else {
-                res.json({ success:false, message: 'Block data not found. Transaction aborted.'});
+                transactionOrigin = lastTransaction[0].transaction_hash;
             }
         }
-      } else {
-        // Step 2: Retrieve block details
-        const [blockData] = await db.query(
-            'SELECT current_block, block_validator FROM xera_network_blocks ORDER BY id DESC LIMIT 1'
-        );
-        
+
+        // Retrieve block details
+        const [blockData] = await db.query('SELECT current_block, block_validator FROM xera_network_blocks ORDER BY id DESC LIMIT 1');
         if (blockData.length > 0) {
             const { current_block: txBlock, block_validator: validator } = blockData[0];
-            const [incrementBlockCount] = await db.query('UPDATE xera_network_blocks SET block_transactions = block_transactions + 1 WHERE current_block = ?',[txBlock]);
             
+            // Increment block transaction count
+            const [incrementBlockCount] = await db.query('UPDATE xera_network_blocks SET block_transactions = block_transactions + 1 WHERE current_block = ?', [txBlock]);
             if (incrementBlockCount.affectedRows > 0) {
-                // Step 3: Insert new transaction
+                
+                // Insert new transaction
                 const [addTransaction] = await db.query(
-                    'INSERT INTO xera_network_transactions (transaction_block, transaction_origin, transaction_hash, sender_address, receiver_address, transaction_command, transaction_amount, transaction_token, transaction_token_id, transaction_validator, transaction_date, transaction_fee_amount,transaction_fee_token,transaction_fee_token_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+                    'INSERT INTO xera_network_transactions (transaction_block, transaction_origin, transaction_hash, sender_address, receiver_address, transaction_command, transaction_amount, transaction_token, transaction_token_id, transaction_validator, transaction_date, transaction_fee_amount, transaction_fee_token, transaction_fee_token_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
                     [txBlock, transactionOrigin, txHash, sender, receiver, command, amount, token, tokenId, validator, txLocalDate, 0.00, '', '']
                 );
-                
+
                 if (addTransaction.affectedRows > 0) {
-                    // Step 4: Update token circulation
-                    const [currentToken] = await db.query(
-                        'SELECT token_circulating FROM xera_asset_token WHERE token_symbol = ?',
-                        [token]
-                    );
-                    
+                    // Update token circulation
+                    const [currentToken] = await db.query('SELECT token_circulating FROM xera_asset_token WHERE token_symbol = ?', [token]);
                     if (currentToken.length > 0) {
                         const newCirculating = parseInt(currentToken[0].token_circulating) + amount;
-        
-                        const [updateTokenCirculating] = await db.query(
-                            'UPDATE xera_asset_token SET token_circulating = ? WHERE token_id = ?',
-                            [newCirculating, tokenId]
-                        );
-                        
+                        const [updateTokenCirculating] = await db.query('UPDATE xera_asset_token SET token_circulating = ? WHERE token_id = ?', [newCirculating, tokenId]);
+
                         if (updateTokenCirculating.affectedRows > 0) {
-                            // Step 5: Record task completion
+                            // Record task completion
                             const [recordTask] = await db.query(
                                 'INSERT INTO xera_user_tasks (username, xera_wallet, xera_task, xera_status, xera_points, xera_telegram_id, xera_twitter_username) VALUES (?, ?, ?, ?, ?, ?, ?)',
                                 [username, receiver, 'TXERA Claim Task', 'ok', '1250', '', '']
                             );
-                            
+
                             if (recordTask.affectedRows > 0) {
-                                res.json({ success: true, message: '1 TXERA Claimed Successfully.' });
-                                
+                                return res.json({ success: true, message: '1 TXERA Claimed Successfully.' });
                             } else {
-                                res.json({success:false, message: "Error inserting record"})
+                                return res.json({ success: false, message: 'Error inserting record' });
                             }
                         } else {
-                            res.json({success:false, message: "Error updating token circulation"})
+                            return res.json({ success: false, message: 'Error updating token circulation' });
                         }
                     } else {
-                        res.json({success:false, message: "Token not found or mismatched token symbol."})
+                        return res.json({ success: false, message: 'Token not found or mismatched token symbol.' });
                     }
                 } else {
-                    res.json({success:false, message: "Error adding transaction"})
+                    return res.json({ success: false, message: 'Error adding transaction' });
                 }
             } else {
-            res.json({ success: false, message: "Error increment count"})
+                return res.json({ success: false, message: 'Error incrementing block count' });
             }
         } else {
-            res.json({ success:false, message: 'Block data not found. Transaction aborted.'});
+            return res.json({ success: false, message: 'Block data not found. Transaction aborted.' });
         }
-    }
     } catch (err) {
-      res.json({ success: false, message: err.message });
+        return res.json({ success: false, message: err.message });
     }
 });
 
+// Coin Claim Endpoint
 app.post('/xera/v1/api/user/coin/claim', authenticateToken, async (req, res) => {
     const { username, txHash, sender, receiver, command, amount, token, tokenId } = req.body;
     
@@ -819,121 +607,135 @@ app.post('/xera/v1/api/user/coin/claim', authenticateToken, async (req, res) => 
     }
   
     const txLocalDate = new Date().toISOString().slice(0, 19).replace('T', ' ');
-    
+
     try {
-  
-      // Step 1: Check for recent transactions
-      const [lastTransaction] = await db.query(
-        'SELECT transaction_date, transaction_hash FROM xera_network_transactions WHERE receiver_address = ? ORDER BY transaction_date DESC LIMIT 1',
-        [receiver]
-      );
-  
-      let transactionOrigin = 'Genesis Transaction';
-      if (lastTransaction.length > 0) {
-        const [tokenClaimedcheck] = await db.query(`SELECT * FROM xera_network_transactions WHERE sender_address = ? AND receiver_address = ?`,[sender,receiver]);
-        // Block if the last transaction is within 12 hours
-        if (tokenClaimedcheck.length > 0) { // 12 hours in milliseconds
-          return res.json({success: false, message: `Xera Coin already claimed`,});
-        } else {
-            transactionOrigin = lastTransaction[0].transaction_hash;
-            // Step 2: Retrieve block details
-            const [blockData] = await db.query(
-                'SELECT current_block, block_validator FROM xera_network_blocks ORDER BY id DESC LIMIT 1'
+        // Step 1: Check for recent transactions
+        const [lastTransaction] = await db.query(
+            'SELECT transaction_date, transaction_hash FROM xera_network_transactions WHERE receiver_address = ? ORDER BY transaction_date DESC LIMIT 1',
+            [receiver]
+        );
+
+        let transactionOrigin = 'Genesis Transaction';
+        if (lastTransaction.length > 0) {
+            // Check if a coin has already been claimed within the last 12 hours
+            const [tokenClaimedCheck] = await db.query(
+                'SELECT * FROM xera_network_transactions WHERE sender_address = ? AND receiver_address = ?',
+                [sender, receiver]
             );
             
-            if (blockData.length > 0) {
-                const { current_block: txBlock, block_validator: validator } = blockData[0];
-                const [incrementBlockCount] = await db.query('UPDATE xera_network_blocks SET block_transactions = block_transactions + 1 WHERE current_block = ?',[txBlock]);
+            if (tokenClaimedCheck.length > 0) {
+                return res.json({ success: false, message: 'Xera Coin already claimed' });
+            } else {
+                transactionOrigin = lastTransaction[0].transaction_hash;
                 
-                if (incrementBlockCount.affectedRows > 0) {
-                    // Step 3: Insert new transaction
-                    const [addTransaction] = await db.query(
-                        'INSERT INTO xera_network_transactions (transaction_block, transaction_origin, transaction_hash, sender_address, receiver_address, transaction_command, transaction_amount, transaction_token, transaction_token_id, transaction_validator, transaction_date, transaction_fee_amount,transaction_fee_token,transaction_fee_token_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
-                        [txBlock, transactionOrigin, txHash, sender, receiver, command, amount, token, tokenId, validator, txLocalDate, 0.00, '', '']
+                // Step 2: Retrieve block details
+                const [blockData] = await db.query(
+                    'SELECT current_block, block_validator FROM xera_network_blocks ORDER BY id DESC LIMIT 1'
+                );
+
+                if (blockData.length > 0) {
+                    const { current_block: txBlock, block_validator: validator } = blockData[0];
+                    const [incrementBlockCount] = await db.query(
+                        'UPDATE xera_network_blocks SET block_transactions = block_transactions + 1 WHERE current_block = ?',
+                        [txBlock]
                     );
-                    
-                    if (addTransaction.affectedRows > 0) {
-                        // Step 4: Update token circulation
-                        const [currentToken] = await db.query(
-                            'SELECT token_circulating FROM xera_asset_token WHERE token_symbol = ?',
-                            [token]
+
+                    if (incrementBlockCount.affectedRows > 0) {
+                        // Step 3: Insert new transaction
+                        const [addTransaction] = await db.query(
+                            'INSERT INTO xera_network_transactions (transaction_block, transaction_origin, transaction_hash, sender_address, receiver_address, transaction_command, transaction_amount, transaction_token, transaction_token_id, transaction_validator, transaction_date, transaction_fee_amount, transaction_fee_token, transaction_fee_token_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+                            [txBlock, transactionOrigin, txHash, sender, receiver, command, amount, token, tokenId, validator, txLocalDate, 0.00, '', '']
                         );
-                        
-                        if (currentToken.length > 0) {
-                            const tokenCirculating = parseFloat(currentToken[0].token_circulating).toFixed(8);
-                            const amountNumber = parseFloat(amount);
-                            const newCirculating = parseFloat(tokenCirculating) + amountNumber;
-                            
-                            const [updateTokenCirculating] = await db.query(
-                                'UPDATE xera_asset_token SET token_circulating = ? WHERE token_id = ?',
-                                [newCirculating, tokenId]
+
+                        if (addTransaction.affectedRows > 0) {
+                            // Step 4: Update token circulation
+                            const [currentToken] = await db.query(
+                                'SELECT token_circulating FROM xera_asset_token WHERE token_symbol = ?',
+                                [token]
                             );
-                            
-                            if (updateTokenCirculating.affectedRows > 0) {
-                                res.json({ success: true, message: 'Coin Claimed Successfully.' });
+
+                            if (currentToken.length > 0) {
+                                const tokenCirculating = parseFloat(currentToken[0].token_circulating).toFixed(8);
+                                const amountNumber = parseFloat(amount);
+                                const newCirculating = parseFloat(tokenCirculating) + amountNumber;
+
+                                const [updateTokenCirculating] = await db.query(
+                                    'UPDATE xera_asset_token SET token_circulating = ? WHERE token_id = ?',
+                                    [newCirculating, tokenId]
+                                );
+
+                                if (updateTokenCirculating.affectedRows > 0) {
+                                    return res.json({ success: true, message: 'Coin Claimed Successfully.' });
+                                } else {
+                                    return res.json({ success: false, message: 'Error updating token circulation' });
+                                }
                             } else {
-                                return res.json({success:false, message: "Error updating token circulation"})
+                                return res.json({ success: false, message: 'Token not found or mismatched token symbol' });
                             }
                         } else {
-                            return res.json({success:false, message: "Token not found or mismatched token symbol."})
+                            return res.json({ success: false, message: 'Error adding transaction' });
                         }
                     } else {
-                        return res.json({success:false, message: "Error adding transaction"})
+                        return res.json({ success: false, message: 'Error incrementing block count' });
                     }
                 } else {
-                    return res.json({ success: false, message: "Error increment count"})
+                    return res.json({ success: false, message: 'Block data not found. Transaction aborted.' });
                 }
-            } else {
-                return res.json({ success:false, message: 'Block data not found. Transaction aborted.'});
             }
         }
-  
-      }
     } catch (err) {
         return res.json({ success: false, message: err.message });
     }
 });
 
-app.post('/xera/v1/api/user/nodes', authenticateToken, async (req,res) => {
-    const { user } = req.body
+// Nodes Retrieval Endpoint
+app.post('/xera/v1/api/user/nodes', authenticateToken, async (req, res) => {
+    const { user } = req.body;
 
     if (!user) {
-      return res.json({ success: false, message: 'No address get' });
+        return res.json({ success: false, message: 'No address provided' });
     }
 
     try {
-        const [getUsernode] = await db.query('SELECT * FROM xera_asset_nodes WHERE node_owner = ?',[user])
-        if (getUsernode.length > 0) {
-            const clean = getUsernode.map(({id, ...clean}) => clean)
-            res.json({success:true, message :`Successfully retrieved node. wallet: ${user}`, node: clean})
+        // Step 1: Retrieve user node details
+        const [getUserNode] = await db.query('SELECT * FROM xera_asset_nodes WHERE node_owner = ?', [user]);
+
+        if (getUserNode.length > 0) {
+            const cleanNodeData = getUserNode.map(({ id, ...node }) => node);
+            return res.json({ success: true, message: `Successfully retrieved node. Wallet: ${user}`, node: cleanNodeData });
         } else {
-            res.json({ success: false, message: "No node retrieved"})
+            return res.json({ success: false, message: 'No node found for the provided address' });
         }
     } catch (error) {
-        res.json({ success: false, message: err.message });
+        return res.json({ success: false, message: error.message });
     }
-})
+});
 
-app.post('/xera/v1/api/user/security', authenticateToken, async (req,res) => {
-    const { user } = req.body
+// Security Information Endpoint
+app.post('/xera/v1/api/user/security', authenticateToken, async (req, res) => {
+    const { user } = req.body;
 
     if (!user) {
-      return res.json({ success: false, message: 'No address get' });
+        return res.json({ success: false, message: 'No address provided' });
     }
 
     try {
-        const [getUserSecurity] = await db.query('SELECT * FROM xera_user_security WHERE xera_wallet = ?',[user])
+        // Retrieve user security data from the database
+        const [getUserSecurity] = await db.query('SELECT * FROM xera_user_security WHERE xera_wallet = ?', [user]);
+        
         if (getUserSecurity.length > 0) {
-            const clean = getUserSecurity.map(({id, ip_address, date_verified, ...clean}) => clean)
-            return res.json({success:true, message :`Successfully retrieved security. wallet: ${user}`, security: clean})
+            // Clean response by removing sensitive data like id, ip_address, etc.
+            const cleanSecurityData = getUserSecurity.map(({ id, ip_address, date_verified, ...clean }) => clean);
+            return res.json({ success: true, message: `Successfully retrieved security. Wallet: ${user}`, security: cleanSecurityData });
         } else {
-            return res.json({ success: false, message: "No security retrieved"})
+            return res.json({ success: false, message: "No security data found" });
         }
     } catch (error) {
-        res.json({ success: false, message: err.message });
+        return res.json({ success: false, message: 'Error retrieving security data', error: error.message });
     }
-})
+});
 
+// Telegram Task Endpoint
 app.post('/xera/v1/api/user/task/telegram', authenticateToken, async (req, res) => {
     const { user } = req.body;
 
@@ -947,9 +749,9 @@ app.post('/xera/v1/api/user/task/telegram', authenticateToken, async (req, res) 
     if (!telegramID || !username || !wallet || !user) {
         return res.json({ success: false, message: 'Incomplete data' });
     }
-    try {
 
-        // Check if the combination of username, wallet, and task already exists
+    try {
+        // Check if the task combination already exists
         const [duplicateCheck] = await db.query(`
             SELECT * 
             FROM xera_user_tasks 
@@ -959,10 +761,10 @@ app.post('/xera/v1/api/user/task/telegram', authenticateToken, async (req, res) 
         `, [username, wallet, xeraTask]);
 
         if (duplicateCheck.length > 0) {
-            return res.json({ success: false, message: 'You already finished this task' });
+            return res.json({ success: false, message: 'You have already completed this task' });
         }
 
-        // Check if the telegram ID already exists
+        // Check if the Telegram ID already exists
         const [telegramCheck] = await db.query(`
             SELECT * 
             FROM xera_user_tasks 
@@ -970,10 +772,10 @@ app.post('/xera/v1/api/user/task/telegram', authenticateToken, async (req, res) 
         `, [telegramID]);
 
         if (telegramCheck.length > 0) {
-            return res.json({ success: false, message: 'User ID already exists' });
+            return res.json({ success: false, message: 'Telegram ID already exists' });
         }
 
-        // Insert into xera_user_tasks if telegramID has a value
+        // Insert the task into the database
         if (telegramID) {
             await db.query(`
                 INSERT INTO xera_user_tasks (username, xera_wallet, xera_telegram_id, xera_twitter_username, xera_task, xera_status, xera_points) 
@@ -981,12 +783,13 @@ app.post('/xera/v1/api/user/task/telegram', authenticateToken, async (req, res) 
             `, [username, wallet, telegramID, '', xeraTask, xeraStatus, xeraPoints]);
         }
 
-        res.json({ success: true, message: 'Telegram User Successfully Verified' });
+        res.json({ success: true, message: 'Telegram user successfully verified' });
     } catch (error) {
         res.json({ success: false, message: 'Request error', error: error.message });
     }
 });
 
+// Twitter Task Endpoint
 app.post('/xera/v1/api/user/task/twitter', authenticateToken, async (req, res) => {
     const { user } = req.body;
 
@@ -1001,8 +804,7 @@ app.post('/xera/v1/api/user/task/twitter', authenticateToken, async (req, res) =
     const xeraTask = 'Twitter Task';
 
     try {
-
-        // Check if the combination of username, wallet, and task already exists
+        // Check if the task combination already exists
         const [duplicateCheck] = await db.query(`
             SELECT * 
             FROM xera_user_tasks 
@@ -1012,10 +814,10 @@ app.post('/xera/v1/api/user/task/twitter', authenticateToken, async (req, res) =
         `, [username, wallet, xeraTask]);
 
         if (duplicateCheck.length > 0) {
-            return res.json({ success: false, message: 'You already did this task' });
+            return res.json({ success: false, message: 'You have already completed this task' });
         }
 
-        // Check if the twitter username already exists
+        // Check if the Twitter username already exists
         const [twitterCheck] = await db.query(`
             SELECT * 
             FROM xera_user_tasks 
@@ -1026,7 +828,7 @@ app.post('/xera/v1/api/user/task/twitter', authenticateToken, async (req, res) =
             return res.json({ success: false, message: 'Twitter username already exists' });
         }
 
-        // Insert into xera_user_tasks if twitterUsername has a value
+        // Insert the task into the database
         if (twitterUsername) {
             await db.query(`
                 INSERT INTO xera_user_tasks (username, xera_wallet, xera_telegram_id, xera_twitter_username, xera_task, xera_status, xera_points) 
@@ -1034,7 +836,7 @@ app.post('/xera/v1/api/user/task/twitter', authenticateToken, async (req, res) =
             `, [username, wallet, '', twitterUsername, xeraTask, xeraStatus, '']);
         }
 
-        res.json({ success: true, message: 'Twitter User Successfully Verified' });
+        res.json({ success: true, message: 'Twitter user successfully verified' });
     } catch (error) {
         res.json({ success: false, message: 'Request error', error: error.message });
     }
@@ -1054,7 +856,6 @@ app.post('/xera/v1/api/user/task/social', authenticateToken, async (req, res) =>
     const xeraPoints = '1250';
 
     try {
-
         // Check if the task already exists
         const [checkResult] = await db.query(`
             SELECT COUNT(*) 
@@ -1092,35 +893,32 @@ app.post('/xera/v1/api/user/task/connect-wallet', authenticateToken, async (req,
     const xeraStatus = 'ok';
     const xeraTask = 'Wallet Connect Task';
     const xeraPoints = '10000';
-    try {
 
+    try {
         // Check if both eth_wallet and sol_wallet already exist in another account
         const [existingWallet] = await db.query(`
             SELECT * FROM xera_user_accounts WHERE eth_wallet = ? AND sol_wallet = ? AND xera_wallet != ?
         `, [ethWallet, solWallet, xeraWallet]);
 
         if (existingWallet.length > 0) {
-            // Both wallets are already bound to another XERA wallet
             return res.json({ success: false, message: 'Wallet already binded on other XERA Wallet' });
         } else {
-            // Proceed with the update
+            // Proceed with the wallet update
             await db.query(`
                 UPDATE xera_user_accounts SET eth_wallet = ?, sol_wallet = ? WHERE xera_wallet = ?
             `, [ethWallet, solWallet, xeraWallet]);
 
-            if (ethWallet || solWallet) {
-                // Check if an entry with the same username, xera_wallet, and xera_task "Wallet Connect Task" already exists
-                const [existingTask] = await db.query(`
-                    SELECT COUNT(*) AS count FROM xera_user_tasks WHERE username = ? AND xera_wallet = ? AND xera_task = 'Wallet Connect Task'
-                `, [xeraUsername, xeraWallet]);
+            // Check if the task is already assigned
+            const [existingTask] = await db.query(`
+                SELECT COUNT(*) AS count FROM xera_user_tasks WHERE username = ? AND xera_wallet = ? AND xera_task = 'Wallet Connect Task'
+            `, [xeraUsername, xeraWallet]);
 
-                // Proceed only if no matching entry was found
-                if (existingTask[0].count == 0) {
-                    await db.query(`
-                        INSERT INTO xera_user_tasks (username, xera_wallet, xera_task, xera_status, xera_points, xera_telegram_id, xera_twitter_username) 
-                        VALUES (?, ?, ?, ?, ?, '', '')
-                    `, [xeraUsername, xeraWallet, xeraTask, xeraStatus, xeraPoints, '', '']);
-                }
+            if (existingTask[0].count == 0) {
+                // Insert task if not already assigned
+                await db.query(`
+                    INSERT INTO xera_user_tasks (username, xera_wallet, xera_task, xera_status, xera_points, xera_telegram_id, xera_twitter_username) 
+                    VALUES (?, ?, ?, ?, ?, '', '')
+                `, [xeraUsername, xeraWallet, xeraTask, xeraStatus, xeraPoints, '', '']);
             }
 
             return res.json({ success: true, message: 'Wallet successfully updated and task recorded' });
@@ -1139,33 +937,43 @@ app.post('/xera/v1/api/user/register', async (req, res) => {
     if (!username || !password || !userIP || !privateAddress || !publicAddress) {
         return res.json({ success: false, message: 'Incomplete data' });
     }
-    try {
 
+    try {
         // Check if the IP address exists 3 times
         const [ipResult] = await db.query(`
             SELECT COUNT(*) AS ip_count FROM xera_user_accounts WHERE xera_account_ip = ?
         `, [userIP]);
 
         if (ipResult[0].ip_count >= 3) {
-            // If the IP is found 3 times or more, respond with an error
             return res.json({ success: false, message: 'IP address already used 3 times' });
         }
 
         const hashedPassword = await bcrypt.hash(password, 10);
 
-        // Proceed with the registration
+        // Register user in xera_user_accounts table
         const [result] = await db.query(`
-            INSERT INTO xera_user_accounts (username, password, xera_wallet, eth_wallet, bsc_wallet, pol_wallet, avax_wallet,arb_wallet, op_wallet, zks_wallet, sol_wallet, near_wallet, xera_referral, xera_account_ip, failed_attempts)
+            INSERT INTO xera_user_accounts (username, password, xera_wallet, eth_wallet, bsc_wallet, pol_wallet, avax_wallet, arb_wallet, op_wallet, zks_wallet, sol_wallet, near_wallet, xera_referral, xera_account_ip, failed_attempts)
             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         `, [username, hashedPassword, publicAddress, '', '', '', '', '', '', '', '', '', referral, userIP, 0]);
-        
+
         if (result.affectedRows > 0) {
-            const [result2] = await db.query(`INSERT INTO xera_user_wallet (private_key, public_key, word1, word2, word3, word4, word5, word6, word7, word8, word9, word10, word11, word12) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`, [privateAddress, publicAddress, seedKey1, seedKey2, seedKey3, seedKey4, seedKey5, seedKey6, seedKey7, seedKey8, seedKey9, seedKey10, seedKey11, seedKey12]);
+            // Insert wallet details into xera_user_wallet table
+            const [result2] = await db.query(`
+                INSERT INTO xera_user_wallet (private_key, public_key, word1, word2, word3, word4, word5, word6, word7, word8, word9, word10, word11, word12) 
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            `, [privateAddress, publicAddress, seedKey1, seedKey2, seedKey3, seedKey4, seedKey5, seedKey6, seedKey7, seedKey8, seedKey9, seedKey10, seedKey11, seedKey12]);
+
             if (result2.affectedRows > 0) {
                 if (referral) {
-                    const [findUser] = await db.query(`SELECT * FROM xera_user_accounts WHERE username = ?`, [referral]);
+                    const [findUser] = await db.query(`
+                        SELECT * FROM xera_user_accounts WHERE username = ?
+                    `, [referral]);
+
                     if (findUser.length > 0) {
-                        const [refres] = await db.query(`INSERT INTO xera_user_tasks (username, xera_wallet, xera_telegram_id, xera_twitter_username, xera_task, xera_status, xera_points) VALUES (?, ?, ?, ?, ?, ?, ?)`, [findUser[0].username, findUser[0].xera_wallet, '', '', 'Referral Task', 'ok', '5000']);
+                        const [refres] = await db.query(`
+                            INSERT INTO xera_user_tasks (username, xera_wallet, xera_telegram_id, xera_twitter_username, xera_task, xera_status, xera_points) 
+                            VALUES (?, ?, ?, ?, ?, ?, ?)
+                        `, [findUser[0].username, findUser[0].xera_wallet, '', '', 'Referral Task', 'ok', '5000']);
                         if (refres.affectedRows > 0) {
                             return res.json({ success: true, message: 'User successfully registered' });
                         }
@@ -1183,6 +991,13 @@ app.post('/xera/v1/api/user/register', async (req, res) => {
     }
 });
 
+// Global error handling middleware
+app.use((err, req, res, next) => {
+    console.error("Global error:", err.message);
+    res.status(500).json({ success: false, message: "An internal error occurred" });
+});
+
+// Start the server
 app.listen(port, () => {
-    console.log(`Server is running on http://localhost:${port}`);
+    console.log(`Server is running on port ${port}`);
 });
