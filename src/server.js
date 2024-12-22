@@ -9,7 +9,7 @@ const compression = require('compression');
 const NodeCache = require('node-cache');
 
 const app = express();
-const port = 5003;
+const port = 5000;
 const cache = new NodeCache({ stdTTL: 60 });
 
 app.use(compression());
