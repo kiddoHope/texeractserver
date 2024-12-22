@@ -51,6 +51,9 @@ app.use((req, res, next) => {
   next();
 });
 
+// pm2 start src/server.js src/airdrop-server.js src/user-server.js src/faucet-server.js src/genesis-server.js src/watcher-server.js
+// node start src/server.js src/airdrop-server.js src/user-server.js src/faucet-server.js src/genesis-server.js src/watcher-server.js
+
 const jwtSecret = process.env.MAIN_JWT_SECRET;
 const jwtAPISecret = process.env.API_JWT_SECRET;
 

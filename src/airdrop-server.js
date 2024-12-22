@@ -26,12 +26,12 @@ app.use(compression());
 app.use(bodyParser.json());
 
 // Rate limiting
-const limiter = rateLimit({
-    windowMs: 15 * 60 * 1000, // 15 minutes
-    max: 100, // Limit each IP to 100 requests per window
-    message: { success: false, message: "Too many requests, please try again later." },
-});
-app.use(limiter);
+// const limiter = rateLimit({
+//     windowMs: 15 * 60 * 1000, // 15 minutes
+//     max: 100, // Limit each IP to 100 requests per window
+//     message: { success: false, message: "Too many requests, please try again later." },
+// });
+// app.use(limiter);
 
 // CORS setup
 const allowedOrigins = [
