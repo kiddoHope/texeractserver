@@ -156,20 +156,10 @@ const getDateNDaysAgo = (n) => {
     return date.toISOString().split('T')[0]; // Format as 'YYYY-MM-DD'
 };
 
-const getStartAndEndOfDay = (n) => {
-    const date = new Date();
-    date.setDate(date.getDate() - n);
-
-    const startDate = new Date(date);
-    startDate.setHours(0, 0, 0, 0);
-
-    const endDate = new Date(date);
-    endDate.setHours(23, 59, 59, 999);
-
-    return {
-        startDate: startDate.toISOString().replace('T', ' ').split('.')[0],
-        endDate: endDate.toISOString().replace('T', ' ').split('.')[0],
-    };
+const getStartAndEndOfDay = (date) => {
+    const startDate = `${date} 00:00:00`;
+    const endDate = `${date} 23:59:59`;
+    return { startDate, endDate };
 };
 
 app.post('/xera/v1/api/users/airdrop/full-stats', async (req, res) => {
@@ -178,52 +168,50 @@ app.post('/xera/v1/api/users/airdrop/full-stats', async (req, res) => {
     try {
         const results = [];
 
-        // Calculate the start and end dates for the 10-day range
-        const allDates = Array.from({ length: 10 }, (_, i) => getDateNDaysAgo(i));
-        const { startDate, endDate } = getStartAndEndOfDay(9); // Covers the 10-day range
+        for (let i = 0; i < 10; i++) {
+            const date = getDateNDaysAgo(i);
+            const { startDate, endDate } = getStartAndEndOfDay(date);
 
-        // Query data for the 10-day period in a single batch
-        const [pointsData, usersData, referralData, txeraClaimData] = await Promise.all([
-            db.query(`
-                SELECT xera_completed_date, SUM(xera_points) AS totalPoints
+            // Query total xera_points
+            const pointsData = await db.query(`
+                SELECT SUM(xera_points) AS totalPoints
                 FROM xera_user_tasks
                 WHERE xera_completed_date BETWEEN ? AND ?
-                GROUP BY xera_completed_date
-            `, [startDate, endDate]),
-            db.query(`
-                SELECT xera_completed_date, COUNT(DISTINCT username) AS dailyParticipants
+            `, [startDate, endDate]);
+            const totalPoints = pointsData[0]?.[0]?.totalPoints || 0;
+            
+
+            // Query unique usernames (daily participants)
+            const usersData = await db.query(`
+                SELECT COUNT(DISTINCT username) AS dailyParticipants
                 FROM xera_user_tasks
                 WHERE xera_completed_date BETWEEN ? AND ?
-                GROUP BY xera_completed_date
-            `, [startDate, endDate]),
-            db.query(`
-                SELECT xera_completed_date, COUNT(*) AS newUsers
-                FROM xera_user_tasks
-                WHERE xera_task = 'Referral Task' AND xera_completed_date BETWEEN ? AND ?
-                GROUP BY xera_completed_date
-            `, [startDate, endDate]),
-            db.query(`
-                SELECT xera_completed_date, COUNT(*) AS txeraClaimTasks
-                FROM xera_user_tasks
-                WHERE xera_task = 'TXERA Claim Task' AND xera_completed_date BETWEEN ? AND ?
-                GROUP BY xera_completed_date
-            `, [startDate, endDate]),
-        ]);
+            `, [startDate, endDate]);
+            const dailyParticipants = usersData[0]?.[0]?.dailyParticipants || 0;
 
-        // Preprocess data into lookup objects for efficient access
-        const pointsMap = Object.fromEntries(pointsData.map(row => [row.xera_completed_date, row.totalPoints || 0]));
-        const usersMap = Object.fromEntries(usersData.map(row => [row.xera_completed_date, row.dailyParticipants || 0]));
-        const referralMap = Object.fromEntries(referralData.map(row => [row.xera_completed_date, row.newUsers || 0]));
-        const txeraClaimMap = Object.fromEntries(txeraClaimData.map(row => [row.xera_completed_date, row.txeraClaimTasks || 0]));
+            // Query total "Referral Task"
+            const referralData = await db.query(`
+                SELECT COUNT(*) AS newUsers
+                FROM xera_user_tasks
+                WHERE xera_completed_date BETWEEN ? AND ? AND xera_task = 'Referral Task'
+            `, [startDate, endDate]);
+            const newUsers = referralData[0]?.[0]?.newUsers || 0;
 
-        // Build results for the last 10 days
-        for (const date of allDates) {
+            // Query total "TXERA Claim Task"
+            const txeraClaimData = await db.query(`
+                SELECT COUNT(*) AS txeraClaimTasks
+                FROM xera_user_tasks
+                WHERE xera_completed_date BETWEEN ? AND ? AND xera_task = 'TXERA Claim Task'
+            `, [startDate, endDate]);
+            const txeraClaimTasks = txeraClaimData[0]?.[0]?.txeraClaimTasks || 0;
+
+            // Append results for the current day
             results.push({
                 date,
-                totalPoints: pointsMap[date] || 0,
-                dailyParticipants: usersMap[date] || 0,
-                newUsers: referralMap[date] || 0,
-                txeraClaimTasks: txeraClaimMap[date] || 0,
+                totalPoints,
+                dailyParticipants,
+                newUsers,
+                txeraClaimTasks,
             });
         }
 
@@ -244,225 +232,162 @@ const handleAirdropPhase = async (req, res, phaseStartDate, phaseEndDate) => {
     const { api, limit = 10, page = 1 } = request;
 
     if (!api) {
-        return res.status(400).json({ success: false, message: "Invalid or missing API key" });
+        return res.json({ success: false, message: "Invalid or missing API key" });
     }
 
-    // Validate API key and retrieve developer data from cache
-    if (!(await getDevFromCache(api, res))) return;
-
+    await getDevFromCache(api, res);
     const offset = (page - 1) * limit;
 
     try {
-        // Fetch paginated data with case-sensitive usernames
-        const queryData = `
-            SELECT username, xera_wallet, 
-                   SUM(xera_points) AS total_points,
-                   SUM(CASE WHEN xera_task = 'Referral Task' THEN 1 ELSE 0 END) AS referral_task_count
+        const [rows] = await db.query(
+            `SELECT MAX(username) AS username, MAX(xera_wallet) AS xera_wallet, SUM(CAST(xera_points AS DECIMAL(10))) AS total_points, 
+                SUM(CASE WHEN xera_task = 'Referral Task' THEN 1 ELSE 0 END) AS referral_task_count
             FROM xera_user_tasks
-            WHERE xera_completed_date BETWEEN ? AND ?
+            WHERE DATE(xera_completed_date) BETWEEN ? AND ?
             GROUP BY BINARY username
             ORDER BY total_points DESC
-            LIMIT ? OFFSET ?`;
+            LIMIT ? OFFSET ?`, 
+            [phaseStartDate, phaseEndDate, limit, offset]
+        );
 
-        const queryCount = `
-            SELECT COUNT(DISTINCT BINARY username) AS total
+        const [totalRows] = await db.query(
+            `SELECT COUNT(DISTINCT username) AS total
             FROM xera_user_tasks
-            WHERE xera_completed_date BETWEEN ? AND ?`;
+            WHERE DATE(xera_completed_date) BETWEEN ? AND ?`
+        , [phaseStartDate, phaseEndDate]);
 
-        const [dataRows] = await db.query(queryData, [phaseStartDate, phaseEndDate, limit, offset]);
-        const [countRows] = await db.query(queryCount, [phaseStartDate, phaseEndDate]);
-
-        const totalRecords = countRows[0]?.total || 0;
-        const totalPages = Math.ceil(totalRecords / limit);
+        const total = totalRows[0]?.total || 0;
+        const totalPages = Math.ceil(total / limit);
 
         res.json({
             success: true,
-            data: dataRows,
+            data: rows,
+            message: "Data retrieved successfully",
             pagination: {
                 currentPage: page,
                 totalPages,
-                totalRecords,
+                totalRecords: total,
                 limit,
             },
-            message: "Data retrieved successfully",
         });
     } catch (error) {
-        console.error("Error in handleAirdropPhase:", error);
-        res.status(500).json({ success: false, message: "Server error", error: error.message });
+        console.error("Error in phase handler:", error);
+        return res.json({ success: false, message: "Request error", error: error.message });
     }
 };
-
-// Define the endpoints for each phase
-const phases = [
-    { route: '/xera/v1/api/users/airdrop/phase1', start: '2024-09-28', end: '2024-12-18' },
-    { route: '/xera/v1/api/users/airdrop/phase2', start: '2024-12-19', end: '2025-02-25' },
-    { route: '/xera/v1/api/users/airdrop/phase3', start: '2025-02-25', end: '2025-05-30' },
-];
-
-phases.forEach(({ route, start, end }) => {
-    app.post(route, (req, res) => handleAirdropPhase(req, res, start, end));
-});
+app.post('/xera/v1/api/users/airdrop/phase1', (req, res) => handleAirdropPhase(req, res, '2024-09-28', '2024-12-18'));
+app.post('/xera/v1/api/users/airdrop/phase2', (req, res) => handleAirdropPhase(req, res, '2024-12-19', '2025-02-25'));
+app.post('/xera/v1/api/users/airdrop/phase3', (req, res) => handleAirdropPhase(req, res, '2025-02-25', '2025-05-30'));
 
 
-// Airdrop Participants
+//  Airdrop Participants
 app.post('/xera/v1/api/users/airdrop/participants', async (req, res) => {
+    await validateApiKey(req, res); // Centralized API Key validation
+
     try {
-        // Validate API Key
-        const isValidApiKey = await validateApiKey(req, res);
-        if (!isValidApiKey) return;
-
-        // Fetch unique case-sensitive participant count
-        const [userTask] = await db.query(`
-            SELECT COUNT(DISTINCT BINARY username) AS user_participants 
-            FROM xera_user_tasks
-        `);
-
-        // Return the data if retrieved successfully
-        const participantData = userTask[0]?.user_participants || 0;
-        res.json({
-            success: true,
-            message: "User participant count retrieved successfully",
-            participants: participantData,
-        });
+        const [userTask] = await db.query('SELECT COUNT(DISTINCT BINARY username) AS user_participants FROM xera_user_tasks');
+        
+        if (userTask.length > 0) {
+            const participantData = userTask[0].user_participants;
+            res.json({ success: true, message: "User tasks successfully retrieved", participants: participantData });
+        } else {
+            return res.json({ success: false, message: "No data retrieved" });
+        }
     } catch (error) {
-        console.error("Error retrieving airdrop participants:", error);
-        res.status(500).json({
-            success: false,
-            message: "Server error",
-            error: error.message,
-        });
+        return res.json({ success: false, message: "Request error", error: error.message });
     }
 });
 
 // Function to handle total points for a given phase
 const getTotalPoints = async (req, res, startDate, endDate) => {
-    try {
-        // Validate API Key and exit early if invalid
-        const isValidApiKey = await validateApiKey(req, res);
-        if (!isValidApiKey) return;
+    await validateApiKey(req, res); // Centralized API Key validation
 
-        // Fetch total points from the database
+    try {
         const [userstask] = await db.query(
             `SELECT SUM(xera_points) AS total_points 
-             FROM xera_user_tasks 
-             WHERE xera_completed_date BETWEEN ? AND ?`, 
+            FROM xera_user_tasks 
+            WHERE xera_completed_date BETWEEN ? AND ?`, 
             [startDate, endDate]
         );
 
-        // Extract and respond with the total points
-        const totalPoints = userstask[0]?.total_points || 0; // Default to 0 if no rows found
-        res.json({
-            success: true,
-            message: "Total points retrieved successfully",
-            totalPoints,
-        });
+        if (userstask.length > 0) {
+            const totalPoints = userstask[0].total_points;
+            return res.json({ success: true, totalPoints });
+        } else {
+            return res.json({ success: false, message: "No tasks found" });
+        }
     } catch (error) {
-        console.error("Error in getTotalPoints:", error);
-        res.status(500).json({
-            success: false,
-            message: "Server error",
-            error: error.message,
-        });
+        return res.json({ success: false, message: "Request error", error: error.message });
     }
 };
-
 // Routes for each phase using the optimized function
-const totalPointsRoutes = [
-    { path: '/xera/v1/api/users/total-points/phase1', start: '2024-11-01 01:01:01', end: '2024-12-18 01:01:01' },
-    { path: '/xera/v1/api/users/total-points/phase2', start: '2024-12-19 01:01:01', end: '2025-02-25 01:01:01' },
-    { path: '/xera/v1/api/users/total-points/phase3', start: '2025-02-25 01:01:01', end: '2025-05-30 01:01:01' },
-];
-totalPointsRoutes.forEach(({ path, start, end }) => {
-    app.post(path, (req, res) => getTotalPoints(req, res, start, end));
+app.post('/xera/v1/api/users/total-points/phase1', (req, res) => {
+    getTotalPoints(req, res, '2024-11-01 01:01:01', '2024-12-18 01:01:01');
+});
+app.post('/xera/v1/api/users/total-points/phase2', (req, res) => {
+    getTotalPoints(req, res, '2024-12-19 01:01:01', '2025-02-25 01:01:01');
+});
+app.post('/xera/v1/api/users/total-points/phase3', (req, res) => {
+    getTotalPoints(req, res, '2025-02-25 01:01:01', '2025-05-30 01:01:01');
 });
 
 // Route to get the total count of wallets
 app.post('/xera/v1/api/users/all-wallet', async (req, res) => {
+    await validateApiKey(req, res); // Centralized API Key validation
     try {
-        // Validate API Key and exit early if invalid
-        const isValidApiKey = await validateApiKey(req, res);
-        if (!isValidApiKey) return;
-
-        // Fetch wallet count
         const [countWallet] = await db.query('SELECT COUNT(*) AS user_count FROM xera_user_accounts');
-
-        // Respond with the count
-        const walletCount = countWallet[0]?.user_count || 0;
-        res.json({
-            success: true,
-            message: "Successfully counted all wallets",
-            walletCount,
-        });
+        
+        if (countWallet.length > 0) {
+            const walletCount = countWallet[0].user_count;
+            res.json({ success: true, message: "Successfully counted all wallets", walletCount });
+        } else {
+            res.json({ success: false, message: "No data found" });
+        }
     } catch (error) {
-        console.error("Error in /all-wallet:", error);
-        res.status(500).json({
-            success: false,
-            message: "Server error",
-            error: error.message,
-        });
+        return res.json({ success: false, message: "Request error", error: error.message });
     }
 });
 
 // Route to get the count of recent participants
 app.post('/xera/v1/api/users/airdrop/recent-participant', async (req, res) => {
+    await validateApiKey(req, res); // Centralized API Key validation
     try {
-        // Validate API Key and exit early if invalid
-        const isValidApiKey = await validateApiKey(req, res);
-        if (!isValidApiKey) return;
-
-        // Fetch recent participants count
-        const [recentParticipants] = await db.query(`
-            SELECT COUNT(DISTINCT BINARY username) AS recent_participants
+        const [recentParticipants] = await db.query(
+            `SELECT COUNT(DISTINCT BINARY username) AS recent_participants
             FROM xera_user_tasks
             WHERE xera_completed_date BETWEEN CONCAT(CURDATE(), ' 00:00:00') AND CONCAT(CURDATE(), ' 23:59:59')
-                AND xera_task != 'TXERA Claim Task'
-        `);
+                AND xera_task != 'TXERA Claim Task'`
+        );
 
-        // Respond with the count
-        const participantsData = recentParticipants[0]?.recent_participants || 0;
-        res.json({
-            success: true,
-            message: "Participants successfully retrieved",
-            recentParticipants: participantsData,
-        });
+        if (recentParticipants.length > 0) {
+            const participantsData = recentParticipants[0].recent_participants;
+            res.json({ success: true, message: "Participants successfully retrieved", recentparticipants: participantsData });
+        } else {
+            res.json({ success: false, message: "No data found" });
+        }
     } catch (error) {
-        console.error("Error in /recent-participant:", error);
-        res.status(500).json({
-            success: false,
-            message: "Server error",
-            error: error.message,
-        });
+        return res.json({ success: false, message: "Request error", error: error.message });
     }
 });
 
 // Route to get transaction history of nodes
 app.post('/xera/v1/api/users/node/transaction-history', async (req, res) => {
+    await validateApiKey(req, res); // Centralized API Key validation
     try {
-        // Validate API Key and exit early if invalid
-        const isValidApiKey = await validateApiKey(req, res);
-        if (!isValidApiKey) return;
-
-        // Fetch transaction history
         const currentDate = new Date().toISOString().split('T')[0]; // Get current date in YYYY-MM-DD format
-        const [transactionNode] = await db.query(`
-            SELECT node_id, node_name, node_owner, node_points, node_txhash, node_txdate
+        const [transactionNode] = await db.query(
+            `SELECT node_id, node_name, node_owner, node_points, node_txhash, node_txdate
             FROM xera_user_node
-            WHERE node_txdate >= ?
-        `, [currentDate]);
+            WHERE node_txdate >= ?`
+        , [currentDate]);
 
-        // Respond with the transaction history
-        res.json({
-            success: true,
-            message: transactionNode.length > 0 ? "User transactions successfully retrieved" : "No transactions found",
-            transactions: transactionNode,
-        });
+        if (transactionNode.length > 0) {
+            res.json({ success: true, message: "User transactions successfully retrieved", transaction: transactionNode });
+        } else {
+            res.json({ success: false, message: "No data found" });
+        }
     } catch (error) {
-        console.error("Error in /node/transaction-history:", error);
-        res.status(500).json({
-            success: false,
-            message: "Server error",
-            error: error.message,
-        });
+        return res.json({ success: false, message: "Request error", error: error.message });
     }
 });
 
