@@ -54,6 +54,8 @@ app.use((req, res, next) => {
 const jwtSecret = process.env.MAIN_JWT_SECRET;
 const jwtAPISecret = process.env.API_JWT_SECRET;
 
+// 46.202.129.137
+
 const db = mysql.createPool({
   host: process.env.DB_HOST,
   user: process.env.DB_USER,
