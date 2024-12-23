@@ -102,7 +102,7 @@ app.post('/xera/v1/api/token/faucet-transaction', async (req, res) => {
 
   try {
     const [assetTokens] = await db.query(
-      'SELECT transaction_block, transaction_hash, transaction_amount, receiver_address, transaction_fee_token, transaction_fee_token_id FROM xera_network_transactions'
+      `SELECT transaction_block, transaction_hash, transaction_amount, receiver_address, transaction_fee_token, transaction_fee_token_id FROM xera_network_transactions WHERE sender_address = 'TXERA Faucet'`
     );
 
     if (!assetTokens || assetTokens.length === 0) {
