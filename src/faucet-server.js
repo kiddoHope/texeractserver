@@ -4,6 +4,7 @@ const jwt = require("jsonwebtoken");
 const mysql = require('mysql2/promise');
 const cors = require("cors");
 require('dotenv').config();
+const CryptoJS = require("crypto-js");
 const rateLimit = require('express-rate-limit');
 const compression = require('compression');
 const NodeCache = require('node-cache');
@@ -84,15 +85,137 @@ async function testConnection() {
 
 testConnection();
 
+
+const decodeKey = (encodedKey) => {
+    if (!encodedKey) {
+        console.error("No encoded API key provided.");
+        return null;
+    }
+
+    const secret = {
+        devKey: `xeraAPI-LokiNakamoto-0ea5b02a13i4bdhw94jwb`,
+        webKey: `xeraAPI-webMainTexeract-egsdfw33resdfdsf`,
+        apiKey: `XERA09aa939245f735992af1a9a6b6d6b91d234ee2`,
+    };
+
+    const fullSecret = secret.devKey + secret.webKey + secret.apiKey;
+    if (!fullSecret) {
+        console.error("Secret for decryption is missing or incomplete.");
+        return null;
+    }
+
+    try {
+        const bytes = CryptoJS.AES.decrypt(encodedKey, fullSecret);
+        const originalKey = bytes.toString(CryptoJS.enc.Utf8);
+
+        if (!originalKey) {
+            console.error("Failed to decrypt API key: Decrypted key is empty.");
+            return null;
+        }
+
+        return originalKey;
+    } catch (error) {
+        console.error("Decryption error:", error);
+        return null;
+    }
+};
+
+// Fetch developer data from cache or database
+const getDevFromCache = async (api, res) => {
+    try {
+        let dev = cache.get(api);
+
+        if (!dev) {
+            const [rows] = await db.query("SELECT * FROM xera_developer WHERE BINARY xera_api = ?", [api]);
+
+            if (rows.length === 0) {
+                return res.status(400).json({ success: false, message: "Invalid API key" });
+            }
+
+            dev = rows[0];
+            cache.set(api, dev);
+        }
+
+        if (dev.xera_moderation !== "creator") {
+            return res.status(403).json({ success: false, message: "Access denied" });
+        }
+
+        return dev;
+    } catch (error) {
+        console.error("Error fetching developer data:", error.message);
+        return res.status(500).json({ success: false, message: "Internal server error" });
+    }
+};
+
+// Function to verify if the request is legitimate
+const verifyRequestSource = (req) => {
+    const expectedOrigins = [
+        "https://texeract.network",
+        "http://localhost:3000",
+        "http://localhost:3001",
+        "https://texeract-network-beta.vercel.app",
+        "https://tg-texeract-beta.vercel.app",
+        "https://texeractbot.xyz",
+    ];
+
+    let origin = req.headers.origin || req.headers.referer || '';
+
+    // Normalize `referer` to only include the origin if necessary
+    if (origin.includes("://")) {
+        const url = new URL(origin);
+        origin = `${url.protocol}//${url.host}`;
+    }
+
+    console.log("Validated Origin:", origin);
+
+    // Check if the origin matches any allowed origins
+    if (!expectedOrigins.includes(origin)) {
+        console.error("Origin not allowed:", origin);
+        return false;
+    }
+
+    return true;
+};
+
+const validateApiKey = async (req, res) => {
+    const { apikey } = req.body;
+
+    // Check if API key exists in the request body
+    if (!apikey) {
+        return res.status(400).json({ success: false, message: "No API key found" });
+    }
+
+    // Decode the API key
+    const decodedKey = decodeKey(apikey);
+    if (!decodedKey) {
+        return res.status(400).json({ success: false, message: "Invalid encoded API key" });
+    }
+
+    // Verify the request source (if this logic is defined elsewhere, ensure it works as expected)
+    if (!verifyRequestSource(req)) {
+        return res.status(403).json({ success: false, message: "Unauthorized request" });
+    }
+
+    // Check if the developer exists in cache (assuming `getDevFromCache` fetches the developer data)
+    const dev = await getDevFromCache(decodedKey, res);
+    if (!dev) {
+        // If no developer is found, send a 403 or an appropriate error message
+        return res.status(403).json({ success: false, message: "Developer not found or unauthorized" });
+    }
+
+    // If all checks pass, return the decoded key for further processing
+    return decodedKey;
+};
+
+
+
 app.post('/xera/v1/api/token/faucet-transaction', async (req, res) => {
-  const { request } = req.body;
+  // Validate the API key and get the decoded key
+  const decodedKey = await validateApiKey(req, res);
+  if (!decodedKey) return; // Stop execution if validation fails
 
-  if (!request || !request.api || !request.limit || !request.page) {
-    return res.status(400).json({ success: false, message: "Invalid or missing parameters" });
-  }
-
-  const { api, limit, page } = request;
-
+  // If validation passes, continue with the logic
+  const { limit = 10, page = 1 } = req.body;
   const limitNumber = parseInt(limit, 10);
   const pageNumber = parseInt(page, 10);
 
@@ -100,20 +223,42 @@ app.post('/xera/v1/api/token/faucet-transaction', async (req, res) => {
     return res.status(400).json({ success: false, message: "Invalid pagination parameters" });
   }
 
+  // Calculate the offset for pagination
+  const offset = (pageNumber - 1) * limitNumber;
+
   try {
+    // Query the database for transactions with the correct limit and offset
     const [assetTokens] = await db.query(
-      `SELECT transaction_block, transaction_hash, transaction_amount, receiver_address, transaction_fee_token, transaction_fee_token_id FROM xera_network_transactions WHERE sender_address = 'TXERA Faucet'`
+      `SELECT transaction_block, transaction_hash, transaction_amount, receiver_address, transaction_fee_token, transaction_fee_token_id 
+      FROM xera_network_transactions 
+      WHERE sender_address = 'TXERA Faucet'
+      ORDER BY id DESC 
+      LIMIT ? OFFSET ?`, 
+      [limitNumber, offset]
     );
 
     if (!assetTokens || assetTokens.length === 0) {
       return res.status(404).json({ success: false, message: "No tokens found" });
     }
 
-    const sortedTokens = assetTokens.sort((a, b) => b.id - a.id);
-    const startIndex = (pageNumber - 1) * limitNumber;
-    const paginatedData = sortedTokens.slice(startIndex, startIndex + limitNumber);
+    // Calculate the total number of tokens for pagination info
+    const [totalRows] = await db.query(
+      `SELECT COUNT(*) AS total FROM xera_network_transactions WHERE sender_address = 'TXERA Faucet'`
+    );
 
-    return res.status(200).json({ success: true, data: paginatedData });
+    const totalTokens = totalRows[0].total;
+    const totalPages = Math.ceil(totalTokens / limitNumber);
+
+    return res.status(200).json({
+      success: true,
+      data: assetTokens,
+      pagination: {
+        currentPage: pageNumber,
+        totalPages,
+        totalRecords: totalTokens,
+        limit: limitNumber,
+      }
+    });
   } catch (error) {
     console.error('Database query error:', error);
     return res.status(500).json({ success: false, message: "Server error", error: error.message });

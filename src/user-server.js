@@ -713,7 +713,6 @@ app.post('/xera/v1/api/user/coin/claim', authenticateToken, async (req, res) => 
     }
 });
 
-
 // Nodes Retrieval Endpoint
 app.post('/xera/v1/api/user/nodes', authenticateToken, async (req, res) => {
     const { user } = req.body;

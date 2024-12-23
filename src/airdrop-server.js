@@ -1,6 +1,7 @@
 const express = require("express");
 const bodyParser = require("body-parser");
 const jwt = require("jsonwebtoken");
+const CryptoJS = require("crypto-js");
 const mysql = require("mysql2/promise");
 const cors = require("cors");
 const rateLimit = require("express-rate-limit");
@@ -109,6 +110,41 @@ const authenticateToken = (req, res, next) => {
     });
 };
 
+
+const decodeKey = (encodedKey) => {
+    if (!encodedKey) {
+        console.error("No encoded API key provided.");
+        return null;
+    }
+
+    const secret = {
+        devKey: `xeraAPI-LokiNakamoto-0ea5b02a13i4bdhw94jwb`,
+        webKey: `xeraAPI-webMainTexeract-egsdfw33resdfdsf`,
+        apiKey: `XERA09aa939245f735992af1a9a6b6d6b91d234ee2`,
+    };
+
+    const fullSecret = secret.devKey + secret.webKey + secret.apiKey;
+    if (!fullSecret) {
+        console.error("Secret for decryption is missing or incomplete.");
+        return null;
+    }
+
+    try {
+        const bytes = CryptoJS.AES.decrypt(encodedKey, fullSecret);
+        const originalKey = bytes.toString(CryptoJS.enc.Utf8);
+
+        if (!originalKey) {
+            console.error("Failed to decrypt API key: Decrypted key is empty.");
+            return null;
+        }
+
+        return originalKey;
+    } catch (error) {
+        console.error("Decryption error:", error);
+        return null;
+    }
+};
+
 // Fetch developer data from cache or database
 const getDevFromCache = async (api, res) => {
     try {
@@ -136,16 +172,66 @@ const getDevFromCache = async (api, res) => {
     }
 };
 
+// Function to verify if the request is legitimate
+const verifyRequestSource = (req) => {
+    const expectedOrigins = [
+        "https://texeract.network",
+        "http://localhost:3000",
+        "http://localhost:3001",
+        "https://texeract-network-beta.vercel.app",
+        "https://tg-texeract-beta.vercel.app",
+        "https://texeractbot.xyz",
+    ];
 
+    let origin = req.headers.origin || req.headers.referer || '';
 
-// Function to handle API key check and cache fetching
+    // Normalize `referer` to only include the origin if necessary
+    if (origin.includes("://")) {
+        const url = new URL(origin);
+        origin = `${url.protocol}//${url.host}`;
+    }
+
+    console.log("Validated Origin:", origin);
+
+    // Check if the origin matches any allowed origins
+    if (!expectedOrigins.includes(origin)) {
+        console.error("Origin not allowed:", origin);
+        return false;
+    }
+
+    return true;
+};
+
 const validateApiKey = async (req, res) => {
     const { apikey } = req.body;
+
+    // Check if API key exists in the request body
     if (!apikey) {
-        return res.json({ success: false, message: "No request found" });
+        return res.status(400).json({ success: false, message: "No API key found" });
     }
-    await getDevFromCache(apikey);
+
+    // Decode the API key
+    const decodedKey = decodeKey(apikey);
+    if (!decodedKey) {
+        return res.status(400).json({ success: false, message: "Invalid encoded API key" });
+    }
+
+    // Verify the request source (if this logic is defined elsewhere, ensure it works as expected)
+    if (!verifyRequestSource(req)) {
+        return res.status(403).json({ success: false, message: "Unauthorized request" });
+    }
+
+    // Check if the developer exists in cache (assuming `getDevFromCache` fetches the developer data)
+    const dev = await getDevFromCache(decodedKey, res);
+    if (!dev) {
+        // If no developer is found, send a 403 or an appropriate error message
+        return res.status(403).json({ success: false, message: "Developer not found or unauthorized" });
+    }
+
+    // If all checks pass, return the decoded key for further processing
+    return decodedKey;
 };
+
 
 
 // Airdrop Full Stats - Optimized for Efficiency
@@ -163,7 +249,8 @@ const getStartAndEndOfDay = (date) => {
 };
 
 app.post('/xera/v1/api/users/airdrop/full-stats', async (req, res) => {
-    await validateApiKey(req, res); // Centralized API Key validation
+    const isValid = await validateApiKey(req, res);
+    if (!isValid) return; // Stop further execution if API key validation fails
 
     try {
         const results = [];
@@ -228,14 +315,12 @@ app.post('/xera/v1/api/users/airdrop/full-stats', async (req, res) => {
 
 // Airdrop Phase1, Phase2, and Phase3 Optimized
 const handleAirdropPhase = async (req, res, phaseStartDate, phaseEndDate) => {
-    const { request } = req.body;
-    const { api, limit = 10, page = 1 } = request;
+    // Validate the API key and get the decoded key
+    const decodedKey = await validateApiKey(req, res);
+    if (!decodedKey) return; // Stop execution if validation fails
 
-    if (!api) {
-        return res.json({ success: false, message: "Invalid or missing API key" });
-    }
-
-    await getDevFromCache(api, res);
+    // If validation passes, continue with the logic
+    const { limit = 10, page = 1 } = req.body;
     const offset = (page - 1) * limit;
 
     try {
@@ -259,7 +344,7 @@ const handleAirdropPhase = async (req, res, phaseStartDate, phaseEndDate) => {
         const total = totalRows[0]?.total || 0;
         const totalPages = Math.ceil(total / limit);
 
-        res.json({
+        return res.json({
             success: true,
             data: rows,
             message: "Data retrieved successfully",
@@ -282,14 +367,15 @@ app.post('/xera/v1/api/users/airdrop/phase3', (req, res) => handleAirdropPhase(r
 
 //  Airdrop Participants
 app.post('/xera/v1/api/users/airdrop/participants', async (req, res) => {
-    await validateApiKey(req, res); // Centralized API Key validation
+    const isValid = await validateApiKey(req, res);
+    if (!isValid) return; // Stop further execution if API key validation fails
 
     try {
         const [userTask] = await db.query('SELECT COUNT(DISTINCT BINARY username) AS user_participants FROM xera_user_tasks');
         
         if (userTask.length > 0) {
             const participantData = userTask[0].user_participants;
-            res.json({ success: true, message: "User tasks successfully retrieved", participants: participantData });
+            return res.json({ success: true, message: "User tasks successfully retrieved", participants: participantData });
         } else {
             return res.json({ success: false, message: "No data retrieved" });
         }
@@ -300,7 +386,8 @@ app.post('/xera/v1/api/users/airdrop/participants', async (req, res) => {
 
 // Function to handle total points for a given phase
 const getTotalPoints = async (req, res, startDate, endDate) => {
-    await validateApiKey(req, res); // Centralized API Key validation
+    const isValid = await validateApiKey(req, res);
+    if (!isValid) return; // Stop further execution if API key validation fails
 
     try {
         const [userstask] = await db.query(
@@ -331,26 +418,32 @@ app.post('/xera/v1/api/users/total-points/phase3', (req, res) => {
     getTotalPoints(req, res, '2025-02-25 01:01:01', '2025-05-30 01:01:01');
 });
 
+
 // Route to get the total count of wallets
 app.post('/xera/v1/api/users/all-wallet', async (req, res) => {
-    await validateApiKey(req, res); // Centralized API Key validation
+    const isValid = await validateApiKey(req, res);
+    if (!isValid) return; // Stop further execution if API key validation fails
+
     try {
         const [countWallet] = await db.query('SELECT COUNT(*) AS user_count FROM xera_user_accounts');
-        
+
         if (countWallet.length > 0) {
             const walletCount = countWallet[0].user_count;
-            res.json({ success: true, message: "Successfully counted all wallets", walletCount });
+            return res.json({ success: true, message: "Successfully counted all wallets", walletCount });
         } else {
-            res.json({ success: false, message: "No data found" });
+            return res.json({ success: false, message: "No data found" });
         }
     } catch (error) {
         return res.json({ success: false, message: "Request error", error: error.message });
     }
 });
 
+
 // Route to get the count of recent participants
 app.post('/xera/v1/api/users/airdrop/recent-participant', async (req, res) => {
-    await validateApiKey(req, res); // Centralized API Key validation
+    const isValid = await validateApiKey(req, res);
+    if (!isValid) return; // Stop further execution if API key validation fails
+
     try {
         const [recentParticipants] = await db.query(
             `SELECT COUNT(DISTINCT BINARY username) AS recent_participants
@@ -361,9 +454,9 @@ app.post('/xera/v1/api/users/airdrop/recent-participant', async (req, res) => {
 
         if (recentParticipants.length > 0) {
             const participantsData = recentParticipants[0].recent_participants;
-            res.json({ success: true, message: "Participants successfully retrieved", recentparticipants: participantsData });
+            return res.json({ success: true, message: "Participants successfully retrieved", recentparticipants: participantsData });
         } else {
-            res.json({ success: false, message: "No data found" });
+            return res.json({ success: false, message: "No data found" });
         }
     } catch (error) {
         return res.json({ success: false, message: "Request error", error: error.message });
@@ -372,7 +465,9 @@ app.post('/xera/v1/api/users/airdrop/recent-participant', async (req, res) => {
 
 // Route to get transaction history of nodes
 app.post('/xera/v1/api/users/node/transaction-history', async (req, res) => {
-    await validateApiKey(req, res); // Centralized API Key validation
+    const isValid = await validateApiKey(req, res);
+    if (!isValid) return; // Stop further execution if API key validation fails
+
     try {
         const currentDate = new Date().toISOString().split('T')[0]; // Get current date in YYYY-MM-DD format
         const [transactionNode] = await db.query(
@@ -382,9 +477,9 @@ app.post('/xera/v1/api/users/node/transaction-history', async (req, res) => {
         , [currentDate]);
 
         if (transactionNode.length > 0) {
-            res.json({ success: true, message: "User transactions successfully retrieved", transaction: transactionNode });
+            return res.json({ success: true, message: "User transactions successfully retrieved", transaction: transactionNode });
         } else {
-            res.json({ success: false, message: "No data found" });
+            return res.json({ success: false, message: "No data found" });
         }
     } catch (error) {
         return res.json({ success: false, message: "Request error", error: error.message });
