@@ -217,7 +217,6 @@ app.post('/xera/v1/api/user/login-basic', async (req, res) => {
 // Route for login using private key
 app.post('/xera/v1/api/user/login-prKey', async (req, res) => {
     const { privateKey } = req.body;
-
     if (!privateKey) {
         return res.json({ success: false, message: "Request Error. No private key received" });
     }
@@ -412,7 +411,6 @@ const cleanData = (data, fieldsToRemove = []) => {
 // Endpoint for fetching transactions
 app.post('/xera/v1/api/user/transactions', authenticateToken, async (req, res) => {
     const { user, page = 1, limit = 50 } = req.body;
-
     if (!user) {
         return res.json({ success: false, message: "Invalid request" });
     }
@@ -438,7 +436,6 @@ app.post('/xera/v1/api/user/transactions', authenticateToken, async (req, res) =
 // Endpoint for fetching user balances
 app.post('/xera/v1/api/user/balance', authenticateToken, async (req, res) => {
     const { user } = req.body;
-
     if (!user) {
         return res.json({ success: false, message: "Invalid request" });
     }
@@ -480,7 +477,6 @@ app.post('/xera/v1/api/user/balance', authenticateToken, async (req, res) => {
 // Endpoint for fetching user's following list
 app.post('/xera/v1/api/user/following', authenticateToken, async (req, res) => {
     const { user } = req.body;
-
     if (!user) {
         return res.json({ success: false, message: "Invalid request" });
     }

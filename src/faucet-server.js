@@ -166,8 +166,6 @@ const verifyRequestSource = (req) => {
         origin = `${url.protocol}//${url.host}`;
     }
 
-    console.log("Validated Origin:", origin);
-
     // Check if the origin matches any allowed origins
     if (!expectedOrigins.includes(origin)) {
         console.error("Origin not allowed:", origin);

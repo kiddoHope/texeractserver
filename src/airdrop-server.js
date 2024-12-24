@@ -191,8 +191,6 @@ const verifyRequestSource = (req) => {
         origin = `${url.protocol}//${url.host}`;
     }
 
-    console.log("Validated Origin:", origin);
-
     // Check if the origin matches any allowed origins
     if (!expectedOrigins.includes(origin)) {
         console.error("Origin not allowed:", origin);
@@ -455,29 +453,6 @@ app.post('/xera/v1/api/users/airdrop/recent-participant', async (req, res) => {
         if (recentParticipants.length > 0) {
             const participantsData = recentParticipants[0].recent_participants;
             return res.json({ success: true, message: "Participants successfully retrieved", recentparticipants: participantsData });
-        } else {
-            return res.json({ success: false, message: "No data found" });
-        }
-    } catch (error) {
-        return res.json({ success: false, message: "Request error", error: error.message });
-    }
-});
-
-// Route to get transaction history of nodes
-app.post('/xera/v1/api/users/node/transaction-history', async (req, res) => {
-    const isValid = await validateApiKey(req, res);
-    if (!isValid) return; // Stop further execution if API key validation fails
-
-    try {
-        const currentDate = new Date().toISOString().split('T')[0]; // Get current date in YYYY-MM-DD format
-        const [transactionNode] = await db.query(
-            `SELECT node_id, node_name, node_owner, node_points, node_txhash, node_txdate
-            FROM xera_user_node
-            WHERE node_txdate >= ?`
-        , [currentDate]);
-
-        if (transactionNode.length > 0) {
-            return res.json({ success: true, message: "User transactions successfully retrieved", transaction: transactionNode });
         } else {
             return res.json({ success: false, message: "No data found" });
         }

@@ -93,9 +93,9 @@ const decodeKey = (encodedKey) => {
     }
 
     const secret = {
-      devKey: `xeraAPI-LokiNakamoto-0ea5b02a13i4bdhw94jwb`,
-      webKey: `xeraAPI-webMainTexeract-egsdfw33resdfdsf`,
-      apiKey: `XERA09aa939245f735992af1a9a6b6d6b91d234ee2`,
+        devKey: `xeraAPI-LokiNakamoto-0ea5b02a13i4bdhw94jwb`,
+        webKey: `xeraAPI-webMainTexeract-egsdfw33resdfdsf`,
+        apiKey: `XERA09aa939245f735992af1a9a6b6d6b91d234ee2`,
     };
 
     const fullSecret = secret.devKey + secret.webKey + secret.apiKey;
@@ -166,8 +166,6 @@ const verifyRequestSource = (req) => {
         origin = `${url.protocol}//${url.host}`;
     }
 
-    console.log("Validated Origin:", origin);
-
     // Check if the origin matches any allowed origins
     if (!expectedOrigins.includes(origin)) {
         console.error("Origin not allowed:", origin);
@@ -204,8 +202,10 @@ const validateApiKey = async (req, res) => {
     }
 
     // If all checks pass, return the decoded key for further processing
-    return decodedKey;
+    return true;
 };
+
+
 
 app.post('/xera/v1/api/token/asset-tokens', async (req, res) => {
   const isValid = await validateApiKey(req, res);
@@ -223,6 +223,46 @@ app.post('/xera/v1/api/token/asset-tokens', async (req, res) => {
   } catch (error) {
     console.error('Error:', error.message);
     return res.status(500).json({ success: false, message: "Server error", error: error.message });
+  }
+});
+
+// Route to get transaction history of nodes
+app.post('/xera/v1/api/node/transaction-history', async (req, res) => {
+  const isValid = await validateApiKey(req, res);
+  if (!isValid) return; // Stop further execution if API key validation fails
+
+  try {
+      // Fetch the most recent transaction date
+      const [lastDateResult] = await db.query(
+          `SELECT MAX(node_txdate) AS lastDate
+           FROM xera_user_node`
+      );
+
+      const lastDate = lastDateResult[0]?.lastDate;
+
+      if (!lastDate) {
+          return res.json({ success: false, message: "No transactions available" });
+      }
+
+      // Query for transactions from the last transaction date
+      const [transactionNode] = await db.query(
+          `SELECT node_id, node_name, node_owner, node_points, node_txhash, node_txdate
+           FROM xera_user_node
+           WHERE node_txdate = ?`,
+          [lastDate]
+      );
+
+      if (transactionNode.length > 0) {
+          return res.status(200).json({
+              success: true,
+              message: "User transactions successfully retrieved",
+              transaction: transactionNode,
+          });
+      } else {
+          return res.status(404).json({ success: false, message: "No transactions found for the last date" });
+      }
+  } catch (error) {
+      return res.status(500).json({ success: false, message: "Request error", error: error.message });
   }
 });
 
