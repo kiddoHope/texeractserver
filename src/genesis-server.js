@@ -169,9 +169,30 @@ app.post('/xera/v1/api/genesis/active-nodes', async (req,res) => {
         return res.json({ success: false, message: "Request error", error: error.message });
     }
 })
+async function getUserRank(user, startDate, endDate) {
+    const [userRanking] = await db.query(`
+        SELECT MAX(username) AS username, MAX(xera_wallet) AS xera_wallet, 
+               SUM(CAST(xera_points AS DECIMAL(10))) AS total_points,
+               SUM(CASE WHEN xera_task = 'Referral Task' THEN 1 ELSE 0 END) AS referral_task_count
+        FROM xera_user_tasks
+        WHERE DATE(xera_completed_date) BETWEEN ? AND ?
+        GROUP BY BINARY username
+        ORDER BY total_points DESC
+    `, [startDate, endDate]);
+    
+    const userRank = userRanking.findIndex(rankUser => rankUser.username === user) + 1;
+    const userTotalPoints = userRanking.find(rankUser => rankUser.username === user)?.total_points;
+    
+    if (userRank > 0 && userTotalPoints) {
+        return { success: true, rank: userRank, totalPoints: userTotalPoints };
+    } else {
+        return { success: false, message: "User not found" };
+    }
+}
 
 app.post('/xera/v1/api/genesis/claim-node', authenticateToken, async (req,res) => {
     const { user } = req.body;
+    console.log(user);
     
     if (!user || !user.wallet || !user.nodeName) {
         return res.json({
@@ -182,31 +203,37 @@ app.post('/xera/v1/api/genesis/claim-node', authenticateToken, async (req,res) =
     
     const owner = user.wallet
     const nodename = user.nodeName
-    
+    const username =  user.username
     try {
-        const [checkNode] = await db.query(`SELECT node_id FROM xera_asset_nodes WHERE node_name = ? AND node_owner = ?`,[nodename, owner])
-        if (checkNode.length > 0) {
-            return res.json({ success: false, message: `You have already claimed ${nodename}`});
-        } else {
-            const [selectNode] = await db.query(`SELECT node_id FROM xera_asset_nodes WHERE node_name = ? AND node_owner = 'none'`,[nodename])
-            if (selectNode.length > 0) {
-                const freeNode = selectNode[0].node_id
-                
-                const [updateNode] = await db.query(
-                    `UPDATE xera_asset_nodes 
-                    SET node_owner = ?, node_status = 'owned', node_state = 'idle' 
-                    WHERE node_id = ?`,
-                    [owner, freeNode]
-                );
-                
-                if (updateNode.affectedRows > 0) {
-                    res.json({success: true, message: `Successfully Claim 1 ${nodename}` })
-                } else {
-                    res.json({ success: false, message: `Failed to claim ${nodename}`})
-                }
+        const userRank = await getUserRank(username, '2024-09-28', '2024-12-18');
+        
+        if (userRank <= 1000) {
+            const [checkNode] = await db.query(`SELECT node_id FROM xera_asset_nodes WHERE node_name = ? AND node_owner = ?`,[nodename, owner])
+            if (checkNode.length > 0) {
+                return res.json({ success: false, message: `You have already claimed ${nodename}`});
             } else {
-                return res.json({ success: false, message: `No ${nodename} available`})
+                const [selectNode] = await db.query(`SELECT node_id FROM xera_asset_nodes WHERE node_name = ? AND node_owner = 'none'`,[nodename])
+                if (selectNode.length > 0) {
+                    const freeNode = selectNode[0].node_id
+                    
+                    const [updateNode] = await db.query(
+                        `UPDATE xera_asset_nodes 
+                        SET node_owner = ?, node_status = 'owned', node_state = 'idle' 
+                        WHERE node_id = ?`,
+                        [owner, freeNode]
+                    );
+                    
+                    if (updateNode.affectedRows > 0) {
+                        res.json({success: true, message: `Successfully Claim 1 ${nodename}` })
+                    } else {
+                        res.json({ success: false, message: `Failed to claim ${nodename}`})
+                    }
+                } else {
+                    return res.json({ success: false, message: `No ${nodename} available`})
+                }
             }
+        } else {
+            return res.json({ success: false, message: "You are not eligible to claim a node" });
         }
     } catch (error) {
         return res.json({ success: false, message: "Request error", error: error.message });
