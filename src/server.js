@@ -55,9 +55,6 @@ app.use((req, res, next) => {
 // pm2 start src/server.js src/airdrop-server.js src/user-server.js src/faucet-server.js src/genesis-server.js src/watcher-server.js
 // node start src/server.js src/airdrop-server.js src/user-server.js src/faucet-server.js src/genesis-server.js src/watcher-server.js
 
-const jwtSecret = process.env.MAIN_JWT_SECRET;
-const jwtAPISecret = process.env.API_JWT_SECRET;
-
 const db = mysql.createPool({
   host: process.env.DB_HOST,
   user: process.env.DB_USER,
@@ -86,41 +83,6 @@ async function testConnection() {
 
 testConnection();
 
-const decodeKey = (encodedKey) => {
-    if (!encodedKey) {
-        console.error("No encoded API key provided.");
-        return null;
-    }
-
-    const secret = {
-        devKey: `xeraAPI-LokiNakamoto-0ea5b02a13i4bdhw94jwb`,
-        webKey: `xeraAPI-webMainTexeract-egsdfw33resdfdsf`,
-        apiKey: `XERA09aa939245f735992af1a9a6b6d6b91d234ee2`,
-    };
-
-    const fullSecret = secret.devKey + secret.webKey + secret.apiKey;
-    if (!fullSecret) {
-        console.error("Secret for decryption is missing or incomplete.");
-        return null;
-    }
-
-    try {
-        const bytes = CryptoJS.AES.decrypt(encodedKey, fullSecret);
-        const originalKey = bytes.toString(CryptoJS.enc.Utf8);
-        
-
-        if (!originalKey) {
-            console.error("Failed to decrypt API key: Decrypted key is empty.");
-            return null;
-        }
-
-        return originalKey;
-    } catch (error) {
-        console.error("Decryption error:", error);
-        return null;
-    }
-};
-
 // Fetch developer data from cache or database
 const getDevFromCache = async (api) => {
     let message = "";
@@ -145,59 +107,6 @@ const getDevFromCache = async (api) => {
     } catch (error) {
         return message = "Internal server error" 
     }
-};
-
-// Function to verify if the request is legitimate
-const verifyRequestSource = (origin) => {
-    const expectedOrigins = [
-        "https://texeract.network",
-        "http://localhost:3000",
-        "http://localhost:3001",
-        "https://texeract-network-beta.vercel.app",
-        "https://tg-texeract-beta.vercel.app",
-        "https://texeractbot.xyz",
-    ];
-
-    // Normalize `referer` to only include the origin if necessary
-    if (origin.includes("://")) {
-        const url = new URL(origin);
-        origin = `${url.protocol}//${url.host}`;
-    }
-
-    // Check if the origin matches any allowed origins
-    if (!expectedOrigins.includes(origin)) {
-        console.error("Origin not allowed:", origin);
-        return false;
-    }
-
-    return true;
-};
-
-const validateApiKey = async (apikey,origin) => {
-
-    let message = "";
-    if (!apikey) {
-      return message = "No API key found";
-    }
-
-    const decodedKey = decodeKey(apikey);
-    if (!decodedKey) {
-        message = "Invalid encoded API key"
-        return message
-    }
-
-    if (!verifyRequestSource(origin)) {
-        message = "Unauthorized request"
-        return message;
-    }
-
-    const dev = await getDevFromCache(decodedKey);
-    if (!dev) {
-        message = "Developer not found or unauthorized"
-        return message;
-    }
-
-    return true;
 };
 
 app.post('/xera/v1/api/token/asset-tokens', async (req, res) => {
