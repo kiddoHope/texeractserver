@@ -22,6 +22,8 @@ const cache = new NodeCache({ stdTTL: 60, checkperiod: 120 });
 app.use(compression());
 app.use(bodyParser.json());
 
+// 46.202.129.137
+
 const allowedOrigins = [
     "https://texeract.network",
     "http://localhost:3000",

@@ -184,25 +184,29 @@ app.post('/xera/v1/api/genesis/claim-node', authenticateToken, async (req,res) =
     const nodename = user.nodeName
     
     try {
-        const [selectNode] = await db.query(`SELECT node_id FROM xera_asset_nodes WHERE node_name = ? AND node_owner = 'none'`,[nodename])
-        
-        if (selectNode.length > 0) {
-            const freeNode = selectNode[0].node_id
-            
-            const [updateNode] = await db.query(
-                `UPDATE xera_asset_nodes 
-                 SET node_owner = ?, node_status = 'owned', node_state = 'idle' 
-                 WHERE node_id = ?`,
-                [owner, freeNode]
-            );
-            
-            if (updateNode.affectedRows > 0) {
-                res.json({success: true, message: `Successfully Claim 1 ${nodename}` })
-            } else {
-                res.json({ success: false, message: `Failed to claim ${nodename}`})
-            }
+        const [checkNode] = await db.query(`SELECT node_id FROM xera_asset_nodes WHERE node_name = ? AND node_owner = ?`,[nodename, owner])
+        if (checkNode.length > 0) {
+            return res.json({ success: false, message: `You have already claimed ${nodename}`});
         } else {
-            return res.json({ success: false, message: `No ${nodename} available`})
+            const [selectNode] = await db.query(`SELECT node_id FROM xera_asset_nodes WHERE node_name = ? AND node_owner = 'none'`,[nodename])
+            if (selectNode.length > 0) {
+                const freeNode = selectNode[0].node_id
+                
+                const [updateNode] = await db.query(
+                    `UPDATE xera_asset_nodes 
+                    SET node_owner = ?, node_status = 'owned', node_state = 'idle' 
+                    WHERE node_id = ?`,
+                    [owner, freeNode]
+                );
+                
+                if (updateNode.affectedRows > 0) {
+                    res.json({success: true, message: `Successfully Claim 1 ${nodename}` })
+                } else {
+                    res.json({ success: false, message: `Failed to claim ${nodename}`})
+                }
+            } else {
+                return res.json({ success: false, message: `No ${nodename} available`})
+            }
         }
     } catch (error) {
         return res.json({ success: false, message: "Request error", error: error.message });
