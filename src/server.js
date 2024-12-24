@@ -177,12 +177,6 @@ app.post('/xera/v1/api/node/transaction-history', async (req, res) => {
   }
 });
 
-// Global error handling middleware
-app.use((err, req, res, next) => {
-    console.error("Global error:", err.message);
-    res.status(500).json({ success: false, message: "An internal error occurred" });
-});
-
 // Start the server
 app.listen(port, () => {
     console.log(`Server is running on port ${port}`);
