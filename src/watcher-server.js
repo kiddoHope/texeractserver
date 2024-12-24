@@ -78,16 +78,17 @@ const db = mysql.createPool({
 });
 
 // Test database connection
-(async function testConnection() {
+async function testConnection() {
     try {
-        const connection = await db.getConnection();
-        console.log("Database connection successful!");
-        connection.release();
+      const connection = await db.getConnection();
+      console.log('Database connection successful!');
+      connection.release();
     } catch (error) {
-        console.error("Database connection failed:", error.message);
-        process.exit(1);
+      console.error('Database connection failed:', error);
     }
-})();
+  }
+  
+testConnection();
 
 // JWT Authentication Middleware
 const authenticateToken = (req, res, next) => {

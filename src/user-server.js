@@ -94,12 +94,46 @@ const authenticateToken = (req, res, next) => {
             const errorMessage = err.name === "TokenExpiredError" ? "Token has expired" : "Invalid token";
             return res.status(403).json({ success: false, message: errorMessage });
         }
-
+        
         req.user = decoded;
         next();
     });
 };
 
+const decodeKey = (encodedKey) => {
+    if (!encodedKey) {
+        console.error("No encoded API key provided.");
+        return null;
+    }
+
+    const secret = {
+        devKey: `xeraAPI-LokiNakamoto-0ea5b02a13i4bdhw94jwb`,
+        webKey: `xeraAPI-webMainTexeract-egsdfw33resdfdsf`,
+        apiKey: `XERA09aa939245f735992af1a9a6b6d6b91d234ee2`,
+    };
+
+    const fullSecret = secret.devKey + secret.webKey + secret.apiKey;
+    if (!fullSecret) {
+        console.error("Secret for decryption is missing or incomplete.");
+        return null;
+    }
+
+    try {
+        const bytes = CryptoJS.AES.decrypt(encodedKey, fullSecret);
+        const originalKey = bytes.toString(CryptoJS.enc.Utf8);
+        
+
+        if (!originalKey) {
+            console.error("Failed to decrypt API key: Decrypted key is empty.");
+            return null;
+        }
+
+        return originalKey;
+    } catch (error) {
+        console.error("Decryption error:", error);
+        return null;
+    }
+};
 // Cache helper function
 const getUserFromCache = async (username) => {
     try {
@@ -116,6 +150,84 @@ const getUserFromCache = async (username) => {
         console.error("Error fetching user:", error.message);
         return null;
     }
+};
+
+const getDevFromCache = async (api) => {
+    let message = "";
+    try {
+        let dev = cache.get(api);
+        if (!dev) {
+            const [rows] = await db.query("SELECT * FROM xera_developer WHERE BINARY xera_api = ?", [api]);
+
+            if (rows.length === 0) {
+                return message = "Invalid API key" 
+            }
+
+            dev = rows[0];
+            cache.set(api, dev);
+        }
+
+        if (dev.xera_moderation !== "creator") {
+            return message = "Access denied"
+        }
+
+        return dev;
+    } catch (error) {
+        return message = "Internal server error" 
+    }
+};
+
+// Function to verify if the request is legitimate
+const verifyRequestSource = (origin) => {
+    const expectedOrigins = [
+        "https://texeract.network",
+        "http://localhost:3000",
+        "http://localhost:3001",
+        "https://texeract-network-beta.vercel.app",
+        "https://tg-texeract-beta.vercel.app",
+        "https://texeractbot.xyz",
+    ];
+
+    // Normalize `referer` to only include the origin if necessary
+    if (origin.includes("://")) {
+        const url = new URL(origin);
+        origin = `${url.protocol}//${url.host}`;
+    }
+
+    // Check if the origin matches any allowed origins
+    if (!expectedOrigins.includes(origin)) {
+        console.error("Origin not allowed:", origin);
+        return false;
+    }
+
+    return true;
+};
+
+const validateApiKey = async (apikey,origin) => {
+
+    let message = "";
+    if (!apikey) {
+      return message = "No API key found";
+    }
+
+    const decodedKey = decodeKey(apikey);
+    if (!decodedKey) {
+        message = "Invalid encoded API key"
+        return message
+    }
+
+    if (!verifyRequestSource(origin)) {
+        message = "Unauthorized request"
+        return message;
+    }
+
+    const dev = await getDevFromCache(decodedKey);
+    if (!dev) {
+        message = "Developer not found or unauthorized"
+        return message;
+    }
+
+    return true;
 };
 
 // app.post("/xera/v1/api/generate/access-token", async (req,res) => {
@@ -147,7 +259,7 @@ const generateAuthToken = (username, publicKey) => {
         myXeraUsername: username,
         myXeraAddress: publicKey
     };
-    return jwt.sign({ xeraJWT }, jwtSecret, { expiresIn: "2d" });
+    return jwt.sign({ xeraJWT }, jwtSecret, { expiresIn: "1d" });
 };
 
 // Helper function to handle user login and token generation
@@ -279,9 +391,6 @@ app.post('/xera/v1/api/user/login-phrase', async (req, res) => {
     }
 });
 
-
-
-
 app.post('/xera/v1/api/user/tasks/all-task', authenticateToken, async (req, res) => {
     const { user } = req.body;
 
@@ -388,6 +497,7 @@ app.post('/xera/v1/api/user/rank-phase2', authenticateToken, async (req, res) =>
 });
 
 app.post('/xera/v1/api/user/rank-phase3', authenticateToken, async (req, res) => {
+
     const { user } = req.body;
     if (!user) return res.json({ success: false, message: "Invalid request" });
 
@@ -398,7 +508,6 @@ app.post('/xera/v1/api/user/rank-phase3', authenticateToken, async (req, res) =>
         return res.json({ success: false, message: "Request error", error: error.message });
     }
 });
-
 
 // Helper function for cleaning response data
 const cleanData = (data, fieldsToRemove = []) => {
@@ -503,9 +612,22 @@ app.post('/xera/v1/api/user/following', authenticateToken, async (req, res) => {
     }
 });
 
-
 app.post('/xera/v1/api/user/faucet-claim', authenticateToken, async (req, res) => {
-    const { username, txHash, sender, receiver, command, amount, token, tokenId } = req.body;
+    const { data } = req.body;
+    const decodedFormRequestTXERADetails = Buffer.from(data, 'base64').toString('utf-8');
+
+    const formRequestTXERADetails = JSON.parse(decodedFormRequestTXERADetails);
+    
+    const apikey = formRequestTXERADetails.apiKey;
+    const origin = req.headers.origin
+    
+    const isValid = await validateApiKey(apikey,origin);
+    
+    if (!isValid)  {
+        return res.status(400).json({ success: false, message: isValid });
+    }
+
+    const { username, txHash, sender, receiver, command, amount, token, tokenId } = formRequestTXERADetails;
 
     // Validate request body
     if (![username, txHash, sender, receiver, command, amount, token, tokenId].every(Boolean)) {
@@ -616,7 +738,21 @@ app.post('/xera/v1/api/user/faucet-claim', authenticateToken, async (req, res) =
 
 // Coin Claim Endpoint
 app.post('/xera/v1/api/user/coin/claim', authenticateToken, async (req, res) => {
-    const { username, txHash, sender, receiver, command, amount, token, tokenId } = req.body;
+    const { data } = req.body;
+    const decodedFormRequestTXERADetails = Buffer.from(data, 'base64').toString('utf-8');
+
+    const formRequestTXERADetails = JSON.parse(decodedFormRequestTXERADetails);
+    
+    const apikey = formRequestTXERADetails.apiKey;
+    const origin = req.headers.origin
+    
+    const isValid = await validateApiKey(apikey,origin);
+    
+    if (!isValid)  {
+        return res.status(400).json({ success: false, message: isValid });
+    }
+
+    const { username, txHash, sender, receiver, command, amount, token, tokenId } = formRequestTXERADetails;
 
     // Validate request body
     if (![username, txHash, sender, receiver, command, amount, token, tokenId].every(Boolean)) {
@@ -758,7 +894,12 @@ app.post('/xera/v1/api/user/security', authenticateToken, async (req, res) => {
 
 // Telegram Task Endpoint
 app.post('/xera/v1/api/user/task/telegram', authenticateToken, async (req, res) => {
-    const { user } = req.body;
+    const { data } = req.body;
+    const decodedFormRequestTXERADetails = Buffer.from(data, 'base64').toString('utf-8');
+
+    const formRequestTXERADetails = JSON.parse(decodedFormRequestTXERADetails);
+
+    const { user } = formRequestTXERADetails;
 
     const telegramID = user.telegramID;
     const username = user.username;
@@ -812,7 +953,12 @@ app.post('/xera/v1/api/user/task/telegram', authenticateToken, async (req, res) 
 
 // Twitter Task Endpoint
 app.post('/xera/v1/api/user/task/twitter', authenticateToken, async (req, res) => {
-    const { user } = req.body;
+    const { data } = req.body;
+    const decodedFormRequestTXERADetails = Buffer.from(data, 'base64').toString('utf-8');
+
+    const formRequestTXERADetails = JSON.parse(decodedFormRequestTXERADetails);
+
+    const { user } = formRequestTXERADetails;
 
     if (!user || !user.username || !user.wallet) {
         return res.json({ success: false, message: 'Incomplete data' });
@@ -864,8 +1010,13 @@ app.post('/xera/v1/api/user/task/twitter', authenticateToken, async (req, res) =
 });
 
 app.post('/xera/v1/api/user/task/social', authenticateToken, async (req, res) => {
-    const { user } = req.body;
-    
+    const { data } = req.body;
+    const decodedFormRequestTXERADetails = Buffer.from(data, 'base64').toString('utf-8');
+
+    const formRequestTXERADetails = JSON.parse(decodedFormRequestTXERADetails);
+
+    const { user } = formRequestTXERADetails;
+
     if (!user || !user.username || !user.wallet) {
         return res.status(400).json({ success: false, message: 'Incomplete data' });
     }
@@ -901,7 +1052,12 @@ app.post('/xera/v1/api/user/task/social', authenticateToken, async (req, res) =>
 });
 
 app.post('/xera/v1/api/user/task/connect-wallet', authenticateToken, async (req, res) => {
-    const { user } = req.body;
+    const { data } = req.body;
+    const decodedFormRequestTXERADetails = Buffer.from(data, 'base64').toString('utf-8');
+
+    const formRequestTXERADetails = JSON.parse(decodedFormRequestTXERADetails);
+
+    const { user } = formRequestTXERADetails;
 
     if (!user || !user.ethWallet || !user.solWallet || !user.xeraWallet || !user.xeraUsername) {
         return res.status(400).json({ success: false, message: 'Incomplete data' });
@@ -950,10 +1106,15 @@ app.post('/xera/v1/api/user/task/connect-wallet', authenticateToken, async (req,
 });
 
 app.post('/xera/v1/api/user/register', async (req, res) => {
+    const { data } = req.body;
+    const decodedFormRequestTXERADetails = Buffer.from(data, 'base64').toString('utf-8');
+
+    const formRequestTXERADetails = JSON.parse(decodedFormRequestTXERADetails);
+
     const {
         username, password, userIP, referral, privateAddress, publicAddress,
         seedKey1, seedKey2, seedKey3, seedKey4, seedKey5, seedKey6, seedKey7, seedKey8, seedKey9, seedKey10, seedKey11, seedKey12
-    } = req.body;
+    } = formRequestTXERADetails;
 
     if (!username || !password || !userIP || !privateAddress || !publicAddress) {
         return res.json({ success: false, message: 'Incomplete data' });

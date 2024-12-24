@@ -90,26 +90,6 @@ const db = mysql.createPool({
     }
 })();
 
-// JWT Authentication Middleware
-const authenticateToken = (req, res, next) => {
-    const authHeader = req.headers["authorization"];
-    const token = authHeader && authHeader.split(" ")[1];
-
-    if (!token) {
-        return res.status(401).json({ success: false, message: "Authentication token is required" });
-    }
-
-    jwt.verify(token, jwtSecret, (err, decoded) => {
-        if (err) {
-            const errorMessage = err.name === "TokenExpiredError" ? "Token has expired" : "Invalid token";
-            return res.status(403).json({ success: false, message: errorMessage });
-        }
-
-        req.user = decoded;
-        next();
-    });
-};
-
 
 const decodeKey = (encodedKey) => {
     if (!encodedKey) {
@@ -132,6 +112,7 @@ const decodeKey = (encodedKey) => {
     try {
         const bytes = CryptoJS.AES.decrypt(encodedKey, fullSecret);
         const originalKey = bytes.toString(CryptoJS.enc.Utf8);
+        
 
         if (!originalKey) {
             console.error("Failed to decrypt API key: Decrypted key is empty.");
@@ -146,15 +127,15 @@ const decodeKey = (encodedKey) => {
 };
 
 // Fetch developer data from cache or database
-const getDevFromCache = async (api, res) => {
+const getDevFromCache = async (api) => {
+    let message = "";
     try {
         let dev = cache.get(api);
-
         if (!dev) {
             const [rows] = await db.query("SELECT * FROM xera_developer WHERE BINARY xera_api = ?", [api]);
 
             if (rows.length === 0) {
-                return res.status(400).json({ success: false, message: "Invalid API key" });
+                return message = "Invalid API key" 
             }
 
             dev = rows[0];
@@ -162,18 +143,17 @@ const getDevFromCache = async (api, res) => {
         }
 
         if (dev.xera_moderation !== "creator") {
-            return res.status(403).json({ success: false, message: "Access denied" });
+            return message = "Access denied"
         }
 
         return dev;
     } catch (error) {
-        console.error("Error fetching developer data:", error.message);
-        return res.status(500).json({ success: false, message: "Internal server error" });
+        return message = "Internal server error" 
     }
 };
 
 // Function to verify if the request is legitimate
-const verifyRequestSource = (req) => {
+const verifyRequestSource = (origin) => {
     const expectedOrigins = [
         "https://texeract.network",
         "http://localhost:3000",
@@ -182,8 +162,6 @@ const verifyRequestSource = (req) => {
         "https://tg-texeract-beta.vercel.app",
         "https://texeractbot.xyz",
     ];
-
-    let origin = req.headers.origin || req.headers.referer || '';
 
     // Normalize `referer` to only include the origin if necessary
     if (origin.includes("://")) {
@@ -200,37 +178,32 @@ const verifyRequestSource = (req) => {
     return true;
 };
 
-const validateApiKey = async (req, res) => {
-    const { apikey } = req.body;
+const validateApiKey = async (apikey,origin) => {
 
-    // Check if API key exists in the request body
+    let message = "";
     if (!apikey) {
-        return res.status(400).json({ success: false, message: "No API key found" });
+      return message = "No API key found";
     }
 
-    // Decode the API key
     const decodedKey = decodeKey(apikey);
     if (!decodedKey) {
-        return res.status(400).json({ success: false, message: "Invalid encoded API key" });
+        message = "Invalid encoded API key"
+        return message
     }
 
-    // Verify the request source (if this logic is defined elsewhere, ensure it works as expected)
-    if (!verifyRequestSource(req)) {
-        return res.status(403).json({ success: false, message: "Unauthorized request" });
+    if (!verifyRequestSource(origin)) {
+        message = "Unauthorized request"
+        return message;
     }
 
-    // Check if the developer exists in cache (assuming `getDevFromCache` fetches the developer data)
-    const dev = await getDevFromCache(decodedKey, res);
+    const dev = await getDevFromCache(decodedKey);
     if (!dev) {
-        // If no developer is found, send a 403 or an appropriate error message
-        return res.status(403).json({ success: false, message: "Developer not found or unauthorized" });
+        message = "Developer not found or unauthorized"
+        return message;
     }
 
-    // If all checks pass, return the decoded key for further processing
-    return decodedKey;
+    return true;
 };
-
-
 
 // Airdrop Full Stats - Optimized for Efficiency
 // Helper functions to handle dates
@@ -247,9 +220,13 @@ const getStartAndEndOfDay = (date) => {
 };
 
 app.post('/xera/v1/api/users/airdrop/full-stats', async (req, res) => {
-    const isValid = await validateApiKey(req, res);
-    if (!isValid) return; // Stop further execution if API key validation fails
-
+    const { apikey } = req.body;
+    const origin = req.headers.origin
+    const isValid = await validateApiKey(apikey,origin);
+  
+    if (!isValid)  {
+        return res.status(400).json({ success: false, message: isValid });
+    }
     try {
         const results = [];
 
@@ -313,12 +290,18 @@ app.post('/xera/v1/api/users/airdrop/full-stats', async (req, res) => {
 
 // Airdrop Phase1, Phase2, and Phase3 Optimized
 const handleAirdropPhase = async (req, res, phaseStartDate, phaseEndDate) => {
+    const { apikey } = req.body;
+    const origin = req.headers.origin
     // Validate the API key and get the decoded key
-    const decodedKey = await validateApiKey(req, res);
-    if (!decodedKey) return; // Stop execution if validation fails
+    const isValid = await validateApiKey(apikey,origin);
+  
+    if (!isValid)  {
+        return res.status(400).json({ success: false, message: isValid });
+    }
 
     // If validation passes, continue with the logic
-    const { limit = 10, page = 1 } = req.body;
+    const limit = 10 
+    const page = 1
     const offset = (page - 1) * limit;
 
     try {
@@ -365,8 +348,13 @@ app.post('/xera/v1/api/users/airdrop/phase3', (req, res) => handleAirdropPhase(r
 
 //  Airdrop Participants
 app.post('/xera/v1/api/users/airdrop/participants', async (req, res) => {
-    const isValid = await validateApiKey(req, res);
-    if (!isValid) return; // Stop further execution if API key validation fails
+    const { apikey } = req.body;
+    const origin = req.headers.origin
+
+    const isValid = await validateApiKey(apikey,origin);
+    if (!isValid)  {
+        return res.status(400).json({ success: false, message: isValid });
+    }
 
     try {
         const [userTask] = await db.query('SELECT COUNT(DISTINCT BINARY username) AS user_participants FROM xera_user_tasks');
@@ -384,8 +372,13 @@ app.post('/xera/v1/api/users/airdrop/participants', async (req, res) => {
 
 // Function to handle total points for a given phase
 const getTotalPoints = async (req, res, startDate, endDate) => {
-    const isValid = await validateApiKey(req, res);
-    if (!isValid) return; // Stop further execution if API key validation fails
+    const { apikey } = req.body;
+    const origin = req.headers.origin
+    const isValid = await validateApiKey(apikey,origin);
+  
+    if (!isValid)  {
+        return res.status(400).json({ success: false, message: isValid });
+    }
 
     try {
         const [userstask] = await db.query(
@@ -419,8 +412,14 @@ app.post('/xera/v1/api/users/total-points/phase3', (req, res) => {
 
 // Route to get the total count of wallets
 app.post('/xera/v1/api/users/all-wallet', async (req, res) => {
-    const isValid = await validateApiKey(req, res);
-    if (!isValid) return; // Stop further execution if API key validation fails
+    const { apikey } = req.body;
+    const origin = req.headers.origin
+    
+    const isValid = await validateApiKey(apikey,origin);
+    
+    if (!isValid)  {
+      return res.status(400).json({ success: false, message: isValid });
+    }
 
     try {
         const [countWallet] = await db.query('SELECT COUNT(*) AS user_count FROM xera_user_accounts');
@@ -436,11 +435,16 @@ app.post('/xera/v1/api/users/all-wallet', async (req, res) => {
     }
 });
 
-
 // Route to get the count of recent participants
 app.post('/xera/v1/api/users/airdrop/recent-participant', async (req, res) => {
-    const isValid = await validateApiKey(req, res);
-    if (!isValid) return; // Stop further execution if API key validation fails
+    const { apikey } = req.body;
+    const origin = req.headers.origin
+    
+    const isValid = await validateApiKey(apikey,origin);
+    
+    if (!isValid)  {
+      return res.status(400).json({ success: false, message: isValid });
+    }
 
     try {
         const [recentParticipants] = await db.query(

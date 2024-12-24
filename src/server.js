@@ -107,6 +107,7 @@ const decodeKey = (encodedKey) => {
     try {
         const bytes = CryptoJS.AES.decrypt(encodedKey, fullSecret);
         const originalKey = bytes.toString(CryptoJS.enc.Utf8);
+        
 
         if (!originalKey) {
             console.error("Failed to decrypt API key: Decrypted key is empty.");
@@ -121,15 +122,15 @@ const decodeKey = (encodedKey) => {
 };
 
 // Fetch developer data from cache or database
-const getDevFromCache = async (api, res) => {
+const getDevFromCache = async (api) => {
+    let message = "";
     try {
         let dev = cache.get(api);
-
         if (!dev) {
             const [rows] = await db.query("SELECT * FROM xera_developer WHERE BINARY xera_api = ?", [api]);
 
             if (rows.length === 0) {
-                return res.status(400).json({ success: false, message: "Invalid API key" });
+                return message = "Invalid API key" 
             }
 
             dev = rows[0];
@@ -137,18 +138,17 @@ const getDevFromCache = async (api, res) => {
         }
 
         if (dev.xera_moderation !== "creator") {
-            return res.status(403).json({ success: false, message: "Access denied" });
+            return message = "Access denied"
         }
 
         return dev;
     } catch (error) {
-        console.error("Error fetching developer data:", error.message);
-        return res.status(500).json({ success: false, message: "Internal server error" });
+        return message = "Internal server error" 
     }
 };
 
 // Function to verify if the request is legitimate
-const verifyRequestSource = (req) => {
+const verifyRequestSource = (origin) => {
     const expectedOrigins = [
         "https://texeract.network",
         "http://localhost:3000",
@@ -157,8 +157,6 @@ const verifyRequestSource = (req) => {
         "https://tg-texeract-beta.vercel.app",
         "https://texeractbot.xyz",
     ];
-
-    let origin = req.headers.origin || req.headers.referer || '';
 
     // Normalize `referer` to only include the origin if necessary
     if (origin.includes("://")) {
@@ -175,42 +173,43 @@ const verifyRequestSource = (req) => {
     return true;
 };
 
-const validateApiKey = async (req, res) => {
-    const { apikey } = req.body;
+const validateApiKey = async (apikey,origin) => {
 
-    // Check if API key exists in the request body
+    let message = "";
     if (!apikey) {
-        return res.status(400).json({ success: false, message: "No API key found" });
+      return message = "No API key found";
     }
 
-    // Decode the API key
     const decodedKey = decodeKey(apikey);
     if (!decodedKey) {
-        return res.status(400).json({ success: false, message: "Invalid encoded API key" });
+        message = "Invalid encoded API key"
+        return message
     }
 
-    // Verify the request source (if this logic is defined elsewhere, ensure it works as expected)
-    if (!verifyRequestSource(req)) {
-        return res.status(403).json({ success: false, message: "Unauthorized request" });
+    if (!verifyRequestSource(origin)) {
+        message = "Unauthorized request"
+        return message;
     }
 
-    // Check if the developer exists in cache (assuming `getDevFromCache` fetches the developer data)
-    const dev = await getDevFromCache(decodedKey, res);
+    const dev = await getDevFromCache(decodedKey);
     if (!dev) {
-        // If no developer is found, send a 403 or an appropriate error message
-        return res.status(403).json({ success: false, message: "Developer not found or unauthorized" });
+        message = "Developer not found or unauthorized"
+        return message;
     }
 
-    // If all checks pass, return the decoded key for further processing
     return true;
 };
 
-
-
 app.post('/xera/v1/api/token/asset-tokens', async (req, res) => {
-  const isValid = await validateApiKey(req, res);
-  if (!isValid) return; // Stop further execution if API key validation fails
-
+  const { apikey } = req.body;
+  const origin = req.headers.origin
+  
+  const isValid = await validateApiKey(apikey,origin);
+  
+  if (!isValid)  {
+    return res.status(400).json({ success: false, message: isValid });
+  }
+  
   try {
     const [assetTokens] = await db.query('SELECT * FROM xera_asset_token');
 
@@ -228,9 +227,15 @@ app.post('/xera/v1/api/token/asset-tokens', async (req, res) => {
 
 // Route to get transaction history of nodes
 app.post('/xera/v1/api/node/transaction-history', async (req, res) => {
-  const isValid = await validateApiKey(req, res);
-  if (!isValid) return; // Stop further execution if API key validation fails
-
+  const { apikey } = req.body;
+  const origin = req.headers.origin
+  
+  const isValid = await validateApiKey(apikey,origin);
+  
+  if (!isValid)  {
+    return res.status(400).json({ success: false, message: isValid });
+  }
+      
   try {
       // Fetch the most recent transaction date
       const [lastDateResult] = await db.query(
