@@ -592,14 +592,10 @@ app.post('/xera/v1/api/user/following', authenticateToken, async (req, res) => {
 
     try {
         const [userFollower] = await db.query(`
-            SELECT 
-                xera_user_following.xera_wallet,
-                xera_user_following.*, 
-                xera_user_display.*
-            FROM xera_user_following
-            INNER JOIN xera_user_display 
-                ON xera_user_following.xera_wallet = xera_user_display.xera_wallet COLLATE utf8mb4_unicode_ci
-        `);
+            SELECT *
+            FROM xera_user_tasks
+            WHERE xera_task = 'Referral Task' AND username = ?
+        `,[user]);
 
         if (userFollower.length > 0) {
             const cleanedData = cleanData(userFollower, ['id']);
