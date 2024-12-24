@@ -11,45 +11,46 @@ const NodeCache = require('node-cache');
 
 const app = express();
 const port = 5000;
-const cache = new NodeCache({ stdTTL: 60 });
 
 app.use(compression());
 app.use(bodyParser.json());
 
+// Caching setup
+const cache = new NodeCache({ stdTTL: 60, checkperiod: 120 });
+
+// Middleware setup
+app.use(compression());
+app.use(bodyParser.json());
+
 const allowedOrigins = [
-  'https://texeract.network', 
-  'http://localhost:3000', 
-  'http://localhost:3001', 
-  'https://texeract-network-beta.vercel.app',
-  'https://tg-texeract-beta.vercel.app',
-  'https://texeractbot.xyz'
+    "https://texeract.network",
+    "http://localhost:3000",
+    "http://localhost:3001",
+    "https://texeract-network-beta.vercel.app",
+    "https://tg-texeract-beta.vercel.app",
+    "https://texeractbot.xyz",
 ];
 
-app.use(cors({
-  origin: (origin, callback) => {
-    if (!origin) return callback(null, true);
-    if (allowedOrigins.includes(origin)) {
-      return callback(null, true);
-    } else {
-      return callback(new Error('Not allowed by CORS'));
-    }
-  },
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH'],
-  allowedHeaders: ['Content-Type', 'Authorization', 'x-access-token', 'X-Requested-With', 'Accept'],
-  credentials: true,
-}));
+app.use(
+    cors({
+        origin: (origin, callback) => {
+            if (!origin || allowedOrigins.includes(origin)) {
+                return callback(null, true);
+            }
+            return callback(new Error("Not allowed by CORS"));
+        },
+        methods: ["GET", "POST", "PUT", "DELETE", "PATCH"],
+        allowedHeaders: ["Content-Type", "Authorization", "x-access-token", "X-Requested-With", "Accept"],
+        credentials: true,
+    })
+);
 
-app.options('*', (req, res) => {
-  res.header('Access-Control-Allow-Origin', req.headers.origin);
-  res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, PATCH');
-  res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization, x-access-token, X-Requested-With, Accept');
-  res.header('Access-Control-Allow-Credentials', 'true');
-  res.sendStatus(204);
-});
-
-app.use((req, res, next) => {
-  res.header('Vary', 'Origin');
-  next();
+app.options("*", (req, res) => {
+    res.header("Access-Control-Allow-Origin", req.headers.origin || "*");
+    res.header("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, PATCH");
+    res.header("Access-Control-Allow-Headers", "Content-Type, Authorization, x-access-token, X-Requested-With, Accept");
+    res.header("Access-Control-Allow-Credentials", "true");
+    res.sendStatus(204);
 });
 
 // pm2 start src/server.js src/airdrop-server.js src/user-server.js src/faucet-server.js src/genesis-server.js src/watcher-server.js
