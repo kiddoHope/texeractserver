@@ -203,9 +203,8 @@ const validateApiKey = async (apikey,origin) => {
 app.post('/xera/v1/api/token/faucet-transaction', async (req, res) => {
   // Validate the API key and get the decoded key
   const { apikey } = req.body;
-  const origin = req.headers.origin
   
-  const isValid = await validateApiKey(apikey,origin);
+  const isValid = await getDevFromCache(apikey);
   
   if (!isValid)  {
     return res.status(400).json({ success: false, message: isValid });
