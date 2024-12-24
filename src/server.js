@@ -202,14 +202,12 @@ const validateApiKey = async (apikey,origin) => {
 
 app.post('/xera/v1/api/token/asset-tokens', async (req, res) => {
   const { apikey } = req.body;
-  const origin = req.headers.origin
   
-  const isValid = await validateApiKey(apikey,origin);
+  const isValid = await getDevFromCache(apikey);
   
   if (!isValid)  {
     return res.status(400).json({ success: false, message: isValid });
   }
-  
   try {
     const [assetTokens] = await db.query('SELECT * FROM xera_asset_token');
 
@@ -228,9 +226,8 @@ app.post('/xera/v1/api/token/asset-tokens', async (req, res) => {
 // Route to get transaction history of nodes
 app.post('/xera/v1/api/node/transaction-history', async (req, res) => {
   const { apikey } = req.body;
-  const origin = req.headers.origin
   
-  const isValid = await validateApiKey(apikey,origin);
+  const isValid = await getDevFromCache(apikey);
   
   if (!isValid)  {
     return res.status(400).json({ success: false, message: isValid });
