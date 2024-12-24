@@ -110,7 +110,7 @@ const getDevFromCache = async (api) => {
     }
 };
 
-app.post('/xera/v1/api/token/asset-tokens', async (req, res) => {
+app.post('/xera/v1/api/info/token/asset-tokens', async (req, res) => {
   const { apikey } = req.body;
   
   const isValid = await getDevFromCache(apikey);
@@ -134,7 +134,7 @@ app.post('/xera/v1/api/token/asset-tokens', async (req, res) => {
 });
 
 // Route to get transaction history of nodes
-app.post('/xera/v1/api/node/transaction-history', async (req, res) => {
+app.post('/xera/v1/api/info/node/transaction-history', async (req, res) => {
   const { apikey } = req.body;
   
   const isValid = await getDevFromCache(apikey);
