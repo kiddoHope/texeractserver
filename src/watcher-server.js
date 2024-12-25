@@ -1,7 +1,7 @@
 const express = require("express");
 const bodyParser = require("body-parser");
 const jwt = require("jsonwebtoken");
-const mysql = require("mysql2/promise");
+const db = require('./connection');
 const cors = require("cors");
 const rateLimit = require("express-rate-limit");
 const compression = require("compression");
@@ -24,14 +24,6 @@ const cache = new NodeCache({ stdTTL: 60, checkperiod: 120 });
 // Apply middleware
 app.use(compression());
 app.use(bodyParser.json());
-
-// Rate limiting
-const limiter = rateLimit({
-    windowMs: 15 * 60 * 1000, // 15 minutes
-    max: 100, // Limit each IP to 100 requests per window
-    message: { success: false, message: "Too many requests, please try again later." },
-});
-app.use(limiter);
 
 // CORS setup
 const allowedOrigins = [
@@ -64,31 +56,6 @@ app.options("*", (req, res) => {
     res.header("Access-Control-Allow-Credentials", "true");
     res.sendStatus(204);
 });
-
-// Database connection pool
-const db = mysql.createPool({
-    host: process.env.DB_HOST,
-    user: process.env.DB_USER,
-    password: process.env.DB_PASSWORD,
-    database: process.env.DB_DATABASE,
-    port: 3306,
-    waitForConnections: true,
-    connectionLimit: 10,
-    queueLimit: 0,
-});
-
-// Test database connection
-async function testConnection() {
-    try {
-      const connection = await db.getConnection();
-      console.log('Database connection successful!');
-      connection.release();
-    } catch (error) {
-      console.error('Database connection failed:', error);
-    }
-  }
-  
-testConnection();
 
 // JWT Authentication Middleware
 const authenticateToken = (req, res, next) => {

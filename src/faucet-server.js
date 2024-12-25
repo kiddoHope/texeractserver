@@ -1,11 +1,8 @@
 const express = require("express");
 const bodyParser = require("body-parser");
-const jwt = require("jsonwebtoken");
-const mysql = require('mysql2/promise');
+const db = require('./connection');
 const cors = require("cors");
 require('dotenv').config();
-const CryptoJS = require("crypto-js");
-const rateLimit = require('express-rate-limit');
 const compression = require('compression');
 const NodeCache = require('node-cache');
 
@@ -17,109 +14,35 @@ app.use(compression());
 app.use(bodyParser.json());
 
 const allowedOrigins = [
-  'https://texeract.network', 
-  'http://localhost:3000', 
-  'http://localhost:3001', 
-  'https://texeract-network-beta.vercel.app',
-  'https://tg-texeract-beta.vercel.app',
-  'https://texeractbot.xyz'
+    "https://texeract.network",
+    "http://localhost:3000",
+    "http://localhost:3001",
+    "https://texeract-network-beta.vercel.app",
+    "https://tg-texeract-beta.vercel.app",
+    "https://texeractbot.xyz",
 ];
 
-app.use(cors({
-  origin: (origin, callback) => {
-    if (!origin) return callback(null, true);
-    if (allowedOrigins.includes(origin)) {
-      return callback(null, true);
-    } else {
-      return callback(new Error('Not allowed by CORS'));
-    }
-  },
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH'],
-  allowedHeaders: ['Content-Type', 'Authorization', 'x-access-token', 'X-Requested-With', 'Accept'],
-  credentials: true,
-}));
+app.use(
+    cors({
+      origin: (origin, callback) => {
+          if (!origin || allowedOrigins.includes(origin)) {
+              return callback(null, true);
+          }
+          return callback(new Error("Not allowed by CORS"));
+      },
+      methods: ["GET", "POST", "PUT", "DELETE", "PATCH"],
+      allowedHeaders: ["Content-Type", "Authorization", "x-access-token", "X-Requested-With", "Accept"],
+      credentials: true,
+    })
+);
 
-app.options('*', (req, res) => {
-  res.header('Access-Control-Allow-Origin', req.headers.origin);
-  res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, PATCH');
-  res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization, x-access-token, X-Requested-With, Accept');
-  res.header('Access-Control-Allow-Credentials', 'true');
-  res.sendStatus(204);
+app.options("*", (req, res) => {
+    res.header("Access-Control-Allow-Origin", req.headers.origin || "*");
+    res.header("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, PATCH");
+    res.header("Access-Control-Allow-Headers", "Content-Type, Authorization, x-access-token, X-Requested-With, Accept");
+    res.header("Access-Control-Allow-Credentials", "true");
+    res.sendStatus(204);
 });
-
-app.use((req, res, next) => {
-  res.header('Vary', 'Origin');
-  next();
-});
-
-const jwtSecret = process.env.MAIN_JWT_SECRET;
-const jwtAPISecret = process.env.API_JWT_SECRET;
-
-// 46.202.129.137
-
-const db = mysql.createPool({
-  host: process.env.DB_HOST,
-  user: process.env.DB_USER,
-  password: process.env.DB_PASSWORD,
-  database: process.env.DB_DATABASE,
-  port: 3306,
-  waitForConnections: true,
-  connectTimeout: 20000,
-  connectionLimit: 10,
-  queueLimit: 0,
-});
-
-process.on('uncaughtException', (err) => {
-  console.error('Uncaught Exception:', err);
-});
-
-async function testConnection() {
-  try {
-    const connection = await db.getConnection();
-    console.log('Database connection successful!');
-    connection.release();
-  } catch (error) {
-    console.error('Database connection failed:', error);
-  }
-}
-
-testConnection();
-
-
-const decodeKey = (encodedKey) => {
-    if (!encodedKey) {
-        console.error("No encoded API key provided.");
-        return null;
-    }
-
-    const secret = {
-        devKey: `xeraAPI-LokiNakamoto-0ea5b02a13i4bdhw94jwb`,
-        webKey: `xeraAPI-webMainTexeract-egsdfw33resdfdsf`,
-        apiKey: `XERA09aa939245f735992af1a9a6b6d6b91d234ee2`,
-    };
-
-    const fullSecret = secret.devKey + secret.webKey + secret.apiKey;
-    if (!fullSecret) {
-        console.error("Secret for decryption is missing or incomplete.");
-        return null;
-    }
-
-    try {
-        const bytes = CryptoJS.AES.decrypt(encodedKey, fullSecret);
-        const originalKey = bytes.toString(CryptoJS.enc.Utf8);
-        
-
-        if (!originalKey) {
-            console.error("Failed to decrypt API key: Decrypted key is empty.");
-            return null;
-        }
-
-        return originalKey;
-    } catch (error) {
-        console.error("Decryption error:", error);
-        return null;
-    }
-};
 
 // Fetch developer data from cache or database
 const getDevFromCache = async (api) => {
@@ -145,59 +68,6 @@ const getDevFromCache = async (api) => {
     } catch (error) {
         return message = "Internal server error" 
     }
-};
-
-// Function to verify if the request is legitimate
-const verifyRequestSource = (origin) => {
-    const expectedOrigins = [
-        "https://texeract.network",
-        "http://localhost:3000",
-        "http://localhost:3001",
-        "https://texeract-network-beta.vercel.app",
-        "https://tg-texeract-beta.vercel.app",
-        "https://texeractbot.xyz",
-    ];
-
-    // Normalize `referer` to only include the origin if necessary
-    if (origin.includes("://")) {
-        const url = new URL(origin);
-        origin = `${url.protocol}//${url.host}`;
-    }
-
-    // Check if the origin matches any allowed origins
-    if (!expectedOrigins.includes(origin)) {
-        console.error("Origin not allowed:", origin);
-        return false;
-    }
-
-    return true;
-};
-
-const validateApiKey = async (apikey,origin) => {
-
-    let message = "";
-    if (!apikey) {
-      return message = "No API key found";
-    }
-
-    const decodedKey = decodeKey(apikey);
-    if (!decodedKey) {
-        message = "Invalid encoded API key"
-        return message
-    }
-
-    if (!verifyRequestSource(origin)) {
-        message = "Unauthorized request"
-        return message;
-    }
-
-    const dev = await getDevFromCache(decodedKey);
-    if (!dev) {
-        message = "Developer not found or unauthorized"
-        return message;
-    }
-
-    return true;
 };
 
 app.post('/xera/v1/api/token/faucet-transaction', async (req, res) => {

@@ -1,13 +1,9 @@
 const express = require("express");
 const bodyParser = require("body-parser");
-const jwt = require("jsonwebtoken");
-const mysql = require('mysql2/promise');
 const cors = require("cors");
-require('dotenv').config();
-const CryptoJS = require("crypto-js");
-const rateLimit = require('express-rate-limit');
 const compression = require('compression');
 const NodeCache = require('node-cache');
+const db = require('./connection');
 
 const app = express();
 const port = 5000;
@@ -22,8 +18,6 @@ const cache = new NodeCache({ stdTTL: 60, checkperiod: 120 });
 app.use(compression());
 app.use(bodyParser.json());
 
-// 46.202.129.137
-
 const allowedOrigins = [
     "https://texeract.network",
     "http://localhost:3000",
@@ -34,17 +28,17 @@ const allowedOrigins = [
 ];
 
 app.use(
-    cors({
-        origin: (origin, callback) => {
-            if (!origin || allowedOrigins.includes(origin)) {
-                return callback(null, true);
-            }
-            return callback(new Error("Not allowed by CORS"));
-        },
-        methods: ["GET", "POST", "PUT", "DELETE", "PATCH"],
-        allowedHeaders: ["Content-Type", "Authorization", "x-access-token", "X-Requested-With", "Accept"],
-        credentials: true,
-    })
+  cors({
+    origin: (origin, callback) => {
+      if (!origin || allowedOrigins.includes(origin)) {
+          return callback(null, true);
+      }
+      return callback(new Error("Not allowed by CORS"));
+    },
+    methods: ["GET", "POST", "PUT", "DELETE", "PATCH"],
+    allowedHeaders: ["Content-Type", "Authorization", "x-access-token", "X-Requested-With", "Accept"],
+    credentials: true,
+  })
 );
 
 app.options("*", (req, res) => {
@@ -54,37 +48,6 @@ app.options("*", (req, res) => {
     res.header("Access-Control-Allow-Credentials", "true");
     res.sendStatus(204);
 });
-
-// pm2 start src/server.js src/airdrop-server.js src/user-server.js src/faucet-server.js src/genesis-server.js src/watcher-server.js
-// node start src/server.js src/airdrop-server.js src/user-server.js src/faucet-server.js src/genesis-server.js src/watcher-server.js
-
-const db = mysql.createPool({
-  host: process.env.DB_HOST,
-  user: process.env.DB_USER,
-  password: process.env.DB_PASSWORD,
-  database: process.env.DB_DATABASE,
-  port: 3306,
-  waitForConnections: true,
-  connectTimeout: 20000,
-  connectionLimit: 10,
-  queueLimit: 0,
-});
-
-process.on('uncaughtException', (err) => {
-  console.error('Uncaught Exception:', err);
-});
-
-async function testConnection() {
-  try {
-    const connection = await db.getConnection();
-    console.log('Database connection successful!');
-    connection.release();
-  } catch (error) {
-    console.error('Database connection failed:', error);
-  }
-}
-
-testConnection();
 
 // Fetch developer data from cache or database
 const getDevFromCache = async (api) => {

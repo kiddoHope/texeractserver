@@ -1,7 +1,7 @@
 const express = require("express");
 const bodyParser = require("body-parser");
 const jwt = require("jsonwebtoken");
-const mysql = require("mysql2/promise");
+const db = require('./connection');
 const cors = require("cors");
 const rateLimit = require("express-rate-limit");
 const compression = require("compression");
@@ -65,29 +65,6 @@ app.options("*", (req, res) => {
     res.sendStatus(204);
 });
 
-// Database connection pool
-const db = mysql.createPool({
-    host: process.env.DB_HOST,
-    user: process.env.DB_USER,
-    password: process.env.DB_PASSWORD,
-    database: process.env.DB_DATABASE,
-    port: 3306,
-    waitForConnections: true,
-    connectionLimit: 10,
-    queueLimit: 0,
-});
-
-// Test database connection
-(async function testConnection() {
-    try {
-        const connection = await db.getConnection();
-        console.log("Database connection successful!");
-        connection.release();
-    } catch (error) {
-        console.error("Database connection failed:", error.message);
-        process.exit(1);
-    }
-})();
 
 // JWT Authentication Middleware
 const authenticateToken = (req, res, next) => {
@@ -192,7 +169,6 @@ async function getUserRank(user, startDate, endDate) {
 
 app.post('/xera/v1/api/genesis/claim-node', authenticateToken, async (req,res) => {
     const { user } = req.body;
-    console.log(user);
     
     if (!user || !user.wallet || !user.nodeName) {
         return res.json({
