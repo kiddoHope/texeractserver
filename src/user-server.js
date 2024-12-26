@@ -871,16 +871,14 @@ app.post('/xera/v1/api/user/task/telegram', authenticateToken, async (req, res) 
 
     const formRequestTXERADetails = JSON.parse(decodedFormRequestTXERADetails);
 
-    const { user } = formRequestTXERADetails;
-
-    const telegramID = user.telegramID;
-    const username = user.username;
-    const wallet = user.wallet;
+    const telegramID = formRequestTXERADetails.telegramID;
+    const username = formRequestTXERADetails.username;
+    const wallet = formRequestTXERADetails.wallet;
     const xeraStatus = 'ok';
     const xeraTask = 'Telegram Task';
     const xeraPoints = '10000';
 
-    if (!telegramID || !username || !wallet || !user) {
+    if (!telegramID || !username || !wallet || !formRequestTXERADetails) {
         return res.json({ success: false, message: 'Incomplete data' });
     }
 
@@ -930,15 +928,13 @@ app.post('/xera/v1/api/user/task/twitter', authenticateToken, async (req, res) =
 
     const formRequestTXERADetails = JSON.parse(decodedFormRequestTXERADetails);
 
-    const { user } = formRequestTXERADetails;
-
-    if (!user || !user.username || !user.wallet) {
+    if (!formRequestTXERADetails || !formRequestTXERADetails.username || !formRequestTXERADetails.wallet) {
         return res.json({ success: false, message: 'Incomplete data' });
     }
 
-    const twitterUsername = user.twitterUsername;
-    const username = user.username;
-    const wallet = user.wallet;
+    const twitterUsername = formRequestTXERADetails.twitterUsername;
+    const username = formRequestTXERADetails.username;
+    const wallet = formRequestTXERADetails.wallet;
     const xeraStatus = 'pending';
     const xeraTask = 'Twitter Task';
 
@@ -983,19 +979,18 @@ app.post('/xera/v1/api/user/task/twitter', authenticateToken, async (req, res) =
 
 app.post('/xera/v1/api/user/task/social', authenticateToken, async (req, res) => {
     const { data } = req.body;
+    
     const decodedFormRequestTXERADetails = Buffer.from(data, 'base64').toString('utf-8');
 
     const formRequestTXERADetails = JSON.parse(decodedFormRequestTXERADetails);
-
-    const { user } = formRequestTXERADetails;
-
-    if (!user || !user.username || !user.wallet) {
+    
+    if (!formRequestTXERADetails || !formRequestTXERADetails.username || !formRequestTXERADetails.wallet) {
         return res.status(400).json({ success: false, message: 'Incomplete data' });
     }
 
-    const taskTitle = user.taskTitle;
-    const username = user.username;
-    const wallet = user.wallet;
+    const taskTitle = formRequestTXERADetails.taskTitle;
+    const username = formRequestTXERADetails.username;
+    const wallet = formRequestTXERADetails.wallet;
     const xeraStatus = 'ok';
     const xeraPoints = '1250';
 
@@ -1029,16 +1024,14 @@ app.post('/xera/v1/api/user/task/connect-wallet', authenticateToken, async (req,
 
     const formRequestTXERADetails = JSON.parse(decodedFormRequestTXERADetails);
 
-    const { user } = formRequestTXERADetails;
-
-    if (!user || !user.ethWallet || !user.solWallet || !user.xeraWallet || !user.xeraUsername) {
+    if (!formRequestTXERADetails || !formRequestTXERADetails.ethWallet || !formRequestTXERADetails.solWallet || !formRequestTXERADetails.xeraWallet || !formRequestTXERADetails.xeraUsername) {
         return res.status(400).json({ success: false, message: 'Incomplete data' });
     }
 
-    const ethWallet = user.ethWallet;
-    const solWallet = user.solWallet;
-    const xeraWallet = user.xeraWallet; 
-    const xeraUsername = user.xeraUsername;
+    const ethWallet = formRequestTXERADetails.ethWallet;
+    const solWallet = formRequestTXERADetails.solWallet;
+    const xeraWallet = formRequestTXERADetails.xeraWallet; 
+    const xeraUsername = formRequestTXERADetails.xeraUsername;
     const xeraStatus = 'ok';
     const xeraTask = 'Wallet Connect Task';
     const xeraPoints = '10000';
