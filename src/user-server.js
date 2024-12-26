@@ -472,18 +472,18 @@ app.post('/xera/v1/api/user/rank-phase2', authenticateToken, async (req, res) =>
     }
 });
 
-app.post('/xera/v1/api/user/rank-phase3', authenticateToken, async (req, res) => {
+// app.post('/xera/v1/api/user/rank-phase3', authenticateToken, async (req, res) => {
 
-    const { user } = req.body;
-    if (!user) return res.json({ success: false, message: "Invalid request" });
+//     const { user } = req.body;
+//     if (!user) return res.json({ success: false, message: "Invalid request" });
 
-    try {
-        const result = await getUserRank(user, '2025-02-25', '2025-05-30');
-        return res.json(result);
-    } catch (error) {
-        return res.json({ success: false, message: "Request error", error: error.message });
-    }
-});
+//     try {
+//         const result = await getUserRank(user, '2025-02-25', '2025-05-30');
+//         return res.json(result);
+//     } catch (error) {
+//         return res.json({ success: false, message: "Request error", error: error.message });
+//     }
+// });
 
 // Helper function for cleaning response data
 const cleanData = (data, fieldsToRemove = []) => {
@@ -574,8 +574,8 @@ app.post('/xera/v1/api/user/following', authenticateToken, async (req, res) => {
         `,[user]);
 
         if (userFollower.length > 0) {
-            const cleanedData = cleanData(userFollower, ['id']);
-            return res.json({ success: true, data: cleanedData });
+            // const cleanedData = cleanData(userFollower, ['id']);
+            return res.json({ success: true, data: userFollower.length });
         } else {
             return res.json({ success: false, message: "No followers found" });
         }

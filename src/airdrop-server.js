@@ -184,74 +184,74 @@ const getStartAndEndOfDay = (date) => {
     return { startDate, endDate };
 };
 
-app.post('/xera/v1/api/users/airdrop/full-stats', async (req, res) => {
-    const { apikey } = req.body;
-    const origin = req.headers.origin
-    const isValid = await validateApiKey(apikey,origin);
+// app.post('/xera/v1/api/users/airdrop/full-stats', async (req, res) => {
+//     const { apikey } = req.body;
+//     const origin = req.headers.origin
+//     const isValid = await validateApiKey(apikey,origin);
   
-    if (!isValid)  {
-        return res.status(400).json({ success: false, message: isValid });
-    }
-    try {
-        const results = [];
+//     if (!isValid)  {
+//         return res.status(400).json({ success: false, message: isValid });
+//     }
+//     try {
+//         const results = [];
 
-        for (let i = 0; i < 10; i++) {
-            const date = getDateNDaysAgo(i);
-            const { startDate, endDate } = getStartAndEndOfDay(date);
+//         for (let i = 0; i < 10; i++) {
+//             const date = getDateNDaysAgo(i);
+//             const { startDate, endDate } = getStartAndEndOfDay(date);
 
-            // Query total xera_points
-            const pointsData = await db.query(`
-                SELECT SUM(xera_points) AS totalPoints
-                FROM xera_user_tasks
-                WHERE xera_completed_date BETWEEN ? AND ?
-            `, [startDate, endDate]);
-            const totalPoints = pointsData[0]?.[0]?.totalPoints || 0;
+//             // Query total xera_points
+//             const pointsData = await db.query(`
+//                 SELECT SUM(xera_points) AS totalPoints
+//                 FROM xera_user_tasks
+//                 WHERE xera_completed_date BETWEEN ? AND ?
+//             `, [startDate, endDate]);
+//             const totalPoints = pointsData[0]?.[0]?.totalPoints || 0;
             
 
-            // Query unique usernames (daily participants)
-            const usersData = await db.query(`
-                SELECT COUNT(DISTINCT username) AS dailyParticipants
-                FROM xera_user_tasks
-                WHERE xera_completed_date BETWEEN ? AND ?
-            `, [startDate, endDate]);
-            const dailyParticipants = usersData[0]?.[0]?.dailyParticipants || 0;
+//             // Query unique usernames (daily participants)
+//             const usersData = await db.query(`
+//                 SELECT COUNT(DISTINCT username) AS dailyParticipants
+//                 FROM xera_user_tasks
+//                 WHERE xera_completed_date BETWEEN ? AND ?
+//             `, [startDate, endDate]);
+//             const dailyParticipants = usersData[0]?.[0]?.dailyParticipants || 0;
 
-            // Query total "Referral Task"
-            const referralData = await db.query(`
-                SELECT COUNT(*) AS newUsers
-                FROM xera_user_tasks
-                WHERE xera_completed_date BETWEEN ? AND ? AND xera_task = 'Referral Task'
-            `, [startDate, endDate]);
-            const newUsers = referralData[0]?.[0]?.newUsers || 0;
+//             // Query total "Referral Task"
+//             const referralData = await db.query(`
+//                 SELECT COUNT(*) AS newUsers
+//                 FROM xera_user_tasks
+//                 WHERE xera_completed_date BETWEEN ? AND ? AND xera_task = 'Referral Task'
+//             `, [startDate, endDate]);
+//             const newUsers = referralData[0]?.[0]?.newUsers || 0;
 
-            // Query total "TXERA Claim Task"
-            const txeraClaimData = await db.query(`
-                SELECT COUNT(*) AS txeraClaimTasks
-                FROM xera_user_tasks
-                WHERE xera_completed_date BETWEEN ? AND ? AND xera_task = 'TXERA Claim Task'
-            `, [startDate, endDate]);
-            const txeraClaimTasks = txeraClaimData[0]?.[0]?.txeraClaimTasks || 0;
+//             // Query total "TXERA Claim Task"
+//             const txeraClaimData = await db.query(`
+//                 SELECT COUNT(*) AS txeraClaimTasks
+//                 FROM xera_user_tasks
+//                 WHERE xera_completed_date BETWEEN ? AND ? AND xera_task = 'TXERA Claim Task'
+//             `, [startDate, endDate]);
+//             const txeraClaimTasks = txeraClaimData[0]?.[0]?.txeraClaimTasks || 0;
 
-            // Append results for the current day
-            results.push({
-                date,
-                totalPoints,
-                dailyParticipants,
-                newUsers,
-                txeraClaimTasks,
-            });
-        }
+//             // Append results for the current day
+//             results.push({
+//                 date,
+//                 totalPoints,
+//                 dailyParticipants,
+//                 newUsers,
+//                 txeraClaimTasks,
+//             });
+//         }
 
-        return res.json({
-            success: true,
-            message: "Successfully retrieved users data",
-            usersData: results,
-        });
-    } catch (error) {
-        console.error("Error in full-stats:", error);
-        return res.status(500).json({ success: false, message: "Request error", error: error.message });
-    }
-});
+//         return res.json({
+//             success: true,
+//             message: "Successfully retrieved users data",
+//             usersData: results,
+//         });
+//     } catch (error) {
+//         console.error("Error in full-stats:", error);
+//         return res.status(500).json({ success: false, message: "Request error", error: error.message });
+//     }
+// });
 
 // Airdrop Phase1, Phase2, and Phase3 Optimized
 const handleAirdropPhase = async (req, res, phaseStartDate, phaseEndDate) => {
@@ -308,32 +308,32 @@ const handleAirdropPhase = async (req, res, phaseStartDate, phaseEndDate) => {
 };
 app.post('/xera/v1/api/users/airdrop/phase1', (req, res) => handleAirdropPhase(req, res, '2024-09-28', '2024-12-18'));
 app.post('/xera/v1/api/users/airdrop/phase2', (req, res) => handleAirdropPhase(req, res, '2024-12-19', '2025-02-25'));
-app.post('/xera/v1/api/users/airdrop/phase3', (req, res) => handleAirdropPhase(req, res, '2025-02-25', '2025-05-30'));
+// app.post('/xera/v1/api/users/airdrop/phase3', (req, res) => handleAirdropPhase(req, res, '2025-02-25', '2025-05-30'));
 
 
 //  Airdrop Participants
-app.post('/xera/v1/api/users/airdrop/participants', async (req, res) => {
-    const { apikey } = req.body;
-    const origin = req.headers.origin
+// app.post('/xera/v1/api/users/airdrop/participants', async (req, res) => {
+//     const { apikey } = req.body;
+//     const origin = req.headers.origin
 
-    const isValid = await validateApiKey(apikey,origin);
-    if (!isValid)  {
-        return res.status(400).json({ success: false, message: isValid });
-    }
+//     const isValid = await validateApiKey(apikey,origin);
+//     if (!isValid)  {
+//         return res.status(400).json({ success: false, message: isValid });
+//     }
 
-    try {
-        const [userTask] = await db.query('SELECT COUNT(DISTINCT BINARY username) AS user_participants FROM xera_user_tasks');
+//     try {
+//         const [userTask] = await db.query('SELECT COUNT(DISTINCT BINARY username) AS user_participants FROM xera_user_tasks');
         
-        if (userTask.length > 0) {
-            const participantData = userTask[0].user_participants;
-            return res.json({ success: true, message: "User tasks successfully retrieved", participants: participantData });
-        } else {
-            return res.json({ success: false, message: "No data retrieved" });
-        }
-    } catch (error) {
-        return res.json({ success: false, message: "Request error", error: error.message });
-    }
-});
+//         if (userTask.length > 0) {
+//             const participantData = userTask[0].user_participants;
+//             return res.json({ success: true, message: "User tasks successfully retrieved", participants: participantData });
+//         } else {
+//             return res.json({ success: false, message: "No data retrieved" });
+//         }
+//     } catch (error) {
+//         return res.json({ success: false, message: "Request error", error: error.message });
+//     }
+// });
 
 // Function to handle total points for a given phase
 const getTotalPoints = async (req, res, startDate, endDate) => {
@@ -401,34 +401,34 @@ app.post('/xera/v1/api/users/all-wallet', async (req, res) => {
 });
 
 // Route to get the count of recent participants
-app.post('/xera/v1/api/users/airdrop/recent-participant', async (req, res) => {
-    const { apikey } = req.body;
-    const origin = req.headers.origin
+// app.post('/xera/v1/api/users/airdrop/recent-participant', async (req, res) => {
+//     const { apikey } = req.body;
+//     const origin = req.headers.origin
     
-    const isValid = await validateApiKey(apikey,origin);
+//     const isValid = await validateApiKey(apikey,origin);
     
-    if (!isValid)  {
-      return res.status(400).json({ success: false, message: isValid });
-    }
+//     if (!isValid)  {
+//       return res.status(400).json({ success: false, message: isValid });
+//     }
 
-    try {
-        const [recentParticipants] = await db.query(
-            `SELECT COUNT(DISTINCT BINARY username) AS recent_participants
-            FROM xera_user_tasks
-            WHERE xera_completed_date BETWEEN CONCAT(CURDATE(), ' 00:00:00') AND CONCAT(CURDATE(), ' 23:59:59')
-                AND xera_task != 'TXERA Claim Task'`
-        );
+//     try {
+//         const [recentParticipants] = await db.query(
+//             `SELECT COUNT(DISTINCT BINARY username) AS recent_participants
+//             FROM xera_user_tasks
+//             WHERE xera_completed_date BETWEEN CONCAT(CURDATE(), ' 00:00:00') AND CONCAT(CURDATE(), ' 23:59:59')
+//                 AND xera_task != 'TXERA Claim Task'`
+//         );
 
-        if (recentParticipants.length > 0) {
-            const participantsData = recentParticipants[0].recent_participants;
-            return res.json({ success: true, message: "Participants successfully retrieved", recentparticipants: participantsData });
-        } else {
-            return res.json({ success: false, message: "No data found" });
-        }
-    } catch (error) {
-        return res.json({ success: false, message: "Request error", error: error.message });
-    }
-});
+//         if (recentParticipants.length > 0) {
+//             const participantsData = recentParticipants[0].recent_participants;
+//             return res.json({ success: true, message: "Participants successfully retrieved", recentparticipants: participantsData });
+//         } else {
+//             return res.json({ success: false, message: "No data found" });
+//         }
+//     } catch (error) {
+//         return res.json({ success: false, message: "Request error", error: error.message });
+//     }
+// });
 
 
 // Global error handling middleware

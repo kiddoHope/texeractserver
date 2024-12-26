@@ -113,39 +113,39 @@ const getDevFromCache = async (api, res) => {
     }
 };
 
-app.post('/xera/v1/api/genesis/active-nodes', async (req,res) => {
-    const { apikey } = req.body;
+// app.post('/xera/v1/api/genesis/active-nodes', async (req,res) => {
+//     const { apikey } = req.body;
     
-    if (!apikey) {
-        return res.json({ success: false, message: "No request found" });
-    }
+//     if (!apikey) {
+//         return res.json({ success: false, message: "No request found" });
+//     }
     
-    await getDevFromCache(apikey);
+//     await getDevFromCache(apikey);
 
-    try {
-        const [totalResult] = await db.query(`
-            SELECT COUNT(*) AS total_nodes 
-            FROM xera_asset_nodes 
-            WHERE node_name = 'XERA GENESIS NODE'
-        `);
+//     try {
+//         const [totalResult] = await db.query(`
+//             SELECT COUNT(*) AS total_nodes 
+//             FROM xera_asset_nodes 
+//             WHERE node_name = 'XERA GENESIS NODE'
+//         `);
 
-        const [activatedResult] = await db.query(`
-            SELECT COUNT(*) AS activated_nodes 
-            FROM xera_asset_nodes 
-            WHERE node_name = 'XERA GENESIS NODE' 
-            AND node_state = 'activated'
-        `);
+//         const [activatedResult] = await db.query(`
+//             SELECT COUNT(*) AS activated_nodes 
+//             FROM xera_asset_nodes 
+//             WHERE node_name = 'XERA GENESIS NODE' 
+//             AND node_state = 'activated'
+//         `);
         
-        const responseData = {
-            activated: activatedResult[0].activated_nodes,
-            nodes: totalResult[0].total_nodes
-        };
+//         const responseData = {
+//             activated: activatedResult[0].activated_nodes,
+//             nodes: totalResult[0].total_nodes
+//         };
 
-        res.json({success: true, message: "Results retrieved", data:responseData })
-    } catch (error) {
-        return res.json({ success: false, message: "Request error", error: error.message });
-    }
-})
+//         res.json({success: true, message: "Results retrieved", data:responseData })
+//     } catch (error) {
+//         return res.json({ success: false, message: "Request error", error: error.message });
+//     }
+// })
 async function getUserRank(user, startDate, endDate) {
     const [userRanking] = await db.query(`
         SELECT MAX(username) AS username, MAX(xera_wallet) AS xera_wallet, 
@@ -216,107 +216,108 @@ app.post('/xera/v1/api/genesis/claim-node', authenticateToken, async (req,res) =
     }
 })
 
-app.post('/xera/v1/api/genesis/activate-node', authenticateToken, async (req,res) => {
-    const { user } = req.body;
+// app.post('/xera/v1/api/genesis/activate-node', authenticateToken, async (req,res) => {
+//     const { user } = req.body;
     
-    if (!user || !user.wallet || !user.username) {
-        return res.json({
-            success: false,
-            message: "Invalid request: Missing user details (wallet or nodeName)."
-        });
-    }
+//     if (!user || !user.wallet || !user.username) {
+//         return res.json({
+//             success: false,
+//             message: "Invalid request: Missing user details (wallet or nodeName)."
+//         });
+//     }
 
-    const formatDateTime = (date) => {
-        const year = date.getFullYear();
-        const month = String(date.getMonth() + 1).padStart(2, '0'); // Months are 0-indexed
-        const day = String(date.getDate()).padStart(2, '0');
-        const hours = String(date.getHours()).padStart(2, '0');
-        const minutes = String(date.getMinutes()).padStart(2, '0');
-        const seconds = String(date.getSeconds()).padStart(2, '0');
+//     const formatDateTime = (date) => {
+//         const year = date.getFullYear();
+//         const month = String(date.getMonth() + 1).padStart(2, '0'); // Months are 0-indexed
+//         const day = String(date.getDate()).padStart(2, '0');
+//         const hours = String(date.getHours()).padStart(2, '0');
+//         const minutes = String(date.getMinutes()).padStart(2, '0');
+//         const seconds = String(date.getSeconds()).padStart(2, '0');
     
-        return `${year}-${month}-${day} ${hours}:${minutes}:${seconds}`;
-    };
+//         return `${year}-${month}-${day} ${hours}:${minutes}:${seconds}`;
+//     };
     
-    const addHoursToDate = (date, hoursToAdd) => {
-        const updatedDate = new Date(date); // Create a new date object to avoid mutating the original
-        updatedDate.setHours(updatedDate.getHours() + hoursToAdd); // Add hours
-        return updatedDate;
-    };
+//     const addHoursToDate = (date, hoursToAdd) => {
+//         const updatedDate = new Date(date); // Create a new date object to avoid mutating the original
+//         updatedDate.setHours(updatedDate.getHours() + hoursToAdd); // Add hours
+//         return updatedDate;
+//     };
     
-    const username = user.username
-    const owner = user.wallet
-    const nodename = user.nodeName
-    const nodeid = user.nodeID
-    const nodeHash = user.nodeTXHash
-    const now = new Date(); // Current date and time
-    const formattedDateTime = formatDateTime(now);
-    const updatedDate = addHoursToDate(now, 12); // Add 12 hours
-    const formattedUpdatedDateTime = formatDateTime(updatedDate);
+//     const username = user.username
+//     const owner = user.wallet
+//     const nodename = user.nodeName
+//     const nodeid = user.nodeID
+//     const nodeHash = user.nodeTXHash
+//     const now = new Date(); // Current date and time
+//     const formattedDateTime = formatDateTime(now);
+//     const updatedDate = addHoursToDate(now, 12); // Add 12 hours
+//     const formattedUpdatedDateTime = formatDateTime(updatedDate);
 
-    try {
-        const [selectNode] = await db.query(`SELECT * FROM xera_asset_nodes WHERE node_name = ? AND node_owner = ?`,[nodename, owner])
-        if (selectNode.length > 0) {
-            const [updateNode] = await db.query(`UPDATE xera_asset_nodes SET node_state = 'active' WHERE node_owner = ? AND node_id = ?`,[owner,nodeid])
-            if (updateNode.affectedRows > 0) {
-                const nodePoints = selectNode[0].node_points
-                const [insertNode] = await db.query(`
-                    INSERT INTO xera_user_node (node_id, node_name, node_owner, node_points, node_reward, node_token, node_start, node_expire, node_txhash) VALUES ( ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-                    [nodeid, nodename, owner, nodePoints, 0.00, '', formattedDateTime, formattedUpdatedDateTime, nodeHash] )
+//     try {
+//         const [selectNode] = await db.query(`SELECT * FROM xera_asset_nodes WHERE node_name = ? AND node_owner = ?`,[nodename, owner])
+//         if (selectNode.length > 0) {
+//             const [updateNode] = await db.query(`UPDATE xera_asset_nodes SET node_state = 'active' WHERE node_owner = ? AND node_id = ?`,[owner,nodeid])
+//             if (updateNode.affectedRows > 0) {
+//                 const nodePoints = selectNode[0].node_points
+//                 const [insertNode] = await db.query(`
+//                     INSERT INTO xera_user_node (node_id, node_name, node_owner, node_points, node_reward, node_token, node_start, node_expire, node_txhash) VALUES ( ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+//                     [nodeid, nodename, owner, nodePoints, 0.00, '', formattedDateTime, formattedUpdatedDateTime, nodeHash] )
                     
-                if (insertNode.affectedRows > 0) {
-                    const [insertTask] = await db.query(`
-                        INSERT INTO xera_user_tasks (username, xera_wallet, xera_telegram_id, xera_twitter_username, xera_task, xera_status, xera_points) VALUES ( ?, ?, ?, ?, ?, ?, ?)`,
-                        [username, owner, '' , '', nodename, 'ok', nodePoints] )
-                    if (insertTask.affectedRows > 0) {
-                        res.json({success: true, message: `Successfully activated 1 ${nodename}`, start: formattedDateTime, expire: formattedUpdatedDateTime  })
-                    } else {
-                        res.json({success: true, message: `Error adding in users node` })
-                    }
-                } else {
-                    res.json({success: true, message: `Error adding in users node` })
-                }
-            } else {
-                res.json({ success: false, message: `Failed to activate ${nodename}`})
-            }
-        } else {
-            return res.json({ success: false, message: `No ${nodename} available`})
-        }
-    } catch (error) {
-        return res.json({ success: false, message: "Request error", error: error.message });
-    }
-})
+//                 if (insertNode.affectedRows > 0) {
+//                     const [insertTask] = await db.query(`
+//                         INSERT INTO xera_user_tasks (username, xera_wallet, xera_telegram_id, xera_twitter_username, xera_task, xera_status, xera_points) VALUES ( ?, ?, ?, ?, ?, ?, ?)`,
+//                         [username, owner, '' , '', nodename, 'ok', nodePoints] )
+//                     if (insertTask.affectedRows > 0) {
+//                         res.json({success: true, message: `Successfully activated 1 ${nodename}`, start: formattedDateTime, expire: formattedUpdatedDateTime  })
+//                     } else {
+//                         res.json({success: true, message: `Error adding in users node` })
+//                     }
+//                 } else {
+//                     res.json({success: true, message: `Error adding in users node` })
+//                 }
+//             } else {
+//                 res.json({ success: false, message: `Failed to activate ${nodename}`})
+//             }
+//         } else {
+//             return res.json({ success: false, message: `No ${nodename} available`})
+//         }
+//     } catch (error) {
+//         return res.json({ success: false, message: "Request error", error: error.message });
+//     }
+// })
 
-app.post('/xera/v1/api/genesis/operate', async (req,res) => {
-    const { user } = req.body;
+// app.post('/xera/v1/api/genesis/operate', async (req,res) => {
+//     const { user } = req.body;
     
-    if (!user || !user.apikey || !user.nodeID || !user.nodeTXHash) {
-        return res.json({success: false, message: "Invalid request: Missing user details"});
-    }
+//     if (!user || !user.apikey || !user.nodeID || !user.nodeTXHash) {
+//         return res.json({success: false, message: "Invalid request: Missing user details"});
+//     }
 
-    const apikey = user.apikey
-    await getDevFromCache(apikey);
+//     const apikey = user.apikey
+//     await getDevFromCache(apikey);
 
-    const nodeid = user.nodeID
-    const txHash = user.nodeTXHash
+//     const nodeid = user.nodeID
+//     const txHash = user.nodeTXHash
 
-    try {
-        const [checkNode] = await db.query(`SELECT * FROM xera_network_transaction WHERE transaction_hash = ?`,[txHash])
-        if (checkNode.length <= 1) {
-            await db.query(`
-                UPDATE xera_network_transactions
-                SET transaction_validator = ?
-                WHERE transaction_validator = 'XERA Validator'
-                LIMIT 1
-            `, [nodeid]);
-        } else {
-            return res.json({ success: false, message: "Invalid transaction" });
-        }
-    } catch (error) {
-        return res.json({ success: false, message: "Request error", error: error.message });
-    }
-})
+//     try {
+//         const [checkNode] = await db.query(`SELECT * FROM xera_network_transaction WHERE transaction_hash = ?`,[txHash])
+//         if (checkNode.length <= 1) {
+//             await db.query(`
+//                 UPDATE xera_network_transactions
+//                 SET transaction_validator = ?
+//                 WHERE transaction_validator = 'XERA Validator'
+//                 LIMIT 1
+//             `, [nodeid]);
+//         } else {
+//             return res.json({ success: false, message: "Invalid transaction" });
+//         }
+//     } catch (error) {
+//         return res.json({ success: false, message: "Request error", error: error.message });
+//     }
+// })
 
 // Global error handling middleware
+
 app.use((err, req, res, next) => {
     console.error("Global error:", err.message);
     res.status(500).json({ success: false, message: "An internal error occurred" });
