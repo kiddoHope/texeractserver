@@ -183,7 +183,7 @@ app.post('/xera/v1/api/genesis/claim-node', authenticateToken, async (req,res) =
     try {
         const userRank = await getUserRank(username, '2024-09-28', '2024-12-18');
         
-        if (userRank <= 1000) {
+        if (userRank?.rank <= 1000) {
             const [checkNode] = await db.query(`SELECT node_id FROM xera_asset_nodes WHERE node_name = ? AND node_owner = ?`,[nodename, owner])
             if (checkNode.length > 0) {
                 return res.json({ success: false, message: `You have already claimed ${nodename}`});
