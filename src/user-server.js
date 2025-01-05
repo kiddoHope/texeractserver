@@ -600,7 +600,6 @@ app.post('/xera/v1/api/user/faucet-claim', authenticateToken, async (req, res) =
     }
 
     const { username, txHash, sender, receiver, command, amount, token, tokenId } = formRequestTXERADetails;
-
     // Validate request body
     if (![username, txHash, sender, receiver, command, amount, token, tokenId].every(Boolean)) {
         return res.status(400).json({ success: false, message: 'Incomplete transaction data.' });
@@ -611,8 +610,8 @@ app.post('/xera/v1/api/user/faucet-claim', authenticateToken, async (req, res) =
     try {
         // Check for recent transactions
         const [[lastTransaction]] = await db.query(
-            'SELECT transaction_date, transaction_hash FROM xera_network_transactions WHERE receiver_address = ? ORDER BY transaction_date DESC LIMIT 1',
-            [receiver]
+            'SELECT transaction_date, transaction_hash FROM xera_network_transactions WHERE receiver_address = ? AND sender_address = ? ORDER BY transaction_date DESC LIMIT 1',
+            [receiver,sender]
         );
 
         let transactionOrigin = 'Genesis Transaction';
@@ -1135,6 +1134,129 @@ app.post('/xera/v1/api/user/register', async (req, res) => {
         }
     } catch (error) {
         return res.json({ success: false, message: 'Request error', error: error.message });
+    }
+});
+
+app.post('/xera/v1/api/user/send-token', authenticateToken, async (req, res) => {
+    const { data } = req.body;
+    const decodedFormRequestTXERADetails = Buffer.from(data, 'base64').toString('utf-8');
+
+    const formRequestTXERADetails = JSON.parse(decodedFormRequestTXERADetails);
+    
+    const apikey = formRequestTXERADetails.apiKey;
+    const origin = req.headers.origin
+    
+    const isValid = await validateApiKey(apikey,origin);
+    
+    if (!isValid)  {
+        return res.status(400).json({ success: false, message: isValid });
+    }
+
+    const { username, txHash, sender, receiver, command, amount, token, tokenId } = formRequestTXERADetails;
+    // Validate request body
+    if (![username, txHash, sender, receiver, command, amount, token, tokenId].every(Boolean)) {
+        return res.status(400).json({ success: false, message: 'Incomplete transaction data.' });
+    }
+
+    const txLocalDate = new Date().toISOString().slice(0, 19).replace('T', ' ');
+
+    try {
+        // Check for recent transactions
+        const [[lastTransaction]] = await db.query(
+            'SELECT transaction_date, transaction_hash FROM xera_network_transactions WHERE receiver_address = ? AND sender_address = ? ORDER BY transaction_date DESC LIMIT 1',
+            [receiver,sender]
+        );
+
+        let transactionOrigin = 'Genesis Transaction';
+        if (lastTransaction) {
+            const lastTxDate = new Date(lastTransaction.transaction_date).getTime();
+            const timeDiff = Date.now() - lastTxDate;
+
+            if (timeDiff < 43200000) { // 12 hours in milliseconds
+                const timeRemainingMs = 43200000 - timeDiff;
+                const hours = Math.floor(timeRemainingMs / 3600000);
+                const minutes = Math.floor((timeRemainingMs % 3600000) / 60000);
+                const seconds = Math.floor((timeRemainingMs % 60000) / 1000);
+                return res.status(429).json({
+                    success: false,
+                    message: `Send again after ${hours}h ${minutes}m ${seconds}s`,
+                });
+            }
+
+            transactionOrigin = lastTransaction.transaction_hash;
+        }
+
+        // Retrieve the latest block details
+        const [[blockData]] = await db.query(
+            'SELECT current_block, block_validator FROM xera_network_blocks ORDER BY id DESC LIMIT 1'
+        );
+
+        if (!blockData) {
+            return res.status(500).json({ success: false, message: 'Block data not found. Transaction aborted.' });
+        }
+
+        const { current_block: txBlock, block_validator: validator } = blockData;
+
+        // Increment block transaction count
+        const [incrementBlockResult] = await db.query(
+            'UPDATE xera_network_blocks SET block_transactions = block_transactions + 1 WHERE current_block = ?',
+            [txBlock]
+        );
+
+        if (incrementBlockResult.affectedRows === 0) {
+            return res.status(500).json({ success: false, message: 'Error incrementing block count' });
+        }
+
+        // Add new transaction
+        const [addTransactionResult] = await db.query(
+            `INSERT INTO xera_network_transactions 
+            (transaction_block, transaction_origin, transaction_hash, sender_address, receiver_address, transaction_command, transaction_amount, transaction_token, transaction_token_id, transaction_validator, transaction_date, transaction_fee_amount, transaction_fee_token, transaction_fee_token_id)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+            [txBlock, transactionOrigin, txHash, sender, receiver, command, amount, token, tokenId, validator, txLocalDate, 0.00, '', '']
+        );
+
+        if (addTransactionResult.affectedRows === 0) {
+            return res.status(500).json({ success: false, message: 'Error adding transaction' });
+        }
+
+        // Update token circulation
+        // const [[currentToken]] = await db.query(
+        //     'SELECT token_circulating FROM xera_asset_token WHERE token_symbol = ?',
+        //     [token]
+        // );
+
+        // if (!currentToken) {
+        //     return res.status(404).json({ success: false, message: 'Token not found or mismatched token symbol.' });
+        // }
+
+        // const newCirculating = parseInt(currentToken.token_circulating, 10) + parseInt(amount, 10);
+
+        // const [updateTokenResult] = await db.query(
+        //     'UPDATE xera_asset_token SET token_circulating = ? WHERE token_id = ?',
+        //     [newCirculating, tokenId]
+        // );
+
+        // if (updateTokenResult.affectedRows === 0) {
+        //     return res.status(500).json({ success: false, message: 'Error updating token circulation' });
+        // }
+
+        // Record task completion
+        const [recordTaskResult] = await db.query(
+            `INSERT INTO xera_user_tasks 
+            (username, xera_wallet, xera_task, xera_status, xera_points, xera_telegram_id, xera_twitter_username)
+            VALUES (?, ?, ?, ?, ?, ?, ?)`,
+            [username, receiver, 'Send TXERA Task', 'ok', '1250', '', '']
+        );
+
+        if (recordTaskResult.affectedRows === 0) {
+            return res.status(500).json({ success: false, message: 'Error inserting record' });
+        }
+
+        // All operations succeeded
+        return res.status(200).json({ success: true, message: `${amount} ${token} Sent Successfully.` });
+    } catch (error) {
+        console.error('Transaction Error:', error.message);
+        return res.status(500).json({ success: false, message: 'Internal Server Error' });
     }
 });
 
