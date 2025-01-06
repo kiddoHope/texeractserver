@@ -1164,8 +1164,8 @@ app.post('/xera/v1/api/user/send-token', authenticateToken, async (req, res) => 
     try {
         // Check for recent transactions
         const [[lastTransaction]] = await db.query(
-            'SELECT transaction_date, transaction_hash FROM xera_network_transactions WHERE receiver_address = ? AND sender_address = ? ORDER BY transaction_date DESC LIMIT 1',
-            [receiver,sender]
+            'SELECT transaction_date, transaction_hash FROM xera_network_transactions WHERE transaction_command = ? AND sender_address = ? ORDER BY transaction_date DESC LIMIT 1',
+            [command,sender]
         );
 
         let transactionOrigin = 'Genesis Transaction';
