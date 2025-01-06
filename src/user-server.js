@@ -1291,14 +1291,21 @@ app.post('/xera/v1/api/user/nft-claim', authenticateToken, async (req, res) => {
         return res.json({ success: false, message: "Invalid request" });
     }
 
+    let transactionOrigin = 'Genesis Transaction';
+    
     try {
         const [nftClaim] = await db.query(`
-            SELECT *
+            SELECT nft_owner
             FROM xera_asset_nfts
             WHERE nft_name = ? AND nft_owner = ?
         `, [user.nftName, user.nftOwner]);
 
-        if (nftClaim.length > 0) {
+        const [checkTransaction] = await db.query(
+            'SELECT transaction_hash FROM xera_network_transactions WHERE sender_address = ? AND receiver_address = ? ORDER BY transaction_date DESC LIMIT 1',
+            [user.sender,user.receiver]
+        );
+
+        if (nftClaim.length > 0 || checkTransaction.length > 0) {
             return res.json({ success: false, message:"NFT Already claimed" });
         } else {
             const [insertNFT] = await db.query(` INSERT INTO xera_asset_nfts (nft_id, nft_name, nft_content, nft_creator, nft_owner, nft_state, nft_status, nft_rarity, nft_redeemable, nft_price, nft_token, nft_token_id, nft_transaction, nft_mining, nft_info) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`, [user.nftId, user.nftName, user.nftContent, user.nftCreator, user.nftOwner, user.nftState, user.nftStatus, user.nftRarity, user.nftRedeemable, 0.00, "", "", user.nftTransaction, user.nftMining, user.nftInfo]);
@@ -1307,21 +1314,46 @@ app.post('/xera/v1/api/user/nft-claim', authenticateToken, async (req, res) => {
                 
                 // Check for recent transactions
                 const [lastTransaction] = await db.query(
-                    'SELECT transaction_hash FROM xera_network_transactions WHERE receiver_address = ? ORDER BY transaction_date DESC LIMIT 1',
-                    [user.receiver]
+                    'SELECT transaction_hash FROM xera_network_transactions WHERE sender_address = ? AND receiver_address = ? ORDER BY transaction_date DESC LIMIT 1',
+                    [user.sender,user.receiver]
                 );
-                
-                const lasttransaction = lastTransaction[0].transaction_hash;
+
+                // Retrieve the latest block details
+                const [[blockData]] = await db.query(
+                    'SELECT current_block, block_validator FROM xera_network_blocks ORDER BY id DESC LIMIT 1'
+                );
+
+                if (!blockData) {
+                    return res.status(500).json({ success: false, message: 'Block data not found. Transaction aborted.' });
+                }
+
+                const { current_block: txBlock, block_validator: validator } = blockData;
+
+                // Increment block transaction count
+                const [incrementBlockResult] = await db.query(
+                    'UPDATE xera_network_blocks SET block_transactions = block_transactions + 1 WHERE current_block = ?',
+                    [txBlock]
+                );
+
+                if (incrementBlockResult.affectedRows === 0) {
+                    return res.status(500).json({ success: false, message: 'Error incrementing block count' });
+                }
+
                 if (lastTransaction.length > 0) {
-                    
-                    const [insertTransaction] = await db.query(` INSERT INTO xera_network_transactions (transaction_block, transaction_origin, transaction_hash, sender_address, receiver_address, transaction_command, transaction_amount, transaction_token, transaction_token_id, transaction_fee_amount, transaction_fee_token, transaction_fee_token_id, transaction_validator) VALUES (?, ? ,? ,? ,? ,? ,? ,? ,? ,? ,? ,? ,?)`, ["Genesis", lasttransaction, user.txHash, user.sender, user.receiver, user.command, user.amount, user.token, user.tokenId, 0, "", "", "XERA Validator",]);
+                    const lasttransaction = lastTransaction[0].transaction_hash;
+                    const [insertTransaction] = await db.query(` INSERT INTO xera_network_transactions (transaction_block, transaction_origin, transaction_hash, sender_address, receiver_address, transaction_command, transaction_amount, transaction_token, transaction_token_id, transaction_fee_amount, transaction_fee_token, transaction_fee_token_id, transaction_validator) VALUES (?, ? ,? ,? ,? ,? ,? ,? ,? ,? ,? ,? ,?)`, ["Genesis", lasttransaction, user.txHash, user.sender, user.receiver, user.command, user.amount, user.token, user.tokenId, 0, "", "", validator,]);
                     if (insertTransaction.affectedRows > 0) {
                         return res.json({ success: true, message: "NFT claimed successfully" });
                     } else {
                         return res.json({ success: false, message: "NFT claim failed" });
                     }
                 } else {
-                    return res.json({ success: false, message: "NFT claim failed" });
+                    const [insertTransaction] = await db.query(` INSERT INTO xera_network_transactions (transaction_block, transaction_origin, transaction_hash, sender_address, receiver_address, transaction_command, transaction_amount, transaction_token, transaction_token_id, transaction_fee_amount, transaction_fee_token, transaction_fee_token_id, transaction_validator) VALUES (?, ? ,? ,? ,? ,? ,? ,? ,? ,? ,? ,? ,?)`, ["Genesis", transactionOrigin, user.txHash, user.sender, user.receiver, user.command, user.amount, user.token, user.tokenId, 0, "", "", validator,]);
+                    if (insertTransaction.affectedRows > 0) {
+                        return res.json({ success: true, message: "NFT claimed successfully" });
+                    } else {
+                        return res.json({ success: false, message: "NFT claim failed" });
+                    }
                 }
             } else {
                 return res.json({ success: false, message: "NFT claim failed" });
