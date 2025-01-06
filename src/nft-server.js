@@ -77,7 +77,7 @@ const authenticateToken = (req, res, next) => {
 };
 
 // Endpoint for fetching user balances
-app.post('/xera/v1/api/user/nft', authenticateToken, async (req, res) => {
+app.post('/xera/v1/api/user/nfts', authenticateToken, async (req, res) => {
     const { user } = req.body;
 
     if (!user) {
