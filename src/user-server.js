@@ -6,6 +6,7 @@ const cors = require("cors");
 const compression = require("compression");
 const NodeCache = require("node-cache");
 const bcrypt = require("bcrypt");
+const e = require("express");
 require("dotenv").config();
 
 const app = express();
@@ -1260,7 +1261,6 @@ app.post('/xera/v1/api/user/send-token', authenticateToken, async (req, res) => 
     }
 });
 
-
 // Endpoint for fetching user nft
 app.post('/xera/v1/api/user/nfts', authenticateToken, async (req, res) => {
     const { user } = req.body;
@@ -1281,6 +1281,40 @@ app.post('/xera/v1/api/user/nfts', authenticateToken, async (req, res) => {
         }
     } catch (error) {
         return res.json({ success: false, message: error.message });
+    }
+});
+
+app.post('/xera/v1/api/user/nft-claim', authenticateToken, async (req, res) => {
+    const { user } = req.body;
+    if (!user || !user.nftName || !user.nftOwner) {
+        return res.json({ success: false, message: "Invalid request" });
+    }
+
+    try {
+        const [nftClaim] = await db.query(`
+            SELECT *
+            FROM xera_asset_nfts
+            WHERE nft_name = ? AND nft_owner = ?
+        `, [user.nftName, user.nftOwner]);
+
+        if (nftClaim.length > 0) {
+            return res.json({ success: false, message:"NFT Already claimed" });
+        } else {
+            const [insertNFT] = await db.query(` INSERT INTO xera_asset_nfts (nft_id, nft_name, nft_content, nft_creator, nft_owner, nft_state, nft_status, nft_rarity, nft_redeemable, nft_price, nft_token, nft_token_id, nft_transaction, nft_mining, nft_info) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`, [user.nftId, user.nftName, user.nftContent, user.nftContent, user.nftOwner, user.nftState, user.nftStatus, user.nftRarity, user.nftRedeemable, 0.00, "", "", user.nftTransaction, user.nftMining, user.nftInfo]);
+            
+            if (insertNFT.affectedRows > 0) {
+                const [insertTransactiom] = await db.query(` INSERT INTO xera_network_transactions (transaction_block, transaction_origin, transaction_hash, sender_address, receiver_address, transaction_command, transaction_amount, transaction_token, transaction_token_id, transaction_fee_amount, transaction_fee_token, transaction_fee_token_id, transaction_validator) VALUES (?, ? ,? ,? ,? ,? ,? ,? ,? ,? ,? ,? ,? ,?)`, ["Genesis", "Genesis Transaction", user.txHash, user.sender, user.receiver, user.command, user.amount, user.token, user.tokenId, 0, "", "", "XERA Validator",]);
+                if (insertTransactiom.affectedRows > 0) {
+                    return res.json({ success: true, message: "NFT claimed successfully" });
+                } else {
+                    return res.json({ success: false, message: "NFT claim failed" });
+                }
+            } else {
+                return res.json({ success: false, message: "NFT claim failed" });
+            }
+        }
+    } catch (error) {
+        return res.json({ success: false, message: "Request error", error });
     }
 });
 
