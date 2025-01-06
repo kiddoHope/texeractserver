@@ -1260,6 +1260,31 @@ app.post('/xera/v1/api/user/send-token', authenticateToken, async (req, res) => 
     }
 });
 
+
+// Endpoint for fetching user nft
+app.post('/xera/v1/api/user/nfts', authenticateToken, async (req, res) => {
+    const { user } = req.body;
+
+    if (!user) {
+        return res.json({ success: false, message: 'No address provided' });
+    }
+
+    try {
+        // Step 1: Retrieve user node details
+        const [getNFT] = await db.query('SELECT * FROM xera_asset_nfts WHERE nft_owner = ?', [user]);
+
+        if (getNFT.length > 0) {
+            const cleanNFT = getNFT.map(({ id, ...nft }) => nft);
+            return res.json({ success: true, message: `Successfully retrieved NFT. Wallet: ${user}`, nft: cleanNFT });
+        } else {
+            return res.json({ success: false, message: 'No NFT found for the provided address' });
+        }
+    } catch (error) {
+        return res.json({ success: false, message: error.message });
+    }
+});
+
+
 // Global error handling middleware
 app.use((err, req, res, next) => {
     console.error("Global error:", err.message);
