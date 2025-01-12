@@ -391,7 +391,7 @@ app.post('/xera/v1/api/user/tasks/all-task', authenticateToken, async (req, res)
                 "Subscribe - @CrypDropPh", "Subscribe - @kimporsha11", 
                 "Facebook Task", "Telegram 2 Task", "TikTok Task", 
                 "Bluesky Task", "YouTube Task", "TXERA Claim Task", "Soldi Task",
-                "StealthAI Task", "Validium Task"
+                "StealthAI Task", "Validium Task" ,"IQwiki Task"
             ];
 
             // Iterate through each task type and filter the transactions
