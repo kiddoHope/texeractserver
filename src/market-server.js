@@ -8,7 +8,7 @@ const NodeCache = require("node-cache");
 require("dotenv").config();
 
 const app = express();
-const port = 5002;
+const port = 5006;
 const jwtSecret = process.env.MAIN_JWT_SECRET;
 
 // Validate essential environment variables
