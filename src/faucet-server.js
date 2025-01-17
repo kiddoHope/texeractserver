@@ -173,15 +173,20 @@ app.post('/xera/v1/api/token/investments', async (req, res) => {
 
     // Calculate the sum of tx_amount and tx_dollar grouped by tx_token
     const [sums] = await db.query(
-      `SELECT tx_token, SUM(tx_amount) AS total_tx_amount, SUM(tx_dollar) AS total_tx_dollar
+      `SELECT tx_token, SUM(tx_amount) AS total_tx_amount
       FROM xera_user_investments
       GROUP BY tx_token`
+    );
+    const [sumsdollar] = await db.query(
+      `SELECT dollar, SUM(tx_dollar) AS total_tx_dollar
+      FROM xera_user_investments`
     );
 
     return res.status(200).json({
       success: true,
       data: fundings,
-      sums: sums,
+      tokens: sums,
+      dollars: sumsdollar,
       pagination: {
         currentPage: pageNumber,
         totalPages,
@@ -189,6 +194,7 @@ app.post('/xera/v1/api/token/investments', async (req, res) => {
         limit: limitNumber,
       }
     });
+    
   } catch (error) {
     console.error('Database query error:', error);
     return res.status(500).json({ success: false, message: "Server error", error: error.message });
