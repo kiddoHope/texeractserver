@@ -229,12 +229,14 @@ const validateApiKey = async (apikey,origin) => {
 // })
 
 // Helper function to generate JWT token
-const generateAuthToken = (username, publicKey) => {
+const generateAuthToken = (username, publicKey, display) => {
+    const user = getUserFromCache(username);
     const xeraJWT = {
         loginState: "basic",
         isloggedIn: "true",
         myXeraUsername: username,
-        myXeraAddress: publicKey
+        myXeraAddress: publicKey,
+        myXeraDisplay: user.display
     };
     return jwt.sign({ xeraJWT }, jwtSecret, { expiresIn: "1d" });
 };
