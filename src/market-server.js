@@ -170,7 +170,6 @@ const validateApiKey = async (apikey,origin) => {
     return true;
 };
 
-// Route to get the total count of wallets
 app.post('/xera/v1/api/marketplace/banners', async (req, res) => {
     const { apikey } = req.body;
     const origin = req.headers.origin
@@ -183,6 +182,30 @@ app.post('/xera/v1/api/marketplace/banners', async (req, res) => {
 
     try {
         const [banners] = await db.query('SELECT * FROM marketplace_banner ORDER BY id DESC LIMIT 5');
+
+        if (banners.length > 0) {
+            const cleanBanner = banners.map(({ id, ...banner }) => banner);
+            return res.json({ success: true, message: "Successfully fetch banners", data:cleanBanner });
+        } else {
+            return res.json({ success: false, message: "No data found" });
+        }
+    } catch (error) {
+        return res.json({ success: false, message: "Request error", error: error.message });
+    }
+});
+
+app.post('/xera/v1/api/marketplace/featured', async (req, res) => {
+    const { apikey } = req.body;
+    const origin = req.headers.origin
+    
+    const isValid = await validateApiKey(apikey,origin);
+    
+    if (!isValid)  {
+      return res.status(400).json({ success: false, message: isValid });
+    }
+
+    try {
+        const [banners] = await db.query('SELECT * FROM marketplace_featured ORDER BY id DESC LIMIT 4');
 
         if (banners.length > 0) {
             const cleanBanner = banners.map(({ id, ...banner }) => banner);
