@@ -229,8 +229,8 @@ const validateApiKey = async (apikey,origin) => {
 // })
 
 // Helper function to generate JWT token
-const generateAuthToken = (username, publicKey, display) => {
-    const user = getUserFromCache(username);
+const generateAuthToken = async (username, publicKey) => {
+    const user = await getUserFromCache(username);
     const xeraJWT = {
         loginState: "basic",
         isloggedIn: "true",
@@ -238,6 +238,7 @@ const generateAuthToken = (username, publicKey, display) => {
         myXeraAddress: publicKey,
         myXeraDisplay: user.display
     };
+    
     return jwt.sign({ xeraJWT }, jwtSecret, { expiresIn: "1d" });
 };
 
@@ -249,14 +250,14 @@ const handleUserLogin = async (user, password, res) => {
     if (dataPass.slice(0, 4) === "$2y$") {
         const normalizedHash = dataPass.replace("$2y$", "$2a$");
         if (await bcrypt.compare(password, normalizedHash)) {
-            const authToken = generateAuthToken(user.username, user.xera_wallet);
+            const authToken = await generateAuthToken(user.username, user.xera_wallet);
             return res.json({ success: true, message: `${user.username} Successfully Login`, authToken });
         } else {
             return res.json({ success: false, message: 'Wrong password' });
         }
     } else {
         if (await bcrypt.compare(password, dataPass)) {
-            const authToken = generateAuthToken(user.username, user.xera_wallet);
+            const authToken = await generateAuthToken(user.username, user.xera_wallet);
             return res.json({ success: true, message: `${user.username} Successfully Login Basic Account`, authToken });
         } else {
             return res.json({ success: false, message: 'Wrong password' });
@@ -321,7 +322,7 @@ app.post('/xera/v1/api/user/login-prKey', async (req, res) => {
             
             if (getUsername.length > 0) {
                 const username = getUsername[0].username;
-                const authToken = generateAuthToken(username, userData.public_key);
+                const authToken = await generateAuthToken(username, userData.public_key);
                 return res.json({ success: true, message: `${username} Successfully Login Full Access`, authToken });
             } else {
                 return res.json({ success: false, message: "No user found for that key phrase" });
@@ -357,7 +358,7 @@ app.post('/xera/v1/api/user/login-phrase', async (req, res) => {
 
             if (getUsername.length > 0) {
                 const username = getUsername[0].username;
-                const authToken = generateAuthToken(username, userData.public_key);
+                const authToken = await generateAuthToken(username, userData.public_key);
                 return res.json({ success: true, message: `${username} Successfully Login Full Access`, authToken });
             } else {
                 return res.json({ success: false, message: "No user found for that key phrase" });
@@ -1135,6 +1136,61 @@ app.post('/xera/v1/api/user/register', async (req, res) => {
             }
         } else {
             return res.json({ success: false, message: 'Registration failed' });
+        }
+    } catch (error) {
+        return res.json({ success: false, message: 'Request error', error: error.message });
+    }
+});
+
+app.post('/xera/v1/api/user/update-display', authenticateToken, async (req, res) => {
+    const { data } = req.body;
+    const decodedFormRequestTXERADetails = Buffer.from(data, 'base64').toString('utf-8');
+
+    const formRequestTXERADetails = JSON.parse(decodedFormRequestTXERADetails);
+
+    if (!formRequestTXERADetails || !formRequestTXERADetails.ethWallet || !formRequestTXERADetails.solWallet || !formRequestTXERADetails.xeraWallet || !formRequestTXERADetails.xeraUsername) {
+        return res.status(400).json({ success: false, message: 'Incomplete data' });
+    }
+
+    try {
+        const [userAcc] = await db.query(`
+            SELECT * FROM xera_user_accounts WHERE username = ? AND xera_wallet = ?
+        `, [formRequestTXERADetails.username, formRequestTXERADetails.xeraWallet]);
+        if (userAcc.length > 0) {
+            const [updateDisplay] = await db.query(`UPDATE xera_user_accounts SET display = ? WHERE xera_wallet = ?`, [formRequestTXERADetails.displayID, formRequestTXERADetails.xeraWallet]);
+            if (updateDisplay.affectedRows > 0) {
+                return res.json({ success: true, message: 'Display updated successfully' });
+            } else {
+                return res.json({ success: false, message: 'Display update failed' });
+            }
+        } else {
+            return res.json({ success: false, message: 'User not found' });
+        }
+        
+    } catch (error) {
+        return res.json({ success: false, message: 'Request error', error: error.message });
+    }
+});
+
+app.post('/xera/v1/api/user/funding/add-fund', authenticateToken, async (req, res) => {
+    const { data } = req.body;
+    const decodedFormRequestTXERADetails = Buffer.from(data, 'base64').toString('utf-8');
+
+    const formRequestTXERADetails = JSON.parse(decodedFormRequestTXERADetails);
+
+    if (!formRequestTXERADetails || !formRequestTXERADetails.ethWallet || !formRequestTXERADetails.solWallet || !formRequestTXERADetails.xeraWallet || !formRequestTXERADetails.xeraUsername) {
+        return res.status(400).json({ success: false, message: 'Incomplete data' });
+    }
+
+    try {
+        const [inserFund] = await db.query(`
+            INSERT INTO xera_user_investments (tx_hash, tx_amount, tx_token, tx_dollar, tx_investor_address, tx_investor_name, tx_external_hash, tx_external_date, tx_bought_asset, xera_address) 
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        `, [formRequestTXERADetails.tx_hash, formRequestTXERADetails.tx_amount, formRequestTXERADetails.tx_token, formRequestTXERADetails.tx_dollar, formRequestTXERADetails.tx_investor_address, formRequestTXERADetails.tx_investor_name, formRequestTXERADetails.tx_external_hash, formRequestTXERADetails.tx_external_date, formRequestTXERADetails.tx_bought_asset, formRequestTXERADetails.xera_address]);
+        if (inserFund.affectedRows > 0) {
+            return res.json({ success: true, message: 'Funding added successfully' });
+        } else {
+            return res.json({ success: false, message: 'Funding addition failed' });
         }
     } catch (error) {
         return res.json({ success: false, message: 'Request error', error: error.message });

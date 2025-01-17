@@ -129,6 +129,72 @@ app.post('/xera/v1/api/token/faucet-transaction', async (req, res) => {
   }
 });
 
+app.post('/xera/v1/api/token/investments', async (req, res) => {
+  // Validate the API key and get the decoded key
+  const { apikey } = req.body;
+  
+  const isValid = await getDevFromCache(apikey);
+  
+  if (!isValid)  {
+    return res.status(400).json({ success: false, message: isValid });
+  }
+  const { limit, page } = req.body;
+  const limitNumber = parseInt(limit, 10);
+  const pageNumber = parseInt(page, 10);
+
+  if (isNaN(limitNumber) || isNaN(pageNumber) || limitNumber <= 0 || pageNumber <= 0) {
+    return res.status(400).json({ success: false, message: "Invalid pagination parameters" });
+  }
+
+  // Calculate the offset for pagination
+  const offset = (pageNumber - 1) * limitNumber;
+
+  try {
+    // Query the database for transactions with the correct limit and offset
+    const [fundings] = await db.query(
+      `SELECT *
+      FROM xera_user_investments 
+      ORDER BY id DESC 
+      LIMIT ? OFFSET ?`, 
+      [limitNumber, offset]
+    );
+
+    if (!fundings || fundings.length === 0) {
+      return res.status(404).json({ success: false, message: "No fundings found" });
+    }
+
+    // Calculate the total number of tokens for pagination info
+    const [totalRows] = await db.query(
+      `SELECT COUNT(*) AS total FROM xera_user_investments`
+    );
+
+    const totalTokens = totalRows[0].total;
+    const totalPages = Math.ceil(totalTokens / limitNumber);
+
+    // Calculate the sum of tx_amount and tx_dollar grouped by tx_token
+    const [sums] = await db.query(
+      `SELECT tx_token, SUM(tx_amount) AS total_tx_amount, SUM(tx_dollar) AS total_tx_dollar
+      FROM xera_user_investments
+      GROUP BY tx_token`
+    );
+
+    return res.status(200).json({
+      success: true,
+      data: fundings,
+      sums: sums,
+      pagination: {
+        currentPage: pageNumber,
+        totalPages,
+        totalRecords: totalTokens,
+        limit: limitNumber,
+      }
+    });
+  } catch (error) {
+    console.error('Database query error:', error);
+    return res.status(500).json({ success: false, message: "Server error", error: error.message });
+  }
+});
+
 // Global error handling middleware
 app.use((err, req, res, next) => {
   console.error("Global error:", err.message);
