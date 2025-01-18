@@ -163,7 +163,7 @@ app.post('/xera/v1/api/token/investments', async (req, res) => {
     if (!fundings || fundings.length === 0) {
       return res.status(404).json({ success: false, message: "No fundings found" });
     }
-    
+
     const cleanFundings = fundings.map(({ id, ...clean }) => clean);
     // Calculate the total number of tokens for pagination info
     const [totalRows] = await db.query(
@@ -191,39 +191,6 @@ app.post('/xera/v1/api/token/investments', async (req, res) => {
     return res.status(500).json({ success: false, message: "Server error", error: error.message });
   }
 });
-
-app.post('/xera/v1/api/token/total-investments', async (req, res) => {
-  // Validate the API key and get the decoded key
-  const { apikey } = req.body;
-  
-  const isValid = await getDevFromCache(apikey);
-  
-  if (!isValid) {
-    return res.status(400).json({ success: false, message: isValid });
-  }
-
-  try {
-
-    // Calculate the sum of tx_amount and tx_dollar grouped by tx_token
-    const [sums] = await db.query(
-      `SELECT tx_token, SUM(tx_amount) AS total_tx_amount, SUM(tx_dollar) AS total_tx_dollar
-      FROM xera_user_investments
-      GROUP BY tx_token`
-    );
-
-    return res.status(200).json({
-      success: true,
-      tokens: sums,
-    });
-    
-  } catch (error) {
-    console.error('Database query error:', error);
-    return res.status(500).json({ success: false, message: "Server error", error: error.message });
-  }
-});
-
-
-
 
 // Global error handling middleware
 app.use((err, req, res, next) => {

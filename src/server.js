@@ -50,29 +50,118 @@ app.options("*", (req, res) => {
 });
 
 // Fetch developer data from cache or database
+const decodeKey = (encodedKey) => {
+  if (!encodedKey) {
+      console.error("No encoded API key provided.");
+      return null;
+  }
+
+  const secret = {
+      devKey: `xeraAPI-LokiNakamoto-0ea5b02a13i4bdhw94jwb`,
+      webKey: `xeraAPI-webMainTexeract-egsdfw33resdfdsf`,
+      apiKey: `XERA09aa939245f735992af1a9a6b6d6b91d234ee2`,
+  };
+
+  const fullSecret = secret.devKey + secret.webKey + secret.apiKey;
+  if (!fullSecret) {
+      console.error("Secret for decryption is missing or incomplete.");
+      return null;
+  }
+
+  try {
+      const bytes = CryptoJS.AES.decrypt(encodedKey, fullSecret);
+      const originalKey = bytes.toString(CryptoJS.enc.Utf8);
+      
+
+      if (!originalKey) {
+          console.error("Failed to decrypt API key: Decrypted key is empty.");
+          return null;
+      }
+
+      return originalKey;
+  } catch (error) {
+      console.error("Decryption error:", error);
+      return null;
+  }
+};
+
+// Fetch developer data from cache or database
 const getDevFromCache = async (api) => {
-    let message = "";
-    try {
-        let dev = cache.get(api);
-        if (!dev) {
-            const [rows] = await db.query("SELECT * FROM xera_developer WHERE BINARY xera_api = ?", [api]);
+  let message = "";
+  try {
+      let dev = cache.get(api);
+      if (!dev) {
+          const [rows] = await db.query("SELECT * FROM xera_developer WHERE BINARY xera_api = ?", [api]);
 
-            if (rows.length === 0) {
-                return message = "Invalid API key" 
-            }
+          if (rows.length === 0) {
+              return message = "Invalid API key" 
+          }
 
-            dev = rows[0];
-            cache.set(api, dev);
-        }
+          dev = rows[0];
+          cache.set(api, dev);
+      }
 
-        if (dev.xera_moderation !== "creator") {
-            return message = "Access denied"
-        }
+      if (dev.xera_moderation !== "creator") {
+          return message = "Access denied"
+      }
 
-        return dev;
-    } catch (error) {
-        return message = "Internal server error" 
-    }
+      return dev;
+  } catch (error) {
+      return message = "Internal server error" 
+  }
+};
+
+// Function to verify if the request is legitimate
+const verifyRequestSource = (origin) => {
+  const expectedOrigins = [
+      "https://texeract.network",
+      "http://localhost:3000",
+      "http://localhost:3001",
+      "https://texeract-network-beta.vercel.app",
+      "https://tg-texeract-beta.vercel.app",
+      "https://texeractbot.xyz",
+  ];
+
+  // Normalize `referer` to only include the origin if necessary
+  if (origin.includes("://")) {
+      const url = new URL(origin);
+      origin = `${url.protocol}//${url.host}`;
+  }
+
+  // Check if the origin matches any allowed origins
+  if (!expectedOrigins.includes(origin)) {
+      console.error("Origin not allowed:", origin);
+      return false;
+  }
+
+  return true;
+};
+
+const validateApiKey = async (apikey,origin) => {
+
+  let message = "";
+  if (!apikey) {
+    return message = "No API key found";
+  }
+
+  const decodedKey = decodeKey(apikey);
+  if (!decodedKey) {
+      message = "Invalid encoded API key"
+      return message
+  }
+
+  if (!verifyRequestSource(origin)) {
+      message = "Unauthorized request"
+      return message;
+  }
+
+  const dev = await getDevFromCache(decodedKey);
+  if (!dev) {
+      message = "Developer not found or unauthorized"
+      return message;
+  }
+
+  return true;
 };
 
 app.post('/xera/v1/api/info/token/asset-tokens', async (req, res) => {
@@ -98,7 +187,6 @@ app.post('/xera/v1/api/info/token/asset-tokens', async (req, res) => {
   }
 });
 
-// Route to get transaction history of nodes
 app.post('/xera/v1/api/info/node/transaction-history', async (req, res) => {
   const { apikey } = req.body;
   
@@ -140,6 +228,36 @@ app.post('/xera/v1/api/info/node/transaction-history', async (req, res) => {
       }
   } catch (error) {
       return res.status(500).json({ success: false, message: "Request error", error: error.message });
+  }
+});
+
+app.post('/xera/v1/api/info/token/total-investments', async (req, res) => {
+  const { apikey } = req.body;
+  const origin = req.headers.origin
+  
+  const isValid = await validateApiKey(apikey,origin);
+  
+  if (!isValid)  {
+    return res.status(400).json({ success: false, message: isValid });
+  }
+
+  try {
+
+    // Calculate the sum of tx_amount and tx_dollar grouped by tx_token
+    const [sums] = await db.query(
+      `SELECT tx_token, SUM(tx_amount) AS total_tx_amount, SUM(tx_dollar) AS total_tx_dollar
+      FROM xera_user_investments
+      GROUP BY tx_token`
+    );
+
+    return res.status(200).json({
+      success: true,
+      tokens: sums,
+    });
+    
+  } catch (error) {
+    console.error('Database query error:', error);
+    return res.status(500).json({ success: false, message: "Server error", error: error.message });
   }
 });
 
