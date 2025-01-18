@@ -71,35 +71,37 @@ const getDevFromCache = async (api) => {
 };
 
 app.post('/xera/v1/api/nft/collections', async (req, res) => {
-    // Validate the API key and get the decoded key
-    const { apikey } = req.body;
-    
-    const isValid = await getDevFromCache(apikey);
-    
-    if (!isValid) {
-      return res.status(400).json({ success: false, message: isValid });
+  // Validate the API key and get the decoded key
+  const { apikey } = req.body;
+  
+  const isValid = await getDevFromCache(apikey);
+  
+  if (!isValid) {
+    return res.status(400).json({ success: false, message: isValid });
+  }
+
+  try {
+    // Query the database for the required NFT collection details
+    const [nfts] = await db.query(
+      `SELECT nft_collection, COUNT(*) AS nft_count, SUM(nft_price) AS total_price, 
+              SUBSTRING_INDEX(GROUP_CONCAT(DISTINCT nft_token), ',', 1) AS nft_token, 
+              SUBSTRING_INDEX(GROUP_CONCAT(DISTINCT nft_token_id), ',', 1) AS nft_token_id
+       FROM xera_asset_nfts 
+       GROUP BY nft_collection`
+    );
+
+    if (!nfts || nfts.length === 0) {
+      return res.status(404).json({ success: false, message: "No NFT collections found" });
     }
-  
-    try {
-      // Query the database for the required NFT collection details
-      const [nfts] = await db.query(
-        `SELECT nft_collections, COUNT(*) AS nft_count, SUM(nft_price) AS total_price, GROUP_CONCAT(nft_token) AS nft_tokens, GROUP_CONCAT(nft_token_id) AS nft_token_ids
-        FROM xera_asset_nfts 
-        GROUP BY nft_collections`
-      );
-  
-      if (!nfts || nfts.length === 0) {
-        return res.status(404).json({ success: false, message: "No NFT collections found" });
-      }
-  
-      return res.status(200).json({
-        success: true,
-        data: nfts
-      });
-    } catch (error) {
-      console.error('Database query error:', error);
-      return res.status(500).json({ success: false, message: "Server error", error: error.message });
-    }
+
+    return res.status(200).json({
+      success: true,
+      data: nfts
+    });
+  } catch (error) {
+    console.error('Database query error:', error);
+    return res.status(500).json({ success: false, message: "Server error", error: error.message });
+  }
 });
 
 // Global error handling middleware
