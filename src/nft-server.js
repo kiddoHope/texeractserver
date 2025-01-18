@@ -3,6 +3,7 @@ const bodyParser = require("body-parser");
 const db = require('./connection');
 const cors = require("cors");
 require('dotenv').config();
+const CryptoJS = require("crypto-js");
 const compression = require('compression');
 const NodeCache = require('node-cache');
 

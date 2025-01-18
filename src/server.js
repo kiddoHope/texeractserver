@@ -2,6 +2,7 @@ const express = require("express");
 const bodyParser = require("body-parser");
 const cors = require("cors");
 const compression = require('compression');
+const CryptoJS = require("crypto-js");
 const NodeCache = require('node-cache');
 const db = require('./connection');
 
