@@ -187,6 +187,8 @@ app.post('/xera/v1/api/info/token/asset-tokens', async (req, res) => {
     const tokenPrices = {};
 
     if (sums.length > 0) {
+      console.log(sums);
+
       const solana = sums.filter((sum) => sum.tx_token === 'SOL');
       const solTotal = solana.reduce((acc, curr) => acc + curr.total_tx_amount, 0);
       const etherium = sums.filter((sum) => sum.tx_token === 'ETH');
