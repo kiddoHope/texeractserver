@@ -5,6 +5,7 @@ const compression = require('compression');
 const CryptoJS = require("crypto-js");
 const NodeCache = require('node-cache');
 const db = require('./connection');
+const { default: axios } = require("axios");
 
 const app = express();
 const port = 5000;
@@ -170,15 +171,66 @@ app.post('/xera/v1/api/info/token/asset-tokens', async (req, res) => {
   
   const isValid = await getDevFromCache(apikey);
   
-  if (!isValid)  {
+  if (!isValid) {
     return res.status(400).json({ success: false, message: isValid });
   }
+  
   try {
     const [assetTokens] = await db.query('SELECT * FROM xera_asset_token');
+    const [sums] = await db.query(
+      `SELECT tx_asset_id, tx_token, SUM(tx_amount) AS total_tx_amount
+      FROM xera_user_investments
+      WHERE tx_token IN ('SOL', 'ETH')
+      GROUP BY tx_asset_id, tx_token`
+    );
+
+    const tokenPrices = {};
+
+    if (sums.length > 0) {
+      const solana = sums.filter((sum) => sum.tx_token === 'SOL');
+      const solTotal = solana.reduce((acc, curr) => acc + curr.total_tx_amount, 0);
+      const etherium = sums.filter((sum) => sum.tx_token === 'ETH');
+      const ethTotal = etherium.reduce((acc, curr) => acc + curr.total_tx_amount, 0);
+
+      try {
+        const response = await axios.get("https://api.coingecko.com/api/v3/simple/price?ids=solana&vs_currencies=eth");
+        const solToEthRate = response.data.solana.eth;
+
+        // Calculate the percentage for each tx_asset_id
+        sums.forEach(sum => {
+          const { tx_asset_id, tx_token, total_tx_amount } = sum;
+          let totalEth = 0;
+
+          if (tx_token === 'SOL') {
+            totalEth = total_tx_amount * solToEthRate;
+          } else if (tx_token === 'ETH') {
+            totalEth = total_tx_amount;
+          }
+
+          if (!tokenPrices[tx_asset_id]) {
+            tokenPrices[tx_asset_id] = 0;
+          }
+
+          tokenPrices[tx_asset_id] += totalEth * 0.85;
+        });
+
+      } catch (axiosError) {
+        console.error('Error fetching conversion rate:', axiosError.message);
+        return res.status(500).json({ success: false, message: "Error fetching conversion rate", error: axiosError.message });
+      }
+    }
 
     if (assetTokens.length > 0) {
-      const cleanedData = assetTokens.map(({ id, ...clean }) => clean);
-      return res.status(200).json({ success: true, data: cleanedData });
+      // Map the tokenPrices to the assetTokens based on token_id
+      const updatedAssetTokens = assetTokens.map(assetToken => {
+        const tokenPrice = tokenPrices[assetToken.token_id] || assetToken.token_price;
+        return {
+          ...assetToken,
+          token_price: tokenPrice
+        };
+      });
+
+      return res.status(200).json({ success: true, data: updatedAssetTokens });
     } else {
       return res.status(404).json({ success: false, message: "No tokens found" });
     }
@@ -232,35 +284,35 @@ app.post('/xera/v1/api/info/node/transaction-history', async (req, res) => {
   }
 });
 
-app.post('/xera/v1/api/info/token/total-investments', async (req, res) => {
-  const { apikey } = req.body;
-  const origin = req.headers.origin
+// app.post('/xera/v1/api/info/token/total-investments', async (req, res) => {
+//   const { apikey } = req.body;
+//   const origin = req.headers.origin
   
-  const isValid = await validateApiKey(apikey,origin);
+//   const isValid = await validateApiKey(apikey,origin);
   
-  if (!isValid)  {
-    return res.status(400).json({ success: false, message: isValid });
-  }
+//   if (!isValid)  {
+//     return res.status(400).json({ success: false, message: isValid });
+//   }
 
-  try {
+//   try {
 
-    // Calculate the sum of tx_amount and tx_dollar grouped by tx_token
-    const [sums] = await db.query(
-      `SELECT tx_token, SUM(tx_amount) AS total_tx_amount, SUM(tx_dollar) AS total_tx_dollar
-      FROM xera_user_investments
-      GROUP BY tx_token`
-    );
+//     // Calculate the sum of tx_amount and tx_dollar grouped by tx_token
+//     const [sums] = await db.query(
+//       `SELECT tx_token, SUM(tx_amount) AS total_tx_amount, SUM(tx_dollar) AS total_tx_dollar
+//       FROM xera_user_investments
+//       GROUP BY tx_token`
+//     );
 
-    return res.status(200).json({
-      success: true,
-      tokens: sums,
-    });
+//     return res.status(200).json({
+//       success: true,
+//       tokens: sums,
+//     });
     
-  } catch (error) {
-    console.error('Database query error:', error);
-    return res.status(500).json({ success: false, message: "Server error", error: error.message });
-  }
-});
+//   } catch (error) {
+//     console.error('Database query error:', error);
+//     return res.status(500).json({ success: false, message: "Server error", error: error.message });
+//   }
+// });
 
 // Start the server
 app.listen(port, () => {
