@@ -640,10 +640,10 @@ app.post('/xera/v1/api/user/balance', authenticateToken, async (req, res) => {
                     .reduce((total, tx) => total + parseFloat(tx.transaction_amount), 0);
 
                 const totalBalance = (totalReceive - totalSend).toFixed(2);
-                const totalEth = (token.token_price/token.token_supply)*totalBalance;
+                const totalBalanceETH = (token.token_price/token.token_supply)*totalBalance;
                 
 
-                return { ...token, totalBalance, totalEth };
+                return { ...token, totalBalance, totalBalanceETH };
             });
 
             // Clean the data to exclude unnecessary fields
