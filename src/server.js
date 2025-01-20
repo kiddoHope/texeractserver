@@ -166,6 +166,33 @@ const validateApiKey = async (apikey,origin) => {
   return true;
 };
 
+let conversionCache = {
+  solToEthRate: null,
+  lastUpdated: null
+};
+
+const fetchConversionRate = async () => {
+  try {
+    const response = await axios.get("https://api.coingecko.com/api/v3/simple/price?ids=solana&vs_currencies=eth");
+    conversionCache.solToEthRate = response.data.solana.eth;
+    conversionCache.lastUpdated = Date.now();
+  } catch (error) {
+    console.error('Error fetching conversion rate:', error.message);
+    throw new Error("Error fetching conversion rate");
+  }
+};
+
+const getConversionRate = async () => {
+  const now = Date.now();
+  const fiveMinutes = 5 * 60 * 1000;
+
+  if (!conversionCache.solToEthRate || (now - conversionCache.lastUpdated) > fiveMinutes) {
+    await fetchConversionRate();
+  }
+
+  return conversionCache.solToEthRate;
+};
+
 app.post('/xera/v1/api/info/token/asset-tokens', async (req, res) => {
   const { apikey } = req.body;
   
@@ -193,8 +220,7 @@ app.post('/xera/v1/api/info/token/asset-tokens', async (req, res) => {
       const ethTotal = etherium.reduce((acc, curr) => acc + curr.total_tx_amount, 0);
 
       try {
-        const response = await axios.get("https://api.coingecko.com/api/v3/simple/price?ids=solana&vs_currencies=eth");
-        const solToEthRate = response.data.solana.eth;
+        const solToEthRate = await getConversionRate();
 
         // Calculate the percentage for each tx_asset_id
         sums.forEach(sum => {
@@ -214,9 +240,8 @@ app.post('/xera/v1/api/info/token/asset-tokens', async (req, res) => {
           tokenPrices[tx_asset_id] += totalEth * 0.85;
         });
 
-      } catch (axiosError) {
-        console.error('Error fetching conversion rate:', axiosError.message);
-        return res.status(500).json({ success: false, message: "Error fetching conversion rate", error: axiosError.message });
+      } catch (error) {
+        return res.status(500).json({ success: false, message: error.message });
       }
     }
 
