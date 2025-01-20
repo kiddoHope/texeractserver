@@ -256,7 +256,7 @@ app.post('/xera/v1/api/info/token/asset-tokens', async (req, res) => {
         const tokenPrice = tokenPrices[assetToken.token_id] || assetToken.token_price;
         return {
           ...assetToken,
-          token_price: tokenPrice
+          marketCap: tokenPrice
         };
       });
       const cleanedData = cleanData(updatedAssetTokens, ['id']);
