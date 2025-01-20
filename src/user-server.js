@@ -554,7 +554,7 @@ app.post('/xera/v1/api/user/balance', authenticateToken, async (req, res) => {
             });
 
             // Clean the data to exclude unnecessary fields
-            const cleanedData = cleanData(balances, ['id', 'token_owner', 'token_symbol', 'token_decimal', 'token_supply', 'token_circulating', 'token_info']);
+            const cleanedData = cleanData(balances, ['id', 'token_owner', 'token_symbol', 'token_decimal', 'token_supply', 'token_circulating', 'token_info', 'token_on_treasury', 'token_is_claimable', 'token_on_locked', 'token_created']);
             return res.json({ success: true, data: cleanedData });
         } else {
             return res.json({ success: false, message: "No tokens found" });
