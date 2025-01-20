@@ -7,6 +7,7 @@ const compression = require("compression");
 const NodeCache = require("node-cache");
 const bcrypt = require("bcrypt");
 const e = require("express");
+const { default: axios } = require("axios");
 require("dotenv").config();
 
 const app = express();
@@ -523,20 +524,110 @@ app.post('/xera/v1/api/user/transactions', authenticateToken, async (req, res) =
     }
 });
 
+let conversionCache = {
+  solToEthRate: null,
+  lastUpdated: null
+};
+
+const fetchConversionRate = async () => {
+  try {
+    const response = await axios.get("https://api.coingecko.com/api/v3/simple/price?ids=solana&vs_currencies=eth");
+    conversionCache.solToEthRate = response.data.solana.eth;
+    conversionCache.lastUpdated = Date.now();
+  } catch (error) {
+    console.error('Error fetching conversion rate:', error.message);
+    throw new Error("Error fetching conversion rate");
+  }
+};
+
+const getConversionRate = async () => {
+  const now = Date.now();
+  const fiveMinutes = 5 * 60 * 1000;
+
+  if (!conversionCache.solToEthRate || (now - conversionCache.lastUpdated) > fiveMinutes) {
+    await fetchConversionRate();
+  }
+
+  return conversionCache.solToEthRate;
+};
+
+const fetchTotalBalanceTokens = async () => {
+    try {
+        const [assetTokens] = await db.query('SELECT * FROM xera_asset_token');
+        const [sums] = await db.query(
+            `SELECT tx_asset_id, tx_token, SUM(tx_amount) AS total_tx_amount
+            FROM xera_user_investments
+            WHERE tx_token IN ('SOL', 'ETH')
+            GROUP BY tx_asset_id, tx_token`
+        );
+
+        const tokenPrices = {};
+
+        if (sums.length > 0) {
+            const solana = sums.filter((sum) => sum.tx_token === 'SOL');
+            const solTotal = solana.reduce((acc, curr) => acc + curr.total_tx_amount, 0);
+            const etherium = sums.filter((sum) => sum.tx_token === 'ETH');
+            const ethTotal = etherium.reduce((acc, curr) => acc + curr.total_tx_amount, 0);
+
+            try {
+            const solToEthRate = await getConversionRate();
+
+            // Calculate the percentage for each tx_asset_id
+            sums.forEach(sum => {
+                const { tx_asset_id, tx_token, total_tx_amount } = sum;
+                let totalEth = 0;
+
+                if (tx_token === 'SOL') {
+                totalEth = total_tx_amount * solToEthRate;
+                } else if (tx_token === 'ETH') {
+                totalEth = total_tx_amount;
+                }
+
+                if (!tokenPrices[tx_asset_id]) {
+                tokenPrices[tx_asset_id] = 0;
+                }
+
+                tokenPrices[tx_asset_id] += totalEth * 0.85;
+            });
+
+            } catch (error) {
+            return res.status(500).json({ success: false, message: error.message });
+            }
+        }
+
+        if (assetTokens.length > 0) {
+            // Map the tokenPrices to the assetTokens based on token_id
+            const updatedAssetTokens = assetTokens.map(assetToken => {
+            const tokenPrice = tokenPrices[assetToken.token_id] || assetToken.token_price;
+            return {
+                ...assetToken,
+                token_price: tokenPrice
+            };
+            });
+
+            return updatedAssetTokens;
+        } else {
+            return "No tokens found"
+        }
+        } catch (error) {
+            return "Server error"
+        }
+}
+
 // Endpoint for fetching user balances
 app.post('/xera/v1/api/user/balance', authenticateToken, async (req, res) => {
     const { user } = req.body;
     if (!user) {
         return res.json({ success: false, message: "Invalid request" });
     }
+    const assetTokens = await fetchTotalBalanceTokens();
 
     try {
         // Fetch user transactions and token list in parallel
         const [transactions] = await db.query('SELECT * FROM xera_network_transactions WHERE receiver_address = ? OR sender_address = ?', [user, user]);
-        const [tokenList] = await db.query('SELECT * FROM xera_asset_token');
 
-        if (tokenList.length > 0) {
-            const balances = tokenList.map(token => {
+        if (assetTokens.length > 0) {
+            const balances = assetTokens.map(token => {
                 const { token_id } = token;
 
                 // Calculate total sent and received for each token
@@ -549,8 +640,10 @@ app.post('/xera/v1/api/user/balance', authenticateToken, async (req, res) => {
                     .reduce((total, tx) => total + parseFloat(tx.transaction_amount), 0);
 
                 const totalBalance = (totalReceive - totalSend).toFixed(2);
+                const totalEth = (token.token_price/token.token_supply)*totalBalance;
+                
 
-                return { ...token, totalBalance };
+                return { ...token, totalBalance, totalEth };
             });
 
             // Clean the data to exclude unnecessary fields
