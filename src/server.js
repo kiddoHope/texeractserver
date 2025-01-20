@@ -192,7 +192,12 @@ const getConversionRate = async () => {
 
   return conversionCache.solToEthRate;
 };
-
+const cleanData = (data, fieldsToRemove = []) => {
+  return data.map(item => {
+      fieldsToRemove.forEach(field => delete item[field]);
+      return item;
+  });
+};
 app.post('/xera/v1/api/info/token/asset-tokens', async (req, res) => {
   const { apikey } = req.body;
   
@@ -254,8 +259,8 @@ app.post('/xera/v1/api/info/token/asset-tokens', async (req, res) => {
           token_price: tokenPrice
         };
       });
-
-      return res.status(200).json({ success: true, data: updatedAssetTokens });
+      const cleanedData = cleanData(updatedAssetTokens, ['id']);
+      return res.status(200).json({ success: true, data: cleanedData });
     } else {
       return res.status(404).json({ success: false, message: "No tokens found" });
     }
