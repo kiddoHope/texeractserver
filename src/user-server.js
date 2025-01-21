@@ -1241,7 +1241,7 @@ app.post('/xera/v1/api/user/update-display', authenticateToken, async (req, res)
 
     const formRequestTXERADetails = JSON.parse(decodedFormRequestTXERADetails);
 
-    if (!formRequestTXERADetails || !formRequestTXERADetails.ethWallet || !formRequestTXERADetails.solWallet || !formRequestTXERADetails.xeraWallet || !formRequestTXERADetails.xeraUsername) {
+    if (!formRequestTXERADetails || !formRequestTXERADetails.xeraWallet || !formRequestTXERADetails.username) {
         return res.status(400).json({ success: false, message: 'Incomplete data' });
     }
 
