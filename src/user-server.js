@@ -657,6 +657,48 @@ app.post('/xera/v1/api/user/balance', authenticateToken, async (req, res) => {
     }
 });
 
+app.post('/xera/v1/api/user/mainnet/balance', authenticateToken, async (req, res) => {
+    const { user } = req.body;
+    if (!user) {
+        return res.json({ success: false, message: "Invalid request" });
+    }
+    const assetTokens = await fetchTotalBalanceTokens();
+
+    try {
+        // Fetch user transactions and token list in parallel
+        const [transactions] = await db.query('SELECT * FROM xera_mainnet_transactions WHERE receiver_address = ? OR sender_address = ?', [user, user]);
+
+        if (assetTokens.length > 0) {
+            const balances = assetTokens.map(token => {
+                const { token_id } = token;
+
+                // Calculate total sent and received for each token
+                const totalSend = transactions
+                    .filter(tx => tx.transaction_token_id === token_id && tx.sender_address === user)
+                    .reduce((total, tx) => total + parseFloat(tx.transaction_amount), 0);
+
+                const totalReceive = transactions
+                    .filter(tx => tx.transaction_token_id === token_id && tx.receiver_address === user)
+                    .reduce((total, tx) => total + parseFloat(tx.transaction_amount), 0);
+
+                const totalBalance = (totalReceive - totalSend).toFixed(2);
+                const totalBalanceETH = (token.token_price/token.token_circulating)*totalBalance;
+                
+
+                return { ...token, totalBalance, totalBalanceETH };
+            });
+
+            // Clean the data to exclude unnecessary fields
+            const cleanedData = cleanData(balances, ['id', 'token_owner', 'token_symbol', 'token_decimal', 'token_supply', 'token_circulating', 'token_info', 'token_on_treasury', 'token_is_claimable', 'token_on_locked', 'token_created', 'token_price']);
+            return res.json({ success: true, data: cleanedData });
+        } else {
+            return res.json({ success: false, message: "No tokens found" });
+        }
+    } catch (error) {
+        return res.json({ success: false, message: "Request error", error });
+    }
+});
+
 // Endpoint for fetching user's following list
 app.post('/xera/v1/api/user/following', authenticateToken, async (req, res) => {
     const { user } = req.body;
