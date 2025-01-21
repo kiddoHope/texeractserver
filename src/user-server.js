@@ -1413,6 +1413,59 @@ app.post('/xera/v1/api/user/send-token', authenticateToken, async (req, res) => 
     }
 });
 
+app.post('/xera/v1/api/user/mainnet/mint/token', authenticateToken, async (req, res) => {
+    const { data } = req.body;
+    const decodedFormRequestTXERADetails = Buffer.from(data, 'base64').toString('utf-8');
+
+    const formRequestTXERADetails = JSON.parse(decodedFormRequestTXERADetails);
+    
+    const apikey = formRequestTXERADetails.apiKey;
+    const origin = req.headers.origin
+    
+    const isValid = await validateApiKey(apikey,origin);
+    
+    if (!isValid)  {
+        return res.status(400).json({ success: false, message: isValid });
+    }
+
+    const { token_id, token_type, token_creator, token_owner, token_name, token_symbol, token_decimal, token_logo, token_max_supply, token_on_contract, token_on_contract_id, token_is_claimable, token_on_locked, token_holders, token_info } = formRequestTXERADetails;
+    // Validate request body
+    if (![token_id, token_type, token_creator, token_owner, token_name, token_symbol, token_decimal, token_logo, token_max_supply, token_on_contract, token_on_contract_id, token_is_claimable, token_on_locked, token_holders, token_info].every(Boolean)) {
+        return res.status(400).json({ success: false, message: 'Incomplete transaction data.' });
+    }
+
+    const txLocalDate = new Date().toISOString().slice(0, 19).replace('T', ' ');
+
+    try {
+        // Check for recent transactions
+        const [assetTokens] = await db.query(
+            'SELECT token_name, token_symbol FROM xera_asset_token WHERE token_symbol = ? AND token_name = ?',
+            [token_symbol,token_name]
+        );
+
+        if (assetTokens.length > 0) {
+            return res.status(429).json({ success: false, message: 'Token already minted.' });
+        }
+
+        const [addToken] = await db.query(
+            `INSERT INTO xera_asset_token 
+            (token_id, token_type, token_creator, token_owner, token_name, token_symbol, token_decimal, token_logo, token_max_supply, token_supply, token_on_owner, token_on_contract, token_on_contract_id, token_is_claimable, token_on_locked, token_circulating, token_holders, token_info)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+            [token_id, token_type, token_creator, token_owner, token_name, token_symbol, token_decimal, token_logo, token_max_supply, 0, token_max_supply, token_on_contract, token_on_contract_id, token_is_claimable, token_on_locked, 0, token_holders, token_info]
+        );
+
+        if (addToken.affectedRows > 0) {
+            return res.json({ success: true, message: `Successfully minted ${token_name}` });
+        } else {
+            return res.json({ success: false, message: 'Token minting failed' });
+        }
+        
+    } catch (error) {
+        console.error('Transaction Error:', error.message);
+        return res.status(500).json({ success: false, message: 'Internal Server Error' });
+    }
+});
+
 // Endpoint for fetching user nft
 app.post('/xera/v1/api/user/nfts', authenticateToken, async (req, res) => {
     const { user } = req.body;
