@@ -1331,7 +1331,7 @@ app.post('/xera/v1/api/user/mainnet/booster/sol', authenticateToken, async (req,
             `INSERT INTO xera_user_tasks 
             (username, xera_wallet, xera_task, xera_status, xera_points, xera_telegram_id, xera_twitter_username)
             VALUES (?, ?, ?, ?, ?, ?, ?)`,
-            [username, receiver, 'Send TXERA Task', 'ok', '1250', '', '']
+            [formRequestTXERADetails.tx_investor_name, formRequestTXERADetails.receiver_address, 'Booster Task', 'ok', formRequestTXERADetails.xera_points, '', '']
         );
 
         if (recordTaskResult.affectedRows === 0) {
@@ -1342,7 +1342,7 @@ app.post('/xera/v1/api/user/mainnet/booster/sol', authenticateToken, async (req,
         
         const [[lastTransaction]] = await db.query(
             'SELECT transaction_date, transaction_hash FROM xera_network_transactions WHERE transaction_command = ? AND sender_address = ? ORDER BY transaction_date DESC LIMIT 1',
-            [command,sender]
+            [formRequestTXERADetails.transaction_command,formRequestTXERADetails.sender_address]
         );
         if (lastTransaction) {
             transactionOrigin = lastTransaction.transaction_hash;
