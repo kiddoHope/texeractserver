@@ -1319,14 +1319,54 @@ app.post('/xera/v1/api/user/mainnet/booster/sol', authenticateToken, async (req,
 
     try {
         const [inserFund] = await db.query(`
-            INSERT INTO xera_user_investments (tx_hash, tx_amount, tx_token, tx_dollar, tx_investor_address, tx_investor_name, tx_external_hash, tx_external_date, tx_bought_asset, xera_address) 
+            INSERT INTO xera_user_investments (tx_hash, tx_amount, tx_token, tx_dollar, tx_investor_address, tx_investor_name, tx_external_hash, tx_external_date, tx_bought_asset, tx_funding_asset, tx_asset_id, xera_address) 
             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        `, [formRequestTXERADetails.tx_hash, formRequestTXERADetails.tx_amount, formRequestTXERADetails.tx_token, formRequestTXERADetails.tx_dollar, formRequestTXERADetails.tx_investor_address, formRequestTXERADetails.tx_investor_name, formRequestTXERADetails.tx_external_hash, formRequestTXERADetails.tx_external_date, formRequestTXERADetails.tx_bought_asset, formRequestTXERADetails.xera_address]);
-        if (inserFund.affectedRows > 0) {
-            return res.json({ success: true, message: 'Funding added successfully' });
-        } else {
+        `, [formRequestTXERADetails.tx_hash, formRequestTXERADetails.tx_amount, formRequestTXERADetails.tx_token, formRequestTXERADetails.tx_dollar, formRequestTXERADetails.tx_investor_address, formRequestTXERADetails.tx_investor_name, formRequestTXERADetails.tx_external_hash, formRequestTXERADetails.tx_external_date, formRequestTXERADetails.tx_bought_asset, formRequestTXERADetails.tx_funding_asset,  formRequestTXERADetails.tx_asset_id, formRequestTXERADetails.xera_address]);
+        
+        if (inserFund.affectedRows === 0) {
             return res.json({ success: false, message: 'Funding addition failed' });
         }
+
+        const [recordTaskResult] = await db.query(
+            `INSERT INTO xera_user_tasks 
+            (username, xera_wallet, xera_task, xera_status, xera_points, xera_telegram_id, xera_twitter_username)
+            VALUES (?, ?, ?, ?, ?, ?, ?)`,
+            [username, receiver, 'Send TXERA Task', 'ok', '1250', '', '']
+        );
+
+        if (recordTaskResult.affectedRows === 0) {
+            return res.status(500).json({ success: false, message: 'Error inserting record' });
+        }
+
+        let transactionOrigin = 'Genesis Transaction';
+        
+        const [[lastTransaction]] = await db.query(
+            'SELECT transaction_date, transaction_hash FROM xera_network_transactions WHERE transaction_command = ? AND sender_address = ? ORDER BY transaction_date DESC LIMIT 1',
+            [command,sender]
+        );
+        if (lastTransaction) {
+            transactionOrigin = lastTransaction.transaction_hash;
+        }
+        const [addTokenTransaction] = await db.query(
+            `INSERT INTO xera_mainnet_transactions 
+            (transaction_block, transaction_origin, transaction_hash, sender_address, receiver_address, transaction_command, transaction_amount, transaction_token, transaction_token_id, transaction_fee_amount, transaction_fee_token, transaction_fee_token_id, transaction_validator, transaction_info)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+            ["Genesis", transactionOrigin, formRequestTXERADetails.transaction_hash, formRequestTXERADetails.sender_address, formRequestTXERADetails.receiver_address, formRequestTXERADetails.transaction_command, formRequestTXERADetails.transaction_amount, formRequestTXERADetails.transaction_token, formRequestTXERADetails.transaction_token_id, '', '', '', formRequestTXERADetails.transaction_validator, formRequestTXERADetails.transaction_info ]
+        );
+
+        if (addTokenTransaction.affectedRows === 0) {
+            return res.json({ success: false, message: 'Add Transaction failed' });
+        }
+
+        const [addBlock] = await db.query(
+            `UPDATE xera_mainnet_blocks SET block_transactions = block_transactions + 1 WHERE block_validator = ?`,[transaction_validator]
+        );
+
+        if (addBlock.affectedRows === 0) {
+            return res.json({ success: false, message: 'Add Block failed' });
+        }
+        
+        return res.json({ success: true, message: `Successfully Apply Booster` });
     } catch (error) {
         return res.json({ success: false, message: 'Request error', error: error.message });
     }
@@ -1498,7 +1538,7 @@ app.post('/xera/v1/api/user/mainnet/mint/token', authenticateToken, async (req, 
             return res.json({ success: false, message: 'Add Token failed' });
         }
         const [addTokenTransaction] = await db.query(
-            `INSERT INTO mainnet_transactions 
+            `INSERT INTO xera_mainnet_transactions 
             (transaction_block, transaction_origin, transaction_hash, sender_address, receiver_address, transaction_command, transaction_amount, transaction_token, transaction_token_id, transaction_fee_amount, transaction_fee_token, transaction_fee_token_id, transaction_validator, transaction_info)
             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
             ["Genesis", "Genesis Transaction", transaction_hash, sender_address, token_creator, transaction_command, token_max_supply, token_symbol, token_id, transaction_fee_amount, transaction_fee_token, transaction_fee_token_id, transaction_validator,transaction_info ]
