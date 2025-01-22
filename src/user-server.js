@@ -1325,11 +1325,11 @@ app.post('/xera/v1/api/user/mainnet/booster/sol', authenticateToken, async (req,
     if (!isValid)  {
         return res.status(400).json({ success: false, message: isValid });
     }
-    
+
     try {
         const [inserFund] = await db.query(`
             INSERT INTO xera_user_investments (tx_hash, tx_amount, tx_token, tx_dollar, tx_investor_address, tx_investor_name, tx_external_hash, tx_external_date, tx_bought_asset, tx_funding_asset, tx_asset_id, xera_address) 
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         `, [formRequestTXERADetails.tx_hash, formRequestTXERADetails.tx_amount, formRequestTXERADetails.tx_token, 0, formRequestTXERADetails.tx_investor_address, formRequestTXERADetails.tx_investor_name, formRequestTXERADetails.tx_external_hash, formRequestTXERADetails.tx_external_date, '', formRequestTXERADetails.tx_funding_asset,  formRequestTXERADetails.tx_asset_id, formRequestTXERADetails.xera_address]);
         
         if (inserFund.affectedRows === 0) {
@@ -1368,7 +1368,7 @@ app.post('/xera/v1/api/user/mainnet/booster/sol', authenticateToken, async (req,
         }
 
         const [addBlock] = await db.query(
-            `UPDATE xera_mainnet_blocks SET block_transactions = block_transactions + 1 WHERE block_validator = ?`,[transaction_validator]
+            `UPDATE xera_mainnet_blocks SET block_transactions = block_transactions + 1 WHERE block_validator = ?`,[formRequestTXERADetails.transaction_validator]
         );
 
         if (addBlock.affectedRows === 0) {
