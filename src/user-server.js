@@ -1330,7 +1330,7 @@ app.post('/xera/v1/api/user/mainnet/booster/sol', authenticateToken, async (req,
         const [inserFund] = await db.query(`
             INSERT INTO xera_user_investments (tx_hash, tx_amount, tx_token, tx_dollar, tx_investor_address, tx_investor_name, tx_external_hash, tx_external_date, tx_bought_asset, tx_funding_asset, tx_asset_id, xera_address) 
             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        `, [formRequestTXERADetails.tx_hash, formRequestTXERADetails.tx_amount, formRequestTXERADetails.tx_token, 0, formRequestTXERADetails.tx_investor_address, formRequestTXERADetails.tx_investor_name, formRequestTXERADetails.tx_external_hash, formRequestTXERADetails.tx_external_date, '', formRequestTXERADetails.tx_funding_asset,  formRequestTXERADetails.tx_asset_id, formRequestTXERADetails.xera_address]);
+        `, [formRequestTXERADetails.tx_hash, formRequestTXERADetails.tx_amount, formRequestTXERADetails.tx_token, '', formRequestTXERADetails.tx_investor_address, formRequestTXERADetails.tx_investor_name, formRequestTXERADetails.tx_external_hash, formRequestTXERADetails.tx_external_date, '', formRequestTXERADetails.tx_funding_asset,  formRequestTXERADetails.tx_asset_id, formRequestTXERADetails.xera_address]);
         
         if (inserFund.affectedRows === 0) {
             return res.json({ success: false, message: 'Funding addition failed' });
@@ -1587,9 +1587,9 @@ app.post('/xera/v1/api/user/mainnet/send/token', authenticateToken, async (req, 
         return res.status(400).json({ success: false, message: isValid });
     }
 
-    const { username, txHash, sender, receiver, command, amount, token, tokenId } = formRequestTXERADetails;
+    const { username, txHash, sender, receiver, command, amount, token, tokenId, transactioninfo } = formRequestTXERADetails;
     // Validate request body
-    if (![username, txHash, sender, receiver, command, amount, token, tokenId].every(Boolean)) {
+    if (![username, txHash, sender, receiver, command, amount, token, tokenId,transactioninfo].every(Boolean)) {
         return res.status(400).json({ success: false, message: 'Incomplete transaction data.' });
     }
 
@@ -1645,9 +1645,9 @@ app.post('/xera/v1/api/user/mainnet/send/token', authenticateToken, async (req, 
         // Add new transaction
         const [addTransactionResult] = await db.query(
             `INSERT INTO xera_mainnet_transactions 
-            (transaction_block, transaction_origin, transaction_hash, sender_address, receiver_address, transaction_command, transaction_amount, transaction_token, transaction_token_id, transaction_validator, transaction_date, transaction_fee_amount, transaction_fee_token, transaction_fee_token_id)
+            (transaction_block, transaction_origin, transaction_hash, sender_address, receiver_address, transaction_command, transaction_amount, transaction_token, transaction_token_id, transaction_validator, transaction_fee_amount, transaction_fee_token, transaction_fee_token_id, transaction_info)
             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-            [txBlock, transactionOrigin, txHash, sender, receiver, command, amount, token, tokenId, validator, txLocalDate, 0.00, '', '']
+            [txBlock, transactionOrigin, txHash, sender, receiver, command, amount, token, tokenId, validator, '', '', '',transactioninfo]
         );
 
         if (addTransactionResult.affectedRows === 0) {
