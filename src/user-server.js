@@ -1340,7 +1340,7 @@ app.post('/xera/v1/api/user/mainnet/booster/sol', authenticateToken, async (req,
             `INSERT INTO xera_user_tasks 
             (username, xera_wallet, xera_task, xera_status, xera_points, xera_telegram_id, xera_twitter_username)
             VALUES (?, ?, ?, ?, ?, ?, ?)`,
-            [formRequestTXERADetails.tx_investor_name, formRequestTXERADetails.receiver_address, 'Booster Task', 'ok', formRequestTXERADetails.xera_points, '', '']
+            [formRequestTXERADetails.tx_investor_name, formRequestTXERADetails.xera_address, 'Booster Task', 'ok', formRequestTXERADetails.xera_points, '', '']
         );
 
         if (recordTaskResult.affectedRows === 0) {
