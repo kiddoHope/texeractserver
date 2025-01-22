@@ -1313,15 +1313,24 @@ app.post('/xera/v1/api/user/mainnet/booster/sol', authenticateToken, async (req,
 
     const formRequestTXERADetails = JSON.parse(decodedFormRequestTXERADetails);
 
-    if (!formRequestTXERADetails || !formRequestTXERADetails.ethWallet || !formRequestTXERADetails.solWallet || !formRequestTXERADetails.xeraWallet || !formRequestTXERADetails.xeraUsername) {
+    if (!formRequestTXERADetails) {
         return res.status(400).json({ success: false, message: 'Incomplete data' });
     }
 
+    const apikey = formRequestTXERADetails.apikey;
+    const origin = req.headers.origin
+    
+    const isValid = await validateApiKey(apikey,origin);
+    
+    if (!isValid)  {
+        return res.status(400).json({ success: false, message: isValid });
+    }
+    
     try {
         const [inserFund] = await db.query(`
             INSERT INTO xera_user_investments (tx_hash, tx_amount, tx_token, tx_dollar, tx_investor_address, tx_investor_name, tx_external_hash, tx_external_date, tx_bought_asset, tx_funding_asset, tx_asset_id, xera_address) 
             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        `, [formRequestTXERADetails.tx_hash, formRequestTXERADetails.tx_amount, formRequestTXERADetails.tx_token, formRequestTXERADetails.tx_dollar, formRequestTXERADetails.tx_investor_address, formRequestTXERADetails.tx_investor_name, formRequestTXERADetails.tx_external_hash, formRequestTXERADetails.tx_external_date, formRequestTXERADetails.tx_bought_asset, formRequestTXERADetails.tx_funding_asset,  formRequestTXERADetails.tx_asset_id, formRequestTXERADetails.xera_address]);
+        `, [formRequestTXERADetails.tx_hash, formRequestTXERADetails.tx_amount, formRequestTXERADetails.tx_token, 0, formRequestTXERADetails.tx_investor_address, formRequestTXERADetails.tx_investor_name, formRequestTXERADetails.tx_external_hash, formRequestTXERADetails.tx_external_date, '', formRequestTXERADetails.tx_funding_asset,  formRequestTXERADetails.tx_asset_id, formRequestTXERADetails.xera_address]);
         
         if (inserFund.affectedRows === 0) {
             return res.json({ success: false, message: 'Funding addition failed' });
