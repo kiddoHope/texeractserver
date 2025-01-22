@@ -1307,7 +1307,7 @@ app.post('/xera/v1/api/user/update-display', authenticateToken, async (req, res)
     }
 });
 
-app.post('/xera/v1/api/user/funding/add-fund', authenticateToken, async (req, res) => {
+app.post('/xera/v1/api/user/mainnet/booster/sol', authenticateToken, async (req, res) => {
     const { data } = req.body;
     const decodedFormRequestTXERADetails = Buffer.from(data, 'base64').toString('utf-8');
 
@@ -1470,9 +1470,9 @@ app.post('/xera/v1/api/user/mainnet/mint/token', authenticateToken, async (req, 
         return res.status(400).json({ success: false, message: isValid });
     }
 
-    const { token_id, token_type, token_creator, token_owner, token_name, token_symbol, token_decimal, token_logo, token_max_supply, token_on_contract, token_on_contract_id, token_is_claimable, token_on_locked, token_holders, token_info, transaction_hash, sender_address, transaction_command, transaction_fee_amount, transaction_fee_token, transaction_fee_token_id, transaction_validator } = formRequestTXERADetails;
+    const { token_id, token_type, token_creator, token_name, token_symbol, token_decimal, token_logo, token_max_supply,token_is_claimable, token_info, transaction_hash, sender_address, transaction_command, transaction_fee_amount, transaction_fee_token, transaction_fee_token_id, transaction_validator,transaction_info } = formRequestTXERADetails;
     // Validate request body
-    if (![token_id, token_type, token_creator, token_owner, token_name, token_symbol, token_decimal, token_logo, token_max_supply, token_on_contract, token_on_contract_id, token_is_claimable, token_on_locked, token_holders, token_info].every(Boolean)) {
+    if (![token_id, token_type, token_creator, token_name, token_symbol, token_decimal, token_logo, token_max_supply, token_is_claimable, token_info].every(Boolean)) {
         return res.status(400).json({ success: false, message: 'Incomplete transaction data.' });
     }
 
@@ -1491,7 +1491,7 @@ app.post('/xera/v1/api/user/mainnet/mint/token', authenticateToken, async (req, 
             `INSERT INTO xera_asset_token 
             (token_id, token_type, token_creator, token_owner, token_name, token_symbol, token_decimal, token_logo, token_max_supply, token_supply, token_on_owner, token_on_contract, token_on_contract_id, token_is_claimable, token_on_locked, token_circulating, token_holders, token_info)
             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-            [token_id, token_type, token_creator, token_owner, token_name, token_symbol, token_decimal, token_logo, token_max_supply, 0, token_max_supply, token_on_contract, token_on_contract_id, token_is_claimable, token_on_locked, 0, token_holders, token_info]
+            [token_id, token_type, token_creator, token_creator, token_name, token_symbol, token_decimal, token_logo, token_max_supply, 0, token_max_supply, '', '', token_is_claimable, '', 0, '', token_info]
         );
 
         if (addToken.affectedRows === 0) {
@@ -1499,9 +1499,9 @@ app.post('/xera/v1/api/user/mainnet/mint/token', authenticateToken, async (req, 
         }
         const [addTokenTransaction] = await db.query(
             `INSERT INTO mainnet_transactions 
-            (transaction_block, transaction_origin, transaction_hash, sender_address, receiver_address, transaction_command, transaction_amount, transaction_token, transaction_token_id, transaction_fee_amount, transaction_fee_token, transaction_fee_token_id, transaction_validator)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-            ["Genesis", "Genesis Transaction", transaction_hash, sender_address, token_owner, transaction_command, token_max_supply, token_symbol, token_id, transaction_fee_amount, transaction_fee_token, transaction_fee_token_id, transaction_validator ]
+            (transaction_block, transaction_origin, transaction_hash, sender_address, receiver_address, transaction_command, transaction_amount, transaction_token, transaction_token_id, transaction_fee_amount, transaction_fee_token, transaction_fee_token_id, transaction_validator, transaction_info)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+            ["Genesis", "Genesis Transaction", transaction_hash, sender_address, token_creator, transaction_command, token_max_supply, token_symbol, token_id, transaction_fee_amount, transaction_fee_token, transaction_fee_token_id, transaction_validator,transaction_info ]
         );
 
         if (addTokenTransaction.affectedRows === 0) {
