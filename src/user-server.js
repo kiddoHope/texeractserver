@@ -1593,8 +1593,6 @@ app.post('/xera/v1/api/user/mainnet/send/token', authenticateToken, async (req, 
         return res.status(400).json({ success: false, message: 'Incomplete transaction data.' });
     }
 
-    const txLocalDate = new Date().toISOString().slice(0, 19).replace('T', ' ');
-
     try {
         // Check for recent transactions
         const [[lastTransaction]] = await db.query(
@@ -1604,20 +1602,6 @@ app.post('/xera/v1/api/user/mainnet/send/token', authenticateToken, async (req, 
 
         let transactionOrigin = 'Genesis Transaction';
         if (lastTransaction) {
-            const lastTxDate = new Date(lastTransaction.transaction_date).getTime();
-            const timeDiff = Date.now() - lastTxDate;
-
-            if (timeDiff < 21600000) { // 12 hours in milliseconds
-                const timeRemainingMs = 21600000 - timeDiff;
-                const hours = Math.floor(timeRemainingMs / 3600000);
-                const minutes = Math.floor((timeRemainingMs % 3600000) / 60000);
-                const seconds = Math.floor((timeRemainingMs % 60000) / 1000);
-                return res.status(429).json({
-                    success: false,
-                    message: `Send again after ${hours}h ${minutes}m ${seconds}s`,
-                });
-            }
-
             transactionOrigin = lastTransaction.transaction_hash;
         }
 
@@ -1654,36 +1638,37 @@ app.post('/xera/v1/api/user/mainnet/send/token', authenticateToken, async (req, 
             return res.status(500).json({ success: false, message: 'Error adding transaction' });
         }
 
-        if (receiver === 'XERA Centralized Treasury') {
-            const [checkTokenOwner] = await db.query('SELECT token_symbol FROM xera_asset_token WHERE token_owner = ?', [sender]);
-            if (checkTokenOwner.length > 0) {
-                const [updateTokenOwner] = await db.query('UPDATE xera_asset_token SET token_supply = token_supply + ? WHERE token_symbol = ?', [amount, token]);
-                if (updateTokenOwner.affectedRows === 0) {
-                    return res.status(500).json({ success: false, message: 'Error updating token owner' });
-                } else {
-                    return res.status(200).json({ success: true, message: `${amount} ${token} Sent Successfully.` });
-                }
+        const [checkTokenOwner] = await db.query('SELECT token_symbol FROM xera_asset_token WHERE token_owner = ?', [sender]);
+
+        if (receiver === 'XERA Centralized Treasury' && checkTokenOwner.length > 0) {
+            const [updateTokenOwner] = await db.query('UPDATE xera_asset_token SET token_supply = token_supply + ? WHERE token_symbol = ?', [amount, token]);
+            if (updateTokenOwner.affectedRows === 0) {
+                return res.status(500).json({ success: false, message: 'Error updating token owner' });
+            } else {
+                return res.status(200).json({ success: true, message: `${amount} ${token} Sent Successfully.` });
             }
-        }
+        } 
         // Update token circulation
-        const [[currentToken]] = await db.query(
-            'SELECT token_circulating FROM xera_asset_token WHERE token_symbol = ?',
-            [token]
-        );
-
-        if (!currentToken) {
-            return res.status(404).json({ success: false, message: 'Token not found or mismatched token symbol.' });
-        }
-
-        const newCirculating = parseInt(currentToken.token_circulating, 10) + parseInt(amount, 10);
-
-        const [updateTokenResult] = await db.query(
-            'UPDATE xera_asset_token SET token_circulating = ? WHERE token_id = ?',
-            [newCirculating, tokenId]
-        );
-
-        if (updateTokenResult.affectedRows === 0) {
-            return res.status(500).json({ success: false, message: 'Error updating token circulation' });
+        if (checkTokenOwner.length > 0) {
+            const [[currentToken]] = await db.query(
+                'SELECT token_circulating FROM xera_asset_token WHERE token_symbol = ?',
+                [token]
+            );
+    
+            if (!currentToken) {
+                return res.status(404).json({ success: false, message: 'Token not found or mismatched token symbol.' });
+            }
+    
+            const newCirculating = parseInt(currentToken.token_circulating, 10) + parseInt(amount, 10);
+    
+            const [updateTokenResult] = await db.query(
+                'UPDATE xera_asset_token SET token_circulating = ? WHERE token_id = ?',
+                [newCirculating, tokenId]
+            );
+    
+            if (updateTokenResult.affectedRows === 0) {
+                return res.status(500).json({ success: false, message: 'Error updating token circulation' });
+            }
         }
 
         // All operations succeeded
