@@ -395,7 +395,7 @@ app.post('/xera/v1/api/user/tasks/all-task', authenticateToken, async (req, res)
                 "Subscribe - @CrypDropPh", "Subscribe - @kimporsha11", 
                 "Facebook Task", "Telegram 2 Task", "TikTok Task", 
                 "Bluesky Task", "YouTube Task", "TXERA Claim Task", "Soldi Task",
-                "StealthAI Task", "Validium Task" ,"IQwiki Task"
+                "StealthAI Task", "Validium Task" ,"IQwiki Task", "Cryptify Task"
             ];
 
             // Iterate through each task type and filter the transactions
@@ -797,7 +797,7 @@ app.post('/xera/v1/api/user/faucet-claim', authenticateToken, async (req, res) =
         // Add new transaction
         const [addTransactionResult] = await db.query(
             `INSERT INTO xera_network_transactions 
-            (transaction_block, transaction_origin, transaction_hash, sender_address, receiver_address, transaction_command, transaction_amount, transaction_token, transaction_token_id, transaction_validator, transaction_date, transaction_fee_amount, transaction_fee_token, transaction_fee_token_id)
+            (transaction_block, transaction_origin, transaction_hash, sender_address, receiver_address, transaction_command, transaction_amount, transaction_token, transaction_token_id, transaction_validator, transaction_date, transaction_fee_amount, transaction_fee_token, transaction_fee_token_id, token_holders)
             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
             [txBlock, transactionOrigin, txHash, sender, receiver, command, amount, token, tokenId, validator, txLocalDate, 0.00, '', '']
         );
