@@ -1259,7 +1259,7 @@ app.post('/xera/v1/api/user/register', async (req, res) => {
                         const [refres] = await db.query(`
                             INSERT INTO xera_user_tasks (username, xera_wallet, xera_telegram_id, xera_twitter_username, xera_task, xera_status, xera_points) 
                             VALUES (?, ?, ?, ?, ?, ?, ?)
-                        `, [findUser[0].username, findUser[0].xera_wallet, '', '', 'Referral Task', 'ok', '5000']);
+                        `, [findUser[0].username, findUser[0].xera_wallet, '', '', 'Referral Task', 'ok', '2500']);
                         if (refres.affectedRows > 0) {
                             return res.json({ success: true, message: 'User successfully registered' });
                         }
