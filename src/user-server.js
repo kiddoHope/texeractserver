@@ -744,7 +744,7 @@ app.post('/xera/v1/api/user/faucet-claim', authenticateToken, async (req, res) =
     if (![username, txHash, sender, receiver, command, amount, token, tokenId].every(Boolean)) {
         return res.status(400).json({ success: false, message: 'Incomplete transaction data.' });
     }
-
+    
     const txLocalDate = new Date().toISOString().slice(0, 19).replace('T', ' ');
 
     try {
@@ -797,7 +797,7 @@ app.post('/xera/v1/api/user/faucet-claim', authenticateToken, async (req, res) =
         // Add new transaction
         const [addTransactionResult] = await db.query(
             `INSERT INTO xera_network_transactions 
-            (transaction_block, transaction_origin, transaction_hash, sender_address, receiver_address, transaction_command, transaction_amount, transaction_token, transaction_token_id, transaction_validator, transaction_date, transaction_fee_amount, transaction_fee_token, transaction_fee_token_id, token_holders)
+            (transaction_block, transaction_origin, transaction_hash, sender_address, receiver_address, transaction_command, transaction_amount, transaction_token, transaction_token_id, transaction_validator, transaction_date, transaction_fee_amount, transaction_fee_token, transaction_fee_token_id)
             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
             [txBlock, transactionOrigin, txHash, sender, receiver, command, amount, token, tokenId, validator, txLocalDate, 0.00, '', '']
         );
