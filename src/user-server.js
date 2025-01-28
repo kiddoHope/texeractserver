@@ -7,6 +7,8 @@ const compression = require("compression");
 const NodeCache = require("node-cache");
 const bcrypt = require("bcrypt");
 const e = require("express");
+const path = require('path');
+const multer = require('multer');
 const { default: axios } = require("axios");
 require("dotenv").config();
 
@@ -1782,6 +1784,33 @@ app.post('/xera/v1/api/user/nft-claim', authenticateToken, async (req, res) => {
     }
 });
 
+const storage = multer.diskStorage({
+    destination: (req, file, cb) => {
+      cb(null, '/home/texeract/htdocs/texeract.network/nft/'); // Directory to save files
+    },
+    filename: (req, file, cb) => {
+      cb(null, `${Date.now()}-${file.originalname}`); // Unique filename
+    },
+  });
+
+const upload = multer({ storage });
+
+// Create the uploads directory if it doesn't exist
+const fs = require('fs');
+if (!fs.existsSync('uploads')) {
+fs.mkdirSync('uploads');
+}
+
+// Upload route
+app.post('/upload', upload.single('file'), (req, res) => {
+if (!req.file) {
+    return res.status(400).send('No file uploaded.');
+}
+res.send({ message: 'File uploaded successfully!', file: req.file });
+});
+
+// Serve uploaded files statically
+app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
 // Global error handling middleware
 app.use((err, req, res, next) => {
