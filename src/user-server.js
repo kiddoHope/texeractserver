@@ -1934,9 +1934,7 @@ const storage = multer.diskStorage({
     },
     filename: (req, file, cb) => {
         // Get custom filename from request body or generate a unique name
-        const newFileName = req.body.filename 
-            ? `${req.body.filename}${path.extname(file.originalname)}` 
-            : `${Date.now()}-${file.originalname}`;
+        const newFileName = `${req.body.filename}${path.extname(file.originalname)}`
         cb(null, newFileName);
     }
 });
