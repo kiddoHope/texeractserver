@@ -1660,7 +1660,7 @@ app.post('/xera/v1/api/user/mainnet/mintnft/sol', authenticateToken, async (req,
         return res.json({ success: true, message: `Successfully minted NFT ${nft_name}` });
     } catch (error) {
         console.error('Transaction Error:', error.message);
-        return res.status(500).json({ success: false, message: 'Internal Server Error' });
+        return res.status(500).json({ success: false, message: 'Internal Server Error', error:error.message });
     }
 });
 
