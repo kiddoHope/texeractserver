@@ -8,7 +8,7 @@ const db = require('./connection');
 const { default: axios } = require("axios");
 
 const app = express();
-const port = 5000;
+const port = 5008;
 
 app.use(compression());
 app.use(bodyParser.json());
@@ -171,145 +171,66 @@ let conversionCache = {
   lastUpdated: null
 };
 
-const fetchConversionRate = async () => {
-  try {
-    const response = await axios.get("https://api.coingecko.com/api/v3/simple/price?ids=solana&vs_currencies=eth");
-    conversionCache.solToEthRate = response.data.solana.eth;
-    conversionCache.lastUpdated = Date.now();
-  } catch (error) {
-    console.error('Error fetching conversion rate:', error.message);
-    throw new Error("Error fetching conversion rate");
-  }
-};
-
-const getConversionRate = async () => {
-  const now = Date.now();
-  const fiveMinutes = 5 * 60 * 1000;
-
-  if (!conversionCache.solToEthRate || (now - conversionCache.lastUpdated) > fiveMinutes) {
-    await fetchConversionRate();
-  }
-
-  return conversionCache.solToEthRate;
-};
 const cleanData = (data, fieldsToRemove = []) => {
   return data.map(item => {
       fieldsToRemove.forEach(field => delete item[field]);
       return item;
   });
 };
-app.post('/xera/v1/api/info/token/asset-tokens', async (req, res) => {
-  const { apikey } = req.body;
-  const origin = req.headers.origin
-  
-  const isValid = await validateApiKey(apikey,origin);
-  
-  if (!isValid) {
-    return res.status(400).json({ success: false, message: isValid });
-  }
-  
-  try {
-    const [assetTokens] = await db.query('SELECT * FROM xera_asset_token');
-    const [sums] = await db.query(
-      `SELECT tx_asset_id, tx_token, SUM(tx_amount) AS total_tx_amount
-      FROM xera_user_investments
-      WHERE tx_token IN ('SOL', 'ETH')
-      GROUP BY tx_asset_id, tx_token`
-    );
 
-    const tokenPrices = {};
-
-    if (sums.length > 0) {
-      const solana = sums.filter((sum) => sum.tx_token === 'SOL');
-      const solTotal = solana.reduce((acc, curr) => acc + curr.total_tx_amount, 0);
-      const etherium = sums.filter((sum) => sum.tx_token === 'ETH');
-      const ethTotal = etherium.reduce((acc, curr) => acc + curr.total_tx_amount, 0);
-
-      try {
-        const solToEthRate = await getConversionRate();
-
-        // Calculate the percentage for each tx_asset_id
-        sums.forEach(sum => {
-          const { tx_asset_id, tx_token, total_tx_amount } = sum;
-          let totalEth = 0;
-
-          if (tx_token === 'SOL') {
-            totalEth = total_tx_amount * solToEthRate;
-          } else if (tx_token === 'ETH') {
-            totalEth = total_tx_amount;
-          }
-
-          if (!tokenPrices[tx_asset_id]) {
-            tokenPrices[tx_asset_id] = 0;
-          }
-
-          tokenPrices[tx_asset_id] += totalEth * 0.85;
-        });
-
-      } catch (error) {
-        return res.status(500).json({ success: false, message: error.message });
+const fetchData = async (url, apikey) => {
+    try {
+      const response = await axios.post(url, { apikey });
+      if (response.data.success) {
+        return response.data;
       }
+    } catch (error) {
+      console.error(`Error fetching data from ${url}:`, error.message);
     }
+    return null;
+  };
 
-    if (assetTokens.length > 0) {
-      // Map the tokenPrices to the assetTokens based on token_id
-      const updatedAssetTokens = assetTokens.map(assetToken => {
-        const tokenPrice = tokenPrices[assetToken.token_id] || assetToken.token_price;
-        return {
-          ...assetToken,
-          marketCap: tokenPrice
-        };
-      });
-      const cleanedData = cleanData(updatedAssetTokens, ['id', 'token_price']);
-      return res.status(200).json({ success: true, data: cleanedData });
-    } else {
-      return res.status(404).json({ success: false, message: "No tokens found" });
+app.post('/xera/v1/api/info/proxy', async (req, res) => {
+    const { apikey } = req.body;
+    const origin = req.headers.origin
+    
+    const isValid = await validateApiKey(apikey,origin);
+
+    if (!isValid)  {
+        return res.status(400).json({ success: false, message: isValid });
     }
-  } catch (error) {
-    console.error('Error:', error.message);
-    return res.status(500).json({ success: false, message: "Server error", error: error.message });
-  }
-});
-
-app.post('/xera/v1/api/info/node/transaction-history', async (req, res) => {
-  const { apikey } = req.body;
-  
-  const isValid = await getDevFromCache(apikey);
-  
-  if (!isValid)  {
-    return res.status(400).json({ success: false, message: isValid });
-  }
       
+    const decodekey = decodeKey(apikey);
+    
   try {
-      // Fetch the most recent transaction date
-      const [lastDateResult] = await db.query(
-          `SELECT MAX(node_txdate) AS lastDate
-           FROM xera_user_node`
-      );
 
-      const lastDate = lastDateResult[0]?.lastDate;
+    const allWallet = await axios.post('https://texeract.network/xera/v1/api/users/all-wallet', {
+        apikey: decodekey,
+    })
 
-      if (!lastDate) {
-          return res.json({ success: false, message: "No transactions available" });
-      }
+    const assetToken  = await axios.post('https://texeract.network/xera/v1/api/info/token/asset-tokens', {
+        apikey: decodekey,
+    })
 
-      // Query for transactions from the last transaction date
-      const [transactionNode] = await db.query(
-          `SELECT node_id, node_name, node_owner, node_points, node_txhash, node_txdate
-           FROM xera_user_node
-           WHERE node_txdate = ?`,
-          [lastDate]
-      );
+    const nftBanners  = await axios.post('https://texeract.network/xera/v1/api/marketplace/banners', {
+        apikey: decodekey,
+    })
 
-      if (transactionNode.length > 0) {
-          return res.status(200).json({
-              success: true,
-              message: "User transactions successfully retrieved",
-              transaction: transactionNode,
-          });
-      } else {
-          return res.status(404).json({ success: false, message: "No transactions found for the last date" });
-      }
+    const nftFeatured  = await axios.post('https://texeract.network/xera/v1/api/marketplace/featured', {
+        apikey: decodekey,
+    })
+    
+    const allData = {
+        allWallet: allWallet.data || {},
+        assetToken: assetToken.data || {},
+        nftBanners: nftBanners.data || {},
+        nftFeatured: nftFeatured.data || {}
+    };
+
+    const stringify = JSON.stringify(allData);
+    const encryptedKey = CryptoJS.AES.encrypt(stringify, process.env.MAIN_JWT_SECRET).toString();
+    
+    return res.status(200).json({ success: true, data: encryptedKey });
   } catch (error) {
       return res.status(500).json({ success: false, message: "Request error", error: error.message });
   }
