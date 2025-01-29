@@ -20,6 +20,8 @@ const cache = new NodeCache({ stdTTL: 60, checkperiod: 120 });
 app.use(compression());
 app.use(bodyParser.json());
 
+const xeraBaseAPI = "https://texeract.network/xera/v1/api";
+
 const allowedOrigins = [
     "https://texeract.network",
     "http://localhost:3000",
@@ -178,18 +180,6 @@ const cleanData = (data, fieldsToRemove = []) => {
   });
 };
 
-const fetchData = async (url, apikey) => {
-    try {
-      const response = await axios.post(url, { apikey });
-      if (response.data.success) {
-        return response.data;
-      }
-    } catch (error) {
-      console.error(`Error fetching data from ${url}:`, error.message);
-    }
-    return null;
-  };
-
 app.post('/xera/v1/api/public', async (req, res) => {
     const { apikey } = req.body;
     const origin = req.headers.origin
@@ -204,19 +194,19 @@ app.post('/xera/v1/api/public', async (req, res) => {
     
   try {
 
-    const allWallet = await axios.post('https://texeract.network/xera/v1/api/users/all-wallet', {
+    const allWallet = await axios.post(`${xeraBaseAPI}/users/all-wallet`, {
         apikey: decodekey,
     })
 
-    const assetToken  = await axios.post('https://texeract.network/xera/v1/api/info/token/asset-tokens', {
+    const assetToken  = await axios.post(`${xeraBaseAPI}/info/token/asset-tokens`, {
         apikey: decodekey,
     })
 
-    const nftBanners  = await axios.post('https://texeract.network/xera/v1/api/marketplace/banners', {
+    const nftBanners  = await axios.post(`${xeraBaseAPI}/marketplace/banners`, {
         apikey: decodekey,
     })
 
-    const nftFeatured  = await axios.post('https://texeract.network/xera/v1/api/marketplace/featured', {
+    const nftFeatured  = await axios.post(`${xeraBaseAPI}/marketplace/featured`, {
         apikey: decodekey,
     })
     
@@ -234,6 +224,44 @@ app.post('/xera/v1/api/public', async (req, res) => {
   } catch (error) {
       return res.status(500).json({ success: false, message: "Request error", error: error.message });
   }
+});
+
+app.post('/xera/v1/api/public/user', async (req, res) => {
+  const { user } = req.body;
+
+  if (!user) {
+    return res.status(400).json({ success: false, message: "No user provided" });
+  }
+  
+  const headers = { Authorization: `Bearer ${user.header}` };
+
+try {
+
+  const [security, transactions, followers, balance, nodes, nfts] = await Promise.all([
+    axios.post(`${xeraBaseAPI}/user/security`, {user: user.address}, { headers }),
+    axios.post(`${xeraBaseAPI}/user/transactions`, {user: user.address}, { headers }),
+    axios.post(`${xeraBaseAPI}/user/following`, {user: user.username}, { headers }),
+    axios.post(`${xeraBaseAPI}/user/mainnet/balance`, {user: user.address}, { headers }),
+    axios.post(`${xeraBaseAPI}/user/nodes`, {user: user.address}, { headers }),
+    axios.post(`${xeraBaseAPI}/user/nfts`, {user: user.address}, { headers }),
+]);
+  
+  const allData = {
+      security: security.data || {},
+      transactions: transactions.data || {},
+      followers: followers.data || {},
+      balance: balance.data || {},
+      nodes: nodes.data || {},
+      nfts: nfts.data || {}
+  };
+
+  const stringify = JSON.stringify(allData);
+  const encryptedKey = CryptoJS.AES.encrypt(stringify, process.env.MAIN_JWT_SECRET).toString();
+
+  return res.status(200).json({ success: true, data: encryptedKey });
+} catch (error) {
+    return res.status(500).json({ success: false, message: "Request error", error: error.message });
+}
 });
 
 // app.post('/xera/v1/api/info/token/total-investments', async (req, res) => {
