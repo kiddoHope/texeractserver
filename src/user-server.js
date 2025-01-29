@@ -1680,21 +1680,10 @@ app.post('/xera/v1/api/user/mainnet/mintlab/nft', authenticateToken, async (req,
         return res.status(400).json({ success: false, message: isValid });
     }
 
-    const { transaction_hash, sender_address, receiver_address, transaction_command, transaction_amount, transaction_token, transaction_token_id, transaction_validator, transaction_info } = formRequestTXERADetails;
+    const { transaction_origin, transaction_hash, sender_address, receiver_address, transaction_command, transaction_amount, transaction_token, transaction_token_id, transaction_validator, transaction_info } = formRequestTXERADetails;
     // Validate request body
     if (![ transaction_hash, sender_address, receiver_address, transaction_command, transaction_amount, transaction_token, transaction_token_id, transaction_validator, transaction_info].every(Boolean)) {
         return res.status(400).json({ success: false, message: 'Incomplete transaction data.' });
-    }
-
-    const [[lastTransaction]] = await db.query(
-        'SELECT transaction_date, transaction_hash FROM xera_mainnet_transactions WHERE transaction_command = ? AND sender_address = ? ORDER BY transaction_date DESC LIMIT 1',
-        [transaction_command, sender_address]
-    );
-
-    let transactionOrigin = 'Genesis Transaction';
-
-    if (lastTransaction) {
-        transactionOrigin = lastTransaction.transaction_hash;
     }
 
     try {
@@ -1702,7 +1691,7 @@ app.post('/xera/v1/api/user/mainnet/mintlab/nft', authenticateToken, async (req,
             `INSERT INTO xera_mainnet_transactions 
             (transaction_block, transaction_origin, transaction_hash, sender_address, receiver_address, transaction_command, transaction_amount, transaction_token, transaction_token_id, transaction_fee_amount, transaction_fee_token, transaction_fee_token_id, transaction_validator, transaction_info)
             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-            ["Genesis", transactionOrigin, transaction_hash, sender_address, receiver_address, transaction_command, transaction_amount, transaction_token, transaction_token_id, '', '', '', transaction_validator,transaction_info ]
+            ["Genesis", transaction_origin, transaction_hash, sender_address, receiver_address, transaction_command, transaction_amount, transaction_token, transaction_token_id, '', '', '', transaction_validator,transaction_info ]
         );
 
         if (addTokenTransaction.affectedRows === 0) {
