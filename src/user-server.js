@@ -1936,7 +1936,7 @@ const storage = multer.diskStorage({
       cb(null, uploadPath); // Directory to save files
     },
     filename: (req, file, cb) => {
-      const uniqueFilename = filename || `${Date.now()}-${file.originalname}`;
+      const uniqueFilename = filename;
       cb(null, uniqueFilename); // Unique filename
     },
   });
