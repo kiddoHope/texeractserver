@@ -1604,7 +1604,7 @@ app.post('/xera/v1/api/user/mainnet/mintnft/sol', authenticateToken, async (req,
     }
     
 
-    const { nft_id, nft_collection, nft_version, nft_icon, nft_name, nft_content, nft_creator, nft_type, nft_status, nft_rarity, nft_parts, nft_info, tx_hash, tx_amount, tx_token, tx_investor_address, tx_investor_name, tx_external_hash, tx_external_date, tx_funding_asset, tx_asset_id, xera_address, transaction_hash, sender_address, receiver_address, transaction_command, transaction_amount, transaction_token, transaction_token_id, transaction_validator, transaction_info } = formRequestTXERADetails;
+    const { nft_id, nft_collection, nft_version, nft_icon, nft_name, nft_content, nft_creator, nft_type, nft_status, nft_rarity, nft_info, tx_hash, tx_amount, tx_token, tx_investor_address, tx_investor_name, tx_external_hash, tx_external_date, tx_funding_asset, tx_asset_id, xera_address, transaction_hash, sender_address, receiver_address, transaction_command, transaction_amount, transaction_token, transaction_token_id, transaction_validator, transaction_info } = formRequestTXERADetails;
     // Validate request body
 
     const [[lastTransaction]] = await db.query(
@@ -1623,7 +1623,7 @@ app.post('/xera/v1/api/user/mainnet/mintnft/sol', authenticateToken, async (req,
             `INSERT INTO xera_asset_nfts 
             (nft_id, nft_collection, nft_version, nft_icon, nft_name, nft_content, nft_creator, nft_owner, nft_type, nft_status, nft_rarity, nft_parts, nft_stakeable, nft_redeemable, nft_price, nft_token, nft_token_id, nft_info)
             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-            [nft_id, nft_collection, nft_version, nft_icon, nft_name, nft_content, nft_creator, nft_creator, nft_type, nft_status, nft_rarity, nft_parts, true, true, 0, '', '', nft_info]
+            [nft_id, nft_collection, nft_version, nft_icon, nft_name, nft_content, nft_creator, nft_creator, nft_type, nft_status, nft_rarity, "[]", true, true, 0, '', '', nft_info]
         );
 
         if (addNft.affectedRows === 0) {
