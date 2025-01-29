@@ -5,6 +5,7 @@ const db = require('./connection');
 const cors = require("cors");
 const compression = require("compression");
 const NodeCache = require("node-cache");
+const fs = require('fs');
 const bcrypt = require("bcrypt");
 const e = require("express");
 const path = require('path');
@@ -1922,6 +1923,10 @@ app.post('/xera/v1/api/user/nft-claim', authenticateToken, async (req, res) => {
         return res.json({ success: false, message: "Request error", error });
     }
 });
+
+// Middleware to parse JSON body (important for extracting req.body values)
+app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
 
 const storage = multer.diskStorage({
     destination: (req, file, cb) => {
