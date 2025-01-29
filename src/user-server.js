@@ -1951,9 +1951,7 @@ const storage = multer.diskStorage({
   
   // Upload route
   app.post('/xera/v1/api/user/mainnet/mintnft/upload-content', upload.single('file'), (req, res) => {
-    console.log(req.file);
-    console.log(req.body.filename);
-    filename = req.file.filename;
+    filename = req.body.filename;
   
     if (!req.file) {
       return res.status(400).send('No file uploaded.');
