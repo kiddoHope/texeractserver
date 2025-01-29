@@ -1587,10 +1587,14 @@ app.post('/xera/v1/api/user/mainnet/mint/token', authenticateToken, async (req, 
 app.post('/xera/v1/api/user/mainnet/mintnft/sol', authenticateToken, async (req, res) => {
     const { data } = req.body;
     const decodedFormRequestTXERADetails = Buffer.from(data, 'base64').toString('utf-8');
-
-    const formRequestTXERADetails = JSON.parse(decodedFormRequestTXERADetails);
     
-    const apikey = formRequestTXERADetails.apiKey;
+    const formRequestTXERADetails = JSON.parse(decodedFormRequestTXERADetails);
+
+    if (!formRequestTXERADetails) {
+        return res.status(400).json({ success: false, message: 'Incomplete data' });
+    }
+
+    const apikey = formRequestTXERADetails.apikey;
     const origin = req.headers.origin
     
     const isValid = await validateApiKey(apikey,origin);
@@ -1601,7 +1605,7 @@ app.post('/xera/v1/api/user/mainnet/mintnft/sol', authenticateToken, async (req,
 
     const { nft_id, nft_collection, nft_version, nft_icon, nft_name, nft_content, nft_creator, nft_type, nft_status, nft_rarity, nft_parts, nft_info, tx_hash, tx_amount, tx_token, tx_investor_address, tx_investor_name, tx_external_hash, tx_external_date, tx_funding_asset, tx_asset_id, xera_address, transaction_hash, sender_address, receiver_address, transaction_command, transaction_amount, transaction_token, transaction_token_id, transaction_validator, transaction_info } = formRequestTXERADetails;
     // Validate request body
-    if (![nft_id, nft_collection, nft_version, nft_icon, nft_name, nft_content, nft_creator, nft_type, nft_status, nft_rarity, nft_parts, nft_info, tx_hash, tx_amount, tx_token, tx_investor_address, tx_investor_name, tx_external_hash, tx_external_date, tx_funding_asset, tx_asset_id, xera_address, transaction_hash, sender_address, receiver_address, transaction_command, transaction_amount, transaction_token, transaction_token_id, transaction_validator, transaction_info].every(Boolean)) {
+    if (![tx_hash, tx_amount, tx_token, tx_investor_address, tx_investor_name, tx_external_hash, tx_external_date, tx_funding_asset, tx_asset_id, xera_address, transaction_hash, sender_address, receiver_address, transaction_command, transaction_amount, transaction_token, transaction_token_id, transaction_validator, transaction_info].every(Boolean)) {
         return res.status(400).json({ success: false, message: 'Incomplete transaction data.' });
     }
 
