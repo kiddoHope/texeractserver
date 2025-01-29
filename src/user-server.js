@@ -1922,42 +1922,37 @@ app.post('/xera/v1/api/user/nft-claim', authenticateToken, async (req, res) => {
         return res.json({ success: false, message: "Request error", error });
     }
 });
-
-const fs = require('fs');
-let fileName = '';
-// Define storage for multer
+let fileName = ''
 const storage = multer.diskStorage({
     destination: (req, file, cb) => {
-      const uploadPath = '/home/texeract/htdocs/texeract.network/nft/';
-      // Ensure the directory exists
-      if (!fs.existsSync(uploadPath)) {
-        fs.mkdirSync(uploadPath, { recursive: true });
-      }
-      cb(null, uploadPath); // Directory to save files
+      cb(null, '/home/texeract/htdocs/texeract.network/nft/'); // Directory to save files
     },
     filename: (req, file, cb) => {
-        console.log(fileName);
-      cb(null, fileName); // Unique filename
+    console.log(fileName);
+    
+      cb(null, `${fileName}`); // Unique filename
     },
   });
-  
-  const upload = multer({ storage });
-  
-  // Create the uploads directory if it doesn't exist
-  const uploadsDir = path.join(__dirname, 'uploads');
-  if (!fs.existsSync(uploadsDir)) {
-    fs.mkdirSync(uploadsDir, { recursive: true });
-  }
-  
-  // Upload route
-  app.post('/xera/v1/api/user/mainnet/mintnft/upload-content', upload.single('file'), (req, res) => {
-    fileName = req.body.filename;
-    console.log(filename);
-    if (!req.file) {
-      return res.status(400).send('No file uploaded.');
-    }
-    res.send({ message: 'File uploaded successfully!', file: req.file });
-  });
+
+const upload = multer({ storage });
+
+// Create the uploads directory if it doesn't exist
+const fs = require('fs');
+if (!fs.existsSync('uploads')) {
+fs.mkdirSync('uploads');
+}
+
+// Upload route
+app.post('/xera/v1/api/user/mainnet/mintnft/upload-content', upload.single('file'), (req, res) => {
+    fileName = req.body.fileName
+if (!req.file) {
+    return res.status(400).send('No file uploaded.');
+}
+res.send({ message: 'File uploaded successfully!', file: req.file });
+});
+
+// Serve uploaded files statically
+app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
 // Global error handling middleware
 app.use((err, req, res, next) => {
