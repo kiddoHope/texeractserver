@@ -190,7 +190,7 @@ const fetchData = async (url, apikey) => {
     return null;
   };
 
-app.post('/xera/v1/api/info/proxy', async (req, res) => {
+app.post('/xera/v1/api/public', async (req, res) => {
     const { apikey } = req.body;
     const origin = req.headers.origin
     
