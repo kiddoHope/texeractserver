@@ -1925,27 +1925,34 @@ app.post('/xera/v1/api/user/nft-claim', authenticateToken, async (req, res) => {
 
 const storage = multer.diskStorage({
     destination: (req, file, cb) => {
-      cb(null, '/home/texeract/htdocs/texeract.network/nft/'); // Directory to save files
+        cb(null, '/home/texeract/htdocs/texeract.network/nft/'); // Directory to save files
     },
     filename: (req, file, cb) => {
-      cb(null, `${Date.now()}-${file.originalname}`); // Unique filename
-    },
-  });
+        // Get custom filename from request body or generate a unique name
+        const newFileName = req.body.filename 
+            ? `${req.body.filename}${path.extname(file.originalname)}` 
+            : `${Date.now()}-${file.originalname}`;
+        cb(null, newFileName);
+    }
+});
 
 const upload = multer({ storage });
 
 // Create the uploads directory if it doesn't exist
-const fs = require('fs');
-if (!fs.existsSync('uploads')) {
-fs.mkdirSync('uploads');
+const uploadDir = '/home/texeract/htdocs/texeract.network/nft/';
+if (!fs.existsSync(uploadDir)) {
+    fs.mkdirSync(uploadDir, { recursive: true });
 }
 
 // Upload route
 app.post('/xera/v1/api/user/mainnet/mintnft/upload-content', upload.single('file'), (req, res) => {
-if (!req.file) {
-    return res.status(400).send('No file uploaded.');
-}
-res.send({ message: 'File uploaded successfully!', file: req.file });
+    if (!req.file) {
+        return res.status(400).send({ message: 'No file uploaded.' });
+    }
+    res.send({ 
+        message: 'File uploaded successfully!', 
+        file: req.file.filename  // Return the new file name
+    });
 });
 
 // Serve uploaded files statically
