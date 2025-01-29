@@ -1954,8 +1954,9 @@ const storage = multer.diskStorage({
     }
   
     res.send({
-      message: 'File uploaded successfully!',
-      file: req.file // Send back uploaded file details, including the original filename
+        success: true,
+        message: 'File uploaded successfully!',
+        file: req.file // Send back uploaded file details, including the original filename
     });
   });
   
