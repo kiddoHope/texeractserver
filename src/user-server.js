@@ -1922,42 +1922,52 @@ app.post('/xera/v1/api/user/nft-claim', authenticateToken, async (req, res) => {
         return res.json({ success: false, message: "Request error", error });
     }
 });
-let fileName = ''
-const storage = multer.diskStorage({
-    destination: (req, file, cb) => {
-      cb(null, '/home/texeract/htdocs/texeract.network/nft/'); // Directory to save files
-    },
-    filename: (req, file, cb) => {
-    console.log(fileName);
-    
-      cb(null, `${fileName}`); // Unique filename
-    },
-  });
+const fs = require('fs');
+// Middleware to parse JSON and URL-encoded data
+app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
 
+// Multer setup for file storage
+const storage = multer.diskStorage({
+  destination: (req, file, cb) => {
+    const uploadPath = '/home/texeract/htdocs/texeract.network/nft/';
+    // Ensure the directory exists
+    if (!fs.existsSync(uploadPath)) {
+      fs.mkdirSync(uploadPath, { recursive: true });
+    }
+    cb(null, uploadPath); // Directory to save files
+  },
+  filename: (req, file, cb) => {
+    const nftName = req.body.filename || `${Date.now()}-${file.originalname}`;
+    cb(null, nftName); // Use the new filename
+  },
+});
+
+// Multer instance
 const upload = multer({ storage });
 
-// Create the uploads directory if it doesn't exist
-const fs = require('fs');
-if (!fs.existsSync('uploads')) {
-fs.mkdirSync('uploads');
+// Create directory if it doesn't exist
+const uploadDir = '/home/texeract/htdocs/texeract.network/nft/';
+if (!fs.existsSync(uploadDir)) {
+  fs.mkdirSync(uploadDir, { recursive: true });
 }
 
 // Upload route
 app.post('/xera/v1/api/user/mainnet/mintnft/upload-content', upload.single('file'), (req, res) => {
-    fileName = req.body.fileName
-if (!req.file) {
+  if (!req.file) {
     return res.status(400).send('No file uploaded.');
-}
-res.send({ message: 'File uploaded successfully!', file: req.file });
-});
+  }
 
-// Serve uploaded files statically
-app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
+  res.send({
+    message: 'File uploaded successfully!',
+    file: req.file // Send back uploaded file details, including the new filename
+  });
+});
 
 // Global error handling middleware
 app.use((err, req, res, next) => {
-    console.error("Global error:", err.message);
-    res.status(500).json({ success: false, message: "An internal error occurred" });
+  console.error("Global error:", err.message);
+  res.status(500).json({ success: false, message: "An internal error occurred" });
 });
 
 // Start the server
