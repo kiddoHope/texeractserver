@@ -1924,7 +1924,7 @@ app.post('/xera/v1/api/user/nft-claim', authenticateToken, async (req, res) => {
 });
 
 const fs = require('fs');
-let filename = '';
+let fileName = '';
 // Define storage for multer
 const storage = multer.diskStorage({
     destination: (req, file, cb) => {
@@ -1936,8 +1936,8 @@ const storage = multer.diskStorage({
       cb(null, uploadPath); // Directory to save files
     },
     filename: (req, file, cb) => {
-      const uniqueFilename = filename;
-      cb(null, uniqueFilename); // Unique filename
+        console.log(fileName);
+      cb(null, fileName); // Unique filename
     },
   });
   
@@ -1951,8 +1951,8 @@ const storage = multer.diskStorage({
   
   // Upload route
   app.post('/xera/v1/api/user/mainnet/mintnft/upload-content', upload.single('file'), (req, res) => {
-    filename = req.body.filename;
-  
+    fileName = req.body.filename;
+    console.log(filename);
     if (!req.file) {
       return res.status(400).send('No file uploaded.');
     }
