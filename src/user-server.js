@@ -5,6 +5,7 @@ const db = require('./connection');
 const cors = require("cors");
 const compression = require("compression");
 const NodeCache = require("node-cache");
+const fs = require('fs');
 const bcrypt = require("bcrypt");
 const e = require("express");
 const path = require('path');
@@ -1922,54 +1923,47 @@ app.post('/xera/v1/api/user/nft-claim', authenticateToken, async (req, res) => {
         return res.json({ success: false, message: "Request error", error });
     }
 });
-const fs = require('fs');
-// Middleware to parse JSON and URL-encoded data
-app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
-
 // Multer setup for file storage
 const storage = multer.diskStorage({
-  destination: (req, file, cb) => {
-    const uploadPath = '/home/texeract/htdocs/texeract.network/nft/';
-    // Ensure the directory exists
-    if (!fs.existsSync(uploadPath)) {
-      fs.mkdirSync(uploadPath, { recursive: true });
-    }
-    cb(null, uploadPath); // Directory to save files
-  },
-  filename: (req, file, cb) => {
-    const nftName = req.body.filename || `${Date.now()}-${file.originalname}`;
-    cb(null, nftName); // Use the new filename
-  },
-});
-
-// Multer instance
-const upload = multer({ storage });
-
-// Create directory if it doesn't exist
-const uploadDir = '/home/texeract/htdocs/texeract.network/nft/';
-if (!fs.existsSync(uploadDir)) {
-  fs.mkdirSync(uploadDir, { recursive: true });
-}
-
-// Upload route
-app.post('/xera/v1/api/user/mainnet/mintnft/upload-content', upload.single('file'), (req, res) => {
-  if (!req.file) {
-    return res.status(400).send('No file uploaded.');
-  }
-
-  res.send({
-    message: 'File uploaded successfully!',
-    file: req.file // Send back uploaded file details, including the new filename
+    destination: (req, file, cb) => {
+      const uploadPath = '/home/texeract/htdocs/texeract.network/nft/';
+      // Ensure the directory exists
+      if (!fs.existsSync(uploadPath)) {
+        fs.mkdirSync(uploadPath, { recursive: true });
+      }
+      cb(null, uploadPath); // Directory to save files
+    },
+    filename: (req, file, cb) => {
+      cb(null, file.originalname); // Use the original filename
+    },
   });
-});
-
-// Global error handling middleware
-app.use((err, req, res, next) => {
-  console.error("Global error:", err.message);
-  res.status(500).json({ success: false, message: "An internal error occurred" });
-});
-
+  
+  // Multer instance
+  const upload = multer({ storage });
+  
+  // Create directory if it doesn't exist
+  const uploadDir = '/home/texeract/htdocs/texeract.network/nft/';
+  if (!fs.existsSync(uploadDir)) {
+    fs.mkdirSync(uploadDir, { recursive: true });
+  }
+  
+  // Upload route
+  app.post('/xera/v1/api/user/mainnet/mintnft/upload-content', upload.single('file'), (req, res) => {
+    if (!req.file) {
+      return res.status(400).send('No file uploaded.');
+    }
+  
+    res.send({
+      message: 'File uploaded successfully!',
+      file: req.file // Send back uploaded file details, including the original filename
+    });
+  });
+  
+  // Global error handling middleware
+  app.use((err, req, res, next) => {
+    console.error("Global error:", err.message);
+    res.status(500).json({ success: false, message: "An internal error occurred" });
+  });
 // Start the server
 app.listen(port, () => {
     console.log(`Server is running on port ${port}`);
