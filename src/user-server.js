@@ -1361,7 +1361,7 @@ app.post('/xera/v1/api/user/mainnet/booster/sol', authenticateToken, async (req,
         }
         
         const [[lastTransactionMint]] = await db.query(
-            'SELECT transaction_date, transaction_hash FROM xera_mainnet_transactions WHERE reciever_address = ? AND sender_address = ? ORDER BY transaction_date DESC LIMIT 1',
+            'SELECT transaction_date, transaction_hash FROM xera_mainnet_transactions WHERE receiver_address = ? AND sender_address = ? ORDER BY transaction_date DESC LIMIT 1',
             [formRequestTXERADetails.xera_address, "XERA MintLab"]
         );
         if (lastTransactionMint) {
