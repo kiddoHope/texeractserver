@@ -1537,8 +1537,6 @@ app.post('/xera/v1/api/user/mainnet/mint/token', authenticateToken, async (req, 
     }
 
     let transactionOrigin = 'Genesis Transaction';
-    let transactionMint = ""
-    let transactionFund = ""
 
     const [[lastTransactionFund]] = await db.query(
         'SELECT transaction_date, transaction_hash FROM xera_mainnet_transactions WHERE transaction_command = ? AND sender_address = ? ORDER BY transaction_date DESC LIMIT 1',
@@ -1546,7 +1544,7 @@ app.post('/xera/v1/api/user/mainnet/mint/token', authenticateToken, async (req, 
     );
 
     if (lastTransactionFund) {
-        transactionFund = lastTransactionFund.transaction_date;
+        transactionOrigin = lastTransactionFund.transaction_date;
     }
 
     const [[lastTransactionMint]] = await db.query(
@@ -1555,13 +1553,7 @@ app.post('/xera/v1/api/user/mainnet/mint/token', authenticateToken, async (req, 
     );
 
     if (lastTransactionMint) {
-        transactionMint = lastTransactionMint.transaction_date;
-    }
-
-    if (transactionFund > transactionMint) {
-        transactionOrigin = lastTransactionFund.transaction_hash;
-    } else {
-        transactionOrigin = lastTransactionMint.transaction_hash;
+        transactionOrigin = lastTransactionMint.transaction_date;
     }
 
     try {
