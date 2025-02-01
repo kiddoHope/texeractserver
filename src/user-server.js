@@ -1354,10 +1354,18 @@ app.post('/xera/v1/api/user/mainnet/booster/sol', authenticateToken, async (req,
         
         const [[lastTransaction]] = await db.query(
             'SELECT transaction_date, transaction_hash FROM xera_mainnet_transactions WHERE transaction_command = ? AND sender_address = ? ORDER BY transaction_date DESC LIMIT 1',
-            [formRequestTXERADetails.transaction_command,formRequestTXERADetails.sender_address]
+            [formRequestTXERADetails.transaction_command, formRequestTXERADetails.sender_address]
         );
         if (lastTransaction) {
             transactionOrigin = lastTransaction.transaction_hash;
+        }
+        
+        const [[lastTransactionMint]] = await db.query(
+            'SELECT transaction_date, transaction_hash FROM xera_mainnet_transactions WHERE transaction_command = ? AND sender_address = ? ORDER BY transaction_date DESC LIMIT 1',
+            ["Mint", formRequestTXERADetails.sender_address]
+        );
+        if (lastTransactionMint) {
+            transactionOrigin = lastTransactionMint.transaction_hash;
         }
         const [addTokenTransaction] = await db.query(
             `INSERT INTO xera_mainnet_transactions 
