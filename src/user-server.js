@@ -1538,15 +1538,15 @@ app.post('/xera/v1/api/user/mainnet/mint/token', authenticateToken, async (req, 
 
     let transactionOrigin = 'Genesis Transaction';
 
-    const [[lastTransactionFund]] = await db.query(
+    const [[lastTransaction]] = await db.query(
         'SELECT transaction_date, transaction_hash FROM xera_mainnet_transactions WHERE sender_address = ? ORDER BY transaction_date DESC LIMIT 1',
         [sender_address]
     );
 
-    if (lastTransactionFund) {
-        transactionOrigin = lastTransactionFund.transaction_date;
+    if (lastTransaction) {
+        transactionOrigin = lastTransaction.transaction_hash;
     }
-    
+
     try {
         // Check for recent transactions
         const [assetTokens] = await db.query(
