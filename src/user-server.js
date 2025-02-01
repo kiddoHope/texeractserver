@@ -1350,23 +1350,35 @@ app.post('/xera/v1/api/user/mainnet/booster/sol', authenticateToken, async (req,
             return res.status(500).json({ success: false, message: 'Error inserting record' });
         }
 
-        let transactionOrigin = 'Genesis Transaction';
-        
-        const [[lastTransaction]] = await db.query(
-            'SELECT transaction_date, transaction_hash FROM xera_mainnet_transactions WHERE transaction_command = ? AND sender_address = ? ORDER BY transaction_date DESC LIMIT 1',
-            [formRequestTXERADetails.transaction_command, formRequestTXERADetails.sender_address]
-        );
-        if (lastTransaction) {
-            transactionOrigin = lastTransaction.transaction_hash;
-        }
-        
-        const [[lastTransactionMint]] = await db.query(
-            'SELECT transaction_date, transaction_hash FROM xera_mainnet_transactions WHERE receiver_address = ? AND sender_address = ? ORDER BY transaction_date DESC LIMIT 1',
-            [formRequestTXERADetails.xera_address, "XERA MintLab"]
-        );
-        if (lastTransactionMint) {
-            transactionOrigin = lastTransactionMint.transaction_hash;
-        }
+        const getLatestTransactionOrigin = async (formRequestTXERADetails) => {
+            const [[lastTransaction]] = await db.query(
+              'SELECT transaction_date, transaction_hash FROM xera_mainnet_transactions WHERE transaction_command = ? AND sender_address = ? ORDER BY transaction_date DESC LIMIT 1',
+              [formRequestTXERADetails.transaction_command, formRequestTXERADetails.sender_address]
+            );
+          
+            const [[lastTransactionMint]] = await db.query(
+              'SELECT transaction_date, transaction_hash FROM xera_mainnet_transactions WHERE receiver_address = ? AND sender_address = ? ORDER BY transaction_date DESC LIMIT 1',
+              [formRequestTXERADetails.xera_address, "XERA MintLab"]
+            );
+          
+            if (lastTransaction && lastTransactionMint) {
+              // Compare transaction dates and return the latest one
+              if (new Date(lastTransaction.transaction_date) > new Date(lastTransactionMint.transaction_date)) {
+                return lastTransaction.transaction_hash;
+              } else {
+                return lastTransactionMint.transaction_hash;
+              }
+            } else if (lastTransaction) {
+              return lastTransaction.transaction_hash;
+            } else if (lastTransactionMint) {
+              return lastTransactionMint.transaction_hash;
+            } else {
+              return "Genesis Transaction"; 
+            }
+          };
+
+        const transactionOrigin = await getLatestTransactionOrigin(formRequestTXERADetails);
+
         const [addTokenTransaction] = await db.query(
             `INSERT INTO xera_mainnet_transactions 
             (transaction_block, transaction_origin, transaction_hash, sender_address, receiver_address, transaction_command, transaction_amount, transaction_token, transaction_token_id, transaction_fee_amount, transaction_fee_token, transaction_fee_token_id, transaction_validator, transaction_info)
