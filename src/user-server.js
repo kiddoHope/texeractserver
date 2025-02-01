@@ -1629,16 +1629,34 @@ app.post('/xera/v1/api/user/mainnet/mintnft/sol', authenticateToken, async (req,
     const { nft_id, nft_collection, nft_version, nft_icon, nft_name, nft_content, nft_creator, nft_type, nft_status, nft_rarity, nft_info, tx_hash, tx_amount, tx_token, tx_investor_address, tx_investor_name, tx_external_hash, tx_external_date, tx_funding_asset, tx_asset_id, xera_address, transaction_hash, sender_address, receiver_address, transaction_command, transaction_amount, transaction_token, transaction_token_id, transaction_validator, transaction_info } = formRequestTXERADetails;
     // Validate request body
 
-    let transactionOrigin = 'Genesis Transaction';
+    const getLatestTransactionOrigin = async () => {
+        const [[lastTransaction]] = await db.query(
+          'SELECT transaction_date, transaction_hash FROM xera_mainnet_transactions WHERE transaction_command = ? AND sender_address = ? ORDER BY transaction_date DESC LIMIT 1',
+          [sender_address]
+        );
+      
+        const [[lastTransactionMint]] = await db.query(
+          'SELECT transaction_date, transaction_hash FROM xera_mainnet_transactions WHERE receiver_address = ? AND sender_address = ? ORDER BY transaction_date DESC LIMIT 1',
+          [xera_address, "XERA MintLab"]
+        );
+      
+        if (lastTransaction && lastTransactionMint) {
+          // Compare transaction dates and return the latest one
+          if (new Date(lastTransaction.transaction_date) > new Date(lastTransactionMint.transaction_date)) {
+            return lastTransaction.transaction_hash;
+          } else {
+            return lastTransactionMint.transaction_hash;
+          }
+        } else if (lastTransaction) {
+          return lastTransaction.transaction_hash;
+        } else if (lastTransactionMint) {
+          return lastTransactionMint.transaction_hash;
+        } else {
+          return "Genesis Transaction"; 
+        }
+      };
 
-    const [[lastTransactionMintlab]] = await db.query(
-        'SELECT transaction_date, transaction_hash FROM xera_mainnet_transactions WHERE sender_address = ? AND receiver_address = ? ORDER BY transaction_date DESC LIMIT 1',
-        ["XERA MintLab", xera_address]
-    );
-
-    if (lastTransactionMintlab) {
-        transactionOrigin = lastTransactionMintlab.transaction_hash;
-    }
+    const transactionOrigin = await getLatestTransactionOrigin(formRequestTXERADetails);
 
     // const [[lastTransactionMint]] = await db.query(
     //     'SELECT transaction_date, transaction_hash FROM xera_mainnet_transactions WHERE transaction_command = ? AND sender_address = ? ORDER BY transaction_date DESC LIMIT 1',
