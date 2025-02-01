@@ -1619,13 +1619,13 @@ app.post('/xera/v1/api/user/mainnet/mintnft/sol', authenticateToken, async (req,
 
     let transactionOrigin = 'Genesis Transaction';
 
-    const [[lastTransactionFund]] = await db.query(
+    const [[lastTransactionMintlab]] = await db.query(
         'SELECT transaction_date, transaction_hash FROM xera_mainnet_transactions WHERE transaction_command = ? AND sender_address = ? ORDER BY transaction_date DESC LIMIT 1',
-        ["Fund", sender_address]
+        ["XERA MintLab", receiver_address]
     );
 
-    if (lastTransactionFund) {
-        transactionOrigin = lastTransactionFund.transaction_hash;
+    if (lastTransactionMintlab) {
+        transactionOrigin = lastTransactionMintlab.transaction_hash;
     }
 
     const [[lastTransactionMint]] = await db.query(
