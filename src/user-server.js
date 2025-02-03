@@ -398,7 +398,8 @@ app.post('/xera/v1/api/user/tasks/all-task', authenticateToken, async (req, res)
                 "Subscribe - @CrypDropPh", "Subscribe - @kimporsha11", 
                 "Facebook Task", "Telegram 2 Task", "TikTok Task", 
                 "Bluesky Task", "YouTube Task", "TXERA Claim Task", "Soldi Task",
-                "StealthAI Task", "Validium Task" ,"IQwiki Task", "Cryptify Task"
+                "StealthAI Task", "Validium Task" ,"IQwiki Task", "Cryptify Task", "Dmarketplace Task",
+                "AgentXYZ Task", "MingleAI Task", "TesseractAI Task"
             ];
 
             // Iterate through each task type and filter the transactions
@@ -866,29 +867,52 @@ app.post('/xera/v1/api/user/coin/claim', authenticateToken, async (req, res) => 
         return res.status(400).json({ success: false, message: isValid });
     }
 
-    const { username, txHash, sender, receiver, command, amount, token, tokenId } = formRequestTXERADetails;
+    const { username, txHash, sender, receiver, command, amount, token, tokenId, txInfo } = formRequestTXERADetails;
 
     // Validate request body
-    if (![username, txHash, sender, receiver, command, amount, token, tokenId].every(Boolean)) {
+    if (![username, txHash, sender, receiver, command, amount, token, tokenId, txInfo].every(Boolean)) {
         return res.status(400).json({ success: false, message: 'Incomplete transaction data.' });
     }
 
     const txLocalDate = new Date().toISOString().slice(0, 19).replace('T', ' ');
 
     try {
+        let transactionOrigin = 'Genesis Transaction';
+        let transactionOriginMainnet = 'Genesis Transaction';
         // Check for recent transactions
         const [[lastTransaction]] = await db.query(
             'SELECT transaction_date, transaction_hash FROM xera_network_transactions WHERE receiver_address = ? ORDER BY transaction_date DESC LIMIT 1',
             [receiver]
         );
 
-        let transactionOrigin = 'Genesis Transaction';
+
+
         if (lastTransaction) {
             transactionOrigin = lastTransaction.transaction_hash;
 
             // Ensure the sender hasn't already claimed coins
             const [tokenClaimedCheck] = await db.query(
                 'SELECT * FROM xera_network_transactions WHERE sender_address = ? AND receiver_address = ?',
+                [sender, receiver]
+            );
+
+            if (tokenClaimedCheck.length > 0) {
+                return res.status(429).json({ success: false, message: 'Xera Coin already claimed.' });
+            }
+        }
+
+        // last transaction mainnet
+        const [[lastTransactionMainnet]] = await db.query(
+            'SELECT transaction_date, transaction_hash FROM xera_mainnet_transactions WHERE receiver_address = ? ORDER BY transaction_date DESC LIMIT 1',
+            [receiver]
+        );
+        
+        if (lastTransactionMainnet) {
+            transactionOriginMainnet = lastTransactionMainnet.transaction_hash;
+
+            // Ensure the sender hasn't already claimed coins
+            const [tokenClaimedCheck] = await db.query(
+                'SELECT * FROM xera_mainnet_transactions WHERE sender_address = ? AND receiver_address = ?',
                 [sender, receiver]
             );
 
@@ -918,6 +942,15 @@ app.post('/xera/v1/api/user/coin/claim', authenticateToken, async (req, res) => 
             return res.status(500).json({ success: false, message: 'Error incrementing block count.' });
         }
 
+        const [incrementBlockMainnetResult] = await db.query(
+            'UPDATE xera_mainnet_blocks SET block_transactions = block_transactions + 1 WHERE current_block = ?',
+            [txBlock]
+        );
+
+        if (incrementBlockMainnetResult.affectedRows === 0) {
+            return res.status(500).json({ success: false, message: 'Error incrementing block count mainnet' });
+        }
+
         // Add new transaction
         const [addTransactionResult] = await db.query(
             `INSERT INTO xera_network_transactions 
@@ -928,6 +961,17 @@ app.post('/xera/v1/api/user/coin/claim', authenticateToken, async (req, res) => 
 
         if (addTransactionResult.affectedRows === 0) {
             return res.status(500).json({ success: false, message: 'Error adding transaction.' });
+        }
+
+        const [addTransactionResultMainnet] = await db.query(
+            `INSERT INTO xera_mainnet_transactions 
+            (transaction_block, transaction_origin, transaction_hash, sender_address, receiver_address, transaction_command, transaction_amount, transaction_token, transaction_token_id, transaction_validator, transaction_date, transaction_fee_amount, transaction_fee_token, transaction_fee_token_id, transaction_info)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+            [txBlock, transactionOriginMainnet, txHash, sender, receiver, command, amount, token, tokenId, validator, txLocalDate, 0.00, '', '',txInfo]
+        );
+
+        if (addTransactionResultMainnet.affectedRows === 0) {
+            return res.status(500).json({ success: false, message: 'Error adding transaction mainnet' });
         }
 
         // Update token circulation
