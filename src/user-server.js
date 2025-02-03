@@ -743,7 +743,7 @@ app.post('/xera/v1/api/user/faucet-claim', authenticateToken, async (req, res) =
         return res.status(400).json({ success: false, message: isValid });
     }
 
-    const { username, txHash, sender, receiver, command, amount, token, tokenId } = formRequestTXERADetails;
+    const { username, txHash, sender, receiver, command, amount, token, tokenId, txInfo } = formRequestTXERADetails;
     // Validate request body
     if (![username, txHash, sender, receiver, command, amount, token, tokenId].every(Boolean)) {
         return res.status(400).json({ success: false, message: 'Incomplete transaction data.' });
@@ -801,9 +801,9 @@ app.post('/xera/v1/api/user/faucet-claim', authenticateToken, async (req, res) =
         // Add new transaction
         const [addTransactionResult] = await db.query(
             `INSERT INTO xera_network_transactions 
-            (transaction_block, transaction_origin, transaction_hash, sender_address, receiver_address, transaction_command, transaction_amount, transaction_token, transaction_token_id, transaction_validator, transaction_date, transaction_fee_amount, transaction_fee_token, transaction_fee_token_id)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-            [txBlock, transactionOrigin, txHash, sender, receiver, command, amount, token, tokenId, validator, txLocalDate, 0.00, '', '']
+            (transaction_block, transaction_origin, transaction_hash, sender_address, receiver_address, transaction_command, transaction_amount, transaction_token, transaction_token_id, transaction_validator, transaction_date, transaction_fee_amount, transaction_fee_token, transaction_fee_token_id, transaction_info)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+            [txBlock, transactionOrigin, txHash, sender, receiver, command, amount, token, tokenId, validator, txLocalDate, 0.00, '', '',txInfo]
         );
 
         if (addTransactionResult.affectedRows === 0) {
@@ -954,9 +954,9 @@ app.post('/xera/v1/api/user/coin/claim', authenticateToken, async (req, res) => 
         // Add new transaction
         const [addTransactionResult] = await db.query(
             `INSERT INTO xera_network_transactions 
-            (transaction_block, transaction_origin, transaction_hash, sender_address, receiver_address, transaction_command, transaction_amount, transaction_token, transaction_token_id, transaction_validator, transaction_date, transaction_fee_amount, transaction_fee_token, transaction_fee_token_id)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-            [txBlock, transactionOrigin, txHash, sender, receiver, command, amount, token, tokenId, validator, txLocalDate, 0.00, '', '']
+            (transaction_block, transaction_origin, transaction_hash, sender_address, receiver_address, transaction_command, transaction_amount, transaction_token, transaction_token_id, transaction_validator, transaction_date, transaction_fee_amount, transaction_fee_token, transaction_fee_token_id, transaction_info)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+            [txBlock, transactionOrigin, txHash, sender, receiver, command, amount, token, tokenId, validator, txLocalDate, 0.00, '', '', txInfo]
         );
 
         if (addTransactionResult.affectedRows === 0) {
@@ -966,7 +966,7 @@ app.post('/xera/v1/api/user/coin/claim', authenticateToken, async (req, res) => 
         const [addTransactionResultMainnet] = await db.query(
             `INSERT INTO xera_mainnet_transactions 
             (transaction_block, transaction_origin, transaction_hash, sender_address, receiver_address, transaction_command, transaction_amount, transaction_token, transaction_token_id, transaction_validator, transaction_date, transaction_fee_amount, transaction_fee_token, transaction_fee_token_id, transaction_info)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
             [txBlock, transactionOriginMainnet, txHash, sender, receiver, command, amount, token, tokenId, validator, txLocalDate, 0.00, '', '',txInfo]
         );
 
@@ -1463,9 +1463,9 @@ app.post('/xera/v1/api/user/send-token', authenticateToken, async (req, res) => 
         return res.status(400).json({ success: false, message: isValid });
     }
 
-    const { username, txHash, sender, receiver, command, amount, token, tokenId } = formRequestTXERADetails;
+    const { username, txHash, sender, receiver, command, amount, token, tokenId, txInfo } = formRequestTXERADetails;
     // Validate request body
-    if (![username, txHash, sender, receiver, command, amount, token, tokenId].every(Boolean)) {
+    if (![username, txHash, sender, receiver, command, amount, token, tokenId, txInfo].every(Boolean)) {
         return res.status(400).json({ success: false, message: 'Incomplete transaction data.' });
     }
 
@@ -1521,9 +1521,9 @@ app.post('/xera/v1/api/user/send-token', authenticateToken, async (req, res) => 
         // Add new transaction
         const [addTransactionResult] = await db.query(
             `INSERT INTO xera_network_transactions 
-            (transaction_block, transaction_origin, transaction_hash, sender_address, receiver_address, transaction_command, transaction_amount, transaction_token, transaction_token_id, transaction_validator, transaction_date, transaction_fee_amount, transaction_fee_token, transaction_fee_token_id)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-            [txBlock, transactionOrigin, txHash, sender, receiver, command, amount, token, tokenId, validator, txLocalDate, 0.00, '', '']
+            (transaction_block, transaction_origin, transaction_hash, sender_address, receiver_address, transaction_command, transaction_amount, transaction_token, transaction_token_id, transaction_validator, transaction_date, transaction_fee_amount, transaction_fee_token, transaction_fee_token_id, transaction_info)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+            [txBlock, transactionOrigin, txHash, sender, receiver, command, amount, token, tokenId, validator, txLocalDate, 0.00, '', '', txInfo]
         );
 
         if (addTransactionResult.affectedRows === 0) {
