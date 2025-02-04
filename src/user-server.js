@@ -1052,7 +1052,8 @@ app.post('/xera/v1/api/user/security', authenticateToken, async (req, res) => {
 
 app.post('/xera/v1/api/user/last-transaction', authenticateToken, async (req, res) => {
     const { user } = req.body;
-
+    console.log(user);
+    
     if (!user) {
         return res.json({ success: false, message: 'No address provided' });
     }
@@ -1063,14 +1064,13 @@ app.post('/xera/v1/api/user/last-transaction', authenticateToken, async (req, re
         if (getUserlastTransactionMainnet.length > 0) {
             // Clean response by removing sensitive data like id, ip_address, etc.
             const cleantransactiondata = getUserlastTransactionMainnet.map(({ transaction_block, transaction_origin, sender_address, receiver_address, transaction_command, transaction_amount, transaction_token, transaction_token_id, transaction_fee_amount, transaction_fee_token, transaction_fee_token_id, transaction_validator, transaction_info, ...clean }) => clean);
+            
             const latestTransaction = {
                 MainnetTransactionHash: cleantransactiondata[0].transaction_hash,
                 MainnetTransactionDate: cleantransactiondata[0].transaction_date
             }
             transactionData.push(...latestTransaction);
-        } else {
-            return res.json({ success: false, message: "No security data found" });
-        }
+        } 
 
         const [getUserlastTransaction] = await db.query('SELECT transaction_hash, transaction_date FROM xera_network_transactions WHERE sender_address = ? OR receiver_address = ? ORDER BY transaction_date DESC LIMIT 1', [user,user]);
         
@@ -1083,13 +1083,11 @@ app.post('/xera/v1/api/user/last-transaction', authenticateToken, async (req, re
                 NetworkTransactionDate: cleantransactiondata[0].transaction_date
             }
             transactionData.push(...latestTransaction);
-        } else {
-            return res.json({ success: false, message: "No security data found" });
         }
 
         return res.json({ success: true, message: `Successfully retrieved transaction datas. Wallet: ${user}`, transactions: transactionData });
     } catch (error) {
-        return res.json({ success: false, message: 'Error retrieving security data', error: error.message });
+        return res.json({ success: false, message: 'Error retrieving transaction data', error: error.message });
     }
 });
 
