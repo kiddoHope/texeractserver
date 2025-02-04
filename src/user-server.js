@@ -399,7 +399,7 @@ app.post('/xera/v1/api/user/tasks/all-task', authenticateToken, async (req, res)
                 "Facebook Task", "Telegram 2 Task", "TikTok Task", 
                 "Bluesky Task", "YouTube Task", "TXERA Claim Task", "Soldi Task",
                 "StealthAI Task", "Validium Task" ,"IQwiki Task", "Cryptify Task", "Dmarketplace Task",
-                "AgentXYZ Task", "MingleAI Task", "TesseractAI Task"
+                "AgentXYZ Task", "MingleAI Task", "TesseractAI Task", "Imagen Task"
             ];
 
             // Iterate through each task type and filter the transactions
@@ -743,9 +743,9 @@ app.post('/xera/v1/api/user/faucet-claim', authenticateToken, async (req, res) =
         return res.status(400).json({ success: false, message: isValid });
     }
 
-    const { username, txHash, sender, receiver, command, amount, token, tokenId, txInfo } = formRequestTXERADetails;
+    const { username, txHash, sender, receiver, command, amount, token, tokenId, txInfo, lastTx } = formRequestTXERADetails;
     // Validate request body
-    if (![username, txHash, sender, receiver, command, amount, token, tokenId].every(Boolean)) {
+    if (![username, txHash, sender, receiver, command, amount, token, tokenId, lastTx].every(Boolean)) {
         return res.status(400).json({ success: false, message: 'Incomplete transaction data.' });
     }
     
@@ -773,8 +773,11 @@ app.post('/xera/v1/api/user/faucet-claim', authenticateToken, async (req, res) =
                     message: `Claim again after ${hours}h ${minutes}m ${seconds}s`,
                 });
             }
-
-            transactionOrigin = lastTransaction.transaction_hash;
+            if (txHash === lastTransaction.transaction_hash) {
+                transactionOrigin = lastTransaction.transaction_hash;
+            } else {
+                return res.status(400).json({ success: false, message: 'Transaction failed' });
+            }
         }
 
         // Retrieve the latest block details
@@ -867,7 +870,7 @@ app.post('/xera/v1/api/user/coin/claim', authenticateToken, async (req, res) => 
         return res.status(400).json({ success: false, message: isValid });
     }
 
-    const { username, txHash, sender, receiver, command, amount, token, tokenId, txInfo } = formRequestTXERADetails;
+    const { username, txHash, sender, receiver, command, amount, token, tokenId, txInfo, lastTxTestnet, lastTxMainnet } = formRequestTXERADetails;
 
     // Validate request body
     if (![username, txHash, sender, receiver, command, amount, token, tokenId, txInfo].every(Boolean)) {
@@ -888,7 +891,11 @@ app.post('/xera/v1/api/user/coin/claim', authenticateToken, async (req, res) => 
 
 
         if (lastTransaction) {
-            transactionOrigin = lastTransaction.transaction_hash;
+            if (lastTxTestnet === lastTransaction.transaction_hash) {
+                transactionOrigin = lastTransaction.transaction_hash;
+            } else {
+                return res.status(400).json({ success: false, message: 'Transaction failed.' });
+            }
 
             // Ensure the sender hasn't already claimed coins
             const [tokenClaimedCheck] = await db.query(
@@ -908,7 +915,11 @@ app.post('/xera/v1/api/user/coin/claim', authenticateToken, async (req, res) => 
         );
         
         if (lastTransactionMainnet) {
-            transactionOriginMainnet = lastTransactionMainnet.transaction_hash;
+            if (lastTxMainnet === lastTransactionMainnet.transaction_hash) {
+                transactionOriginMainnet = lastTransactionMainnet.transaction_hash;
+            } else {
+                return res.status(400).json({ success: false, message: 'Transaction failed.' });
+            }
 
             // Ensure the sender hasn't already claimed coins
             const [tokenClaimedCheck] = await db.query(
@@ -1552,9 +1563,9 @@ app.post('/xera/v1/api/user/send-token', authenticateToken, async (req, res) => 
         return res.status(400).json({ success: false, message: isValid });
     }
 
-    const { username, txHash, sender, receiver, command, amount, token, tokenId, txInfo } = formRequestTXERADetails;
+    const { username, txHash, sender, receiver, command, amount, token, tokenId, txInfo, lastTxTestnet} = formRequestTXERADetails;
     // Validate request body
-    if (![username, txHash, sender, receiver, command, amount, token, tokenId, txInfo].every(Boolean)) {
+    if (![username, txHash, sender, receiver, command, amount, token, tokenId, txInfo, lastTxTestnet].every(Boolean)) {
         return res.status(400).json({ success: false, message: 'Incomplete transaction data.' });
     }
 
@@ -1582,8 +1593,11 @@ app.post('/xera/v1/api/user/send-token', authenticateToken, async (req, res) => 
                     message: `Send again after ${hours}h ${minutes}m ${seconds}s`,
                 });
             }
-
-            transactionOrigin = lastTransaction.transaction_hash;
+            if (lastTxTestnet === lastTransaction.transaction_hash) {
+                transactionOrigin = lastTransaction.transaction_hash;
+            } else {
+                return res.status(400).json({ success: false, message: 'Transaction failed' });
+            }
         }
 
         // Retrieve the latest block details
