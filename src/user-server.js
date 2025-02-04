@@ -1058,7 +1058,7 @@ app.post('/xera/v1/api/user/last-transaction', authenticateToken, async (req, re
     }
     let transactionData = [];
     try {
-        const [getUserlastTransactionMainnet] = await db.query('SELECT transaction_hash, transaction_date FROM xera_mainnet_transactions WHERE sender_address = ? OR receiver_address = ? ORDER BY transaction_date DESC LIMIT 1', [user]);
+        const [getUserlastTransactionMainnet] = await db.query('SELECT transaction_hash, transaction_date FROM xera_mainnet_transactions WHERE sender_address = ? OR receiver_address = ? ORDER BY transaction_date DESC LIMIT 1', [user,user]);
         
         if (getUserlastTransactionMainnet.length > 0) {
             // Clean response by removing sensitive data like id, ip_address, etc.
@@ -1072,7 +1072,7 @@ app.post('/xera/v1/api/user/last-transaction', authenticateToken, async (req, re
             return res.json({ success: false, message: "No security data found" });
         }
 
-        const [getUserlastTransaction] = await db.query('SELECT transaction_hash, transaction_date FROM xera_network_transactions WHERE sender_address = ? OR receiver_address = ? ORDER BY transaction_date DESC LIMIT 1', [user]);
+        const [getUserlastTransaction] = await db.query('SELECT transaction_hash, transaction_date FROM xera_network_transactions WHERE sender_address = ? OR receiver_address = ? ORDER BY transaction_date DESC LIMIT 1', [user,user]);
         
         if (getUserlastTransaction.length > 0) {
             // Clean response by removing sensitive data like id, ip_address, etc.
