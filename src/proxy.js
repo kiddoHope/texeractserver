@@ -239,6 +239,7 @@ try {
 
   const [security, transactions, followers, balance, nodes, nfts] = await Promise.all([
     axios.post(`${xeraBaseAPI}/user/security`, {user: user.address}, { headers }),
+    axios.post(`${xeraBaseAPI}/user/last-transaction`, {user: user.address}, { headers }),
     axios.post(`${xeraBaseAPI}/user/transactions`, {user: user.address}, { headers }),
     axios.post(`${xeraBaseAPI}/user/following`, {user: user.username}, { headers }),
     axios.post(`${xeraBaseAPI}/user/mainnet/balance`, {user: user.address}, { headers }),
