@@ -237,7 +237,7 @@ app.post('/xera/v1/api/public/user', async (req, res) => {
 
 try {
 
-  const [security, transactions,lastTransactions, followers, balance, nodes, nfts] = await Promise.all([
+  const [security, lastTransactions, transactions, followers, balance, nodes, nfts] = await Promise.all([
     axios.post(`${xeraBaseAPI}/user/security`, {user: user.address}, { headers }),
     axios.post(`${xeraBaseAPI}/user/last-transaction`, {user: user.address}, { headers }),
     axios.post(`${xeraBaseAPI}/user/transactions`, {user: user.address}, { headers }),
@@ -249,8 +249,8 @@ try {
   
   const allData = {
       security: security.data || {},
-      transactions: transactions.data || {},
       lastTransactions: lastTransactions.data || {},
+      transactions: transactions.data || {},
       followers: followers.data || {},
       balance: balance.data || {},
       nodes: nodes.data || {},
