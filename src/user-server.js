@@ -1078,7 +1078,8 @@ app.post('/xera/v1/api/user/last-transaction', authenticateToken, async (req, re
       return res.json({ success: false, message: 'No address provided' });
     }
   
-    let transactionData = [];
+    let transactionNetwork = [];
+    let transactionMainnet = [];
     try {
       const [getUserlastTransactionMainnet] = await db.query(
         'SELECT transaction_hash, transaction_date FROM xera_mainnet_transactions WHERE sender_address = ? OR receiver_address = ? ORDER BY transaction_date DESC LIMIT 1',
@@ -1110,7 +1111,7 @@ app.post('/xera/v1/api/user/last-transaction', authenticateToken, async (req, re
           mainnetTransactionHash: cleanTransactionDataMainnet[0].transaction_hash,
           mainnetTransactionDate: cleanTransactionDataMainnet[0].transaction_date,
         };
-        transactionData.push(mainnetTransaction);
+        transactionMainnet.push(mainnetTransaction);
       }
   
       const [getUserlastTransaction] = await db.query(
@@ -1143,13 +1144,14 @@ app.post('/xera/v1/api/user/last-transaction', authenticateToken, async (req, re
           networkTransactionHash: cleanTransactionDataNetwork[0].transaction_hash,
           networkTransactionDate: cleanTransactionDataNetwork[0].transaction_date,
         };
-        transactionData.push(...networkTransaction);
+        transactionNetwork.push(networkTransaction);
       }
   
       return res.json({
         success: true,
         message: `Successfully retrieved transaction data. Wallet: ${user}`,
-        transactions: transactionData,
+        mainnetTransaction: transactionMainnet,
+        networkTransaction: transactionNetwork,
       });
     } catch (error) {
       return res.json({
