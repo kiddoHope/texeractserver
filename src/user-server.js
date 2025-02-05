@@ -758,9 +758,14 @@ app.post('/xera/v1/api/user/faucet-claim', authenticateToken, async (req, res) =
             [receiver,receiver]
         );
 
+        const [[lastTransactioncommand]] = await db.query(
+            'SELECT transaction_date, transaction_hash FROM xera_network_transactions WHERE transaction_command = ? AND sender_address = ? ORDER BY transaction_date DESC LIMIT 1',
+            [command,sender]
+        );
+
         let transactionOrigin = 'Genesis Transaction';
         if (lastTransaction) {
-            const lastTxDate = new Date(lastTransaction.transaction_date).getTime();
+            const lastTxDate = new Date(lastTransactioncommand.transaction_date).getTime();
             const timeDiff = Date.now() - lastTxDate;
 
             if (timeDiff < 21600000) { // 6 hours in milliseconds
@@ -1579,10 +1584,15 @@ app.post('/xera/v1/api/user/send-token', authenticateToken, async (req, res) => 
             [sender,sender]
         );
 
+        const [[lastTransactioncommand]] = await db.query(
+            'SELECT transaction_date, transaction_hash FROM xera_network_transactions WHERE transaction_command = ? AND sender_address = ? ORDER BY transaction_date DESC LIMIT 1',
+            [command,sender]
+        );
+
 
         let transactionOrigin = 'Genesis Transaction';
         if (lastTransaction) {
-            const lastTxDate = new Date(lastTransaction.transaction_date).getTime();
+            const lastTxDate = new Date(lastTransactioncommand.transaction_date).getTime();
             const timeDiff = Date.now() - lastTxDate;
 
             if (timeDiff < 21600000) { // 12 hours in milliseconds
@@ -1595,6 +1605,7 @@ app.post('/xera/v1/api/user/send-token', authenticateToken, async (req, res) => 
                     message: `Send again after ${hours}h ${minutes}m ${seconds}s`,
                 });
             }
+
             if (lastTxTestnet === lastTransaction.transaction_hash) {
                 transactionOrigin = lastTransaction.transaction_hash;
             } else {
