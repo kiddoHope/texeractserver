@@ -1606,11 +1606,13 @@ app.post('/xera/v1/api/user/send-token', authenticateToken, async (req, res) => 
                 });
             }
 
-            if (lastTxTestnet === lastTransaction.transaction_hash) {
-                transactionOrigin = lastTransaction.transaction_hash;
-            } else {
-                return res.status(400).json({ success: false, message: 'Transaction failed' });
-            }
+            
+        }
+
+        if (lastTxTestnet === lastTransaction.transaction_hash) {
+            transactionOrigin = lastTransaction.transaction_hash;
+        } else {
+            return res.status(400).json({ success: false, message: 'Transaction failed' });
         }
 
         // Retrieve the latest block details
