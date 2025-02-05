@@ -1591,7 +1591,7 @@ app.post('/xera/v1/api/user/send-token', authenticateToken, async (req, res) => 
 
 
         let transactionOrigin = 'Genesis Transaction';
-        if (lastTransaction) {
+        if (lastTransactioncommand) {
             const lastTxDate = new Date(lastTransactioncommand.transaction_date).getTime();
             const timeDiff = Date.now() - lastTxDate;
 
