@@ -744,6 +744,7 @@ app.post('/xera/v1/api/user/faucet-claim', authenticateToken, async (req, res) =
     }
 
     const { username, txHash, sender, receiver, command, amount, token, tokenId, txInfo, lastTxTestnet } = formRequestTXERADetails;
+    
     // Validate request body
     if (![username, txHash, sender, receiver, command, amount, token, tokenId, lastTxTestnet].every(Boolean)) {
         return res.status(400).json({ success: false, message: 'Incomplete transaction data.' });
@@ -778,10 +779,13 @@ app.post('/xera/v1/api/user/faucet-claim', authenticateToken, async (req, res) =
                     message: `Claim again after ${hours}h ${minutes}m ${seconds}s`,
                 });
             }
-            if (lastTxTestnet === lastTransaction.transaction_hash) {
-                transactionOrigin = lastTransaction.transaction_hash;
-            } else {
-                return res.status(400).json({ success: false, message: 'Transaction failed' });
+
+            if (lastTransaction) {
+                if (lastTxTestnet === lastTransaction.transaction_hash) {
+                    transactionOrigin = lastTransaction.transaction_hash;
+                } else {
+                    return res.status(400).json({ success: false, message: 'Transaction failed' });
+                }
             }
         }
 
