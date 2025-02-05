@@ -2206,7 +2206,7 @@ app.post('/xera/v1/api/user/mainnet/nft/claim', authenticateToken, async (req, r
             return res.status(500).json({ success: false, message: 'Error adding transaction' });
         }
 
-        const [updateNFT] = await db.query(`UPDATE xera_asset_nfts SET nft_stakeable = ? WHERE nft_owner = ?`, [nftStakeable, receiver]);
+        const [updateNFT] = await db.query(`UPDATE xera_asset_nfts SET nft_stakeable = ? WHERE nft_owner = ? AND nft_id = ?`, [nftStakeable, receiver, tokenId]);
 
         if (updateNFT.affectedRows === 0) {
             return res.status(400).json({ success: false, message: 'Error updating NFT stakeable status' });
