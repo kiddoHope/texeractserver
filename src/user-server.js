@@ -2134,6 +2134,92 @@ app.post('/xera/v1/api/user/nft-claim', authenticateToken, async (req, res) => {
         return res.json({ success: false, message: "Request error", error });
     }
 });
+
+app.post('/xera/v1/api/user/mainnet/nft/claim', authenticateToken, async (req, res) => {
+    const { data } = req.body;
+    const decodedFormRequestTXERADetails = Buffer.from(data, 'base64').toString('utf-8');
+
+    const formRequestTXERADetails = JSON.parse(decodedFormRequestTXERADetails);
+    
+    const apikey = formRequestTXERADetails.apiKey;
+    const origin = req.headers.origin
+    
+    const isValid = await validateApiKey(apikey,origin);
+    
+    if (!isValid)  {
+        return res.status(400).json({ success: false, message: isValid });
+    }
+
+    const { username, txHash, sender, receiver, command, amount, token, tokenId, txInfo, lastTxMainnet, nftStakeable } = formRequestTXERADetails;
+    // Validate request body
+    if (![username, txHash, sender, receiver, command, amount, token, tokenId, txInfo, lastTxMainnet, nftStakeable].every(Boolean)) {
+        return res.status(400).json({ success: false, message: 'Incomplete transaction data.' });
+    }
+
+    try {
+        // Check for recent transactions
+        const [[lastTransaction]] = await db.query(
+            'SELECT transaction_date, transaction_hash FROM xera_mainnet_transactions WHERE sender_address = ? OR receiver_address = ? ORDER BY transaction_date DESC LIMIT 1',
+            [receiver,receiver]
+        );
+
+        let transactionOrigin = 'Genesis Transaction';
+        
+        if (lastTransaction) {
+            if (lastTransaction.transaction_hash === lastTxMainnet) {
+                transactionOrigin = lastTransaction.transaction_hash;
+            } else {
+                return res.status(400).json({ success: false, message: 'Transaction failed' });
+            }
+        }
+
+        // Retrieve the latest block details
+        const [[blockData]] = await db.query(
+            'SELECT current_block, block_validator FROM xera_mainnet_blocks ORDER BY id DESC LIMIT 1'
+        );
+
+        if (!blockData) {
+            return res.status(400).json({ success: false, message: 'Block data not found. Transaction aborted.' });
+        }
+
+        const { current_block: txBlock, block_validator: validator } = blockData;
+
+        // Increment block transaction count
+        const [incrementBlockResult] = await db.query(
+            'UPDATE xera_mainnet_blocks SET block_transactions = block_transactions + 1 WHERE current_block = ?',
+            [txBlock]
+        );
+
+        if (incrementBlockResult.affectedRows === 0) {
+            return res.status(400).json({ success: false, message: 'Error incrementing block count' });
+        }
+
+        // Add new transaction
+        const [addTransactionResult] = await db.query(
+            `INSERT INTO xera_mainnet_transactions 
+            (transaction_block, transaction_origin, transaction_hash, sender_address, receiver_address, transaction_command, transaction_amount, transaction_token, transaction_token_id, transaction_validator, transaction_fee_amount, transaction_fee_token, transaction_fee_token_id, transaction_info)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+            [txBlock, transactionOrigin, txHash, sender, receiver, command, amount, token, tokenId, validator, '', '', '', txInfo]
+        );
+
+        if (addTransactionResult.affectedRows === 0) {
+            return res.status(500).json({ success: false, message: 'Error adding transaction' });
+        }
+
+        const [updateNFT] = await db.query(`UPDATE xera_asset_nfts SET nft_stakeable = ? WHERE nft_owner = ?`, [nftStakeable, receiver]);
+
+        if (updateNFT.affectedRows === 0) {
+            return res.status(400).json({ success: false, message: 'Error updating NFT stakeable status' });
+        }
+
+        // All operations succeeded
+        return res.status(200).json({ success: true, message: `NFT successfully reclaimed!` });
+    } catch (error) {
+        console.error('Transaction Error:', error.message);
+        return res.status(500).json({ success: false, message: 'Internal Server Error' });
+    }
+});
+
 // Multer setup for file storage
 const storage = multer.diskStorage({
     destination: (req, file, cb) => {
