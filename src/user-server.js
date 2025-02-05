@@ -1143,7 +1143,7 @@ app.post('/xera/v1/api/user/last-transaction', authenticateToken, async (req, re
           networkTransactionHash: cleanTransactionDataNetwork[0].transaction_hash,
           networkTransactionDate: cleanTransactionDataNetwork[0].transaction_date,
         };
-        transactionData.push(networkTransaction);
+        transactionData.push(...networkTransaction);
       }
   
       return res.json({
