@@ -761,7 +761,7 @@ app.post('/xera/v1/api/user/faucet-claim', authenticateToken, async (req, res) =
 
         const [[lastTransactioncommand]] = await db.query(
             'SELECT transaction_date, transaction_hash FROM xera_network_transactions WHERE transaction_command = ? AND receiver_address = ? ORDER BY transaction_date DESC LIMIT 1',
-            [command,sender]
+            [command,receiver]
         );
 
         let transactionOrigin = 'Genesis Transaction';
