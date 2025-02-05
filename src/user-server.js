@@ -1106,9 +1106,11 @@ app.post('/xera/v1/api/user/last-transaction', authenticateToken, async (req, re
           }) => clean
         );
   
-        const mainnetTransactionhash = {MainnetTransactionHash: cleanTransactionDataMainnet[0].transaction_hash}
-        const mainnetTransactiondate = {MainnetTransactionDate: cleanTransactionDataMainnet[0].transaction_date}
-        transactionData.push(mainnetTransactionhash,mainnetTransactiondate);
+        const mainnetTransaction = {
+          mainnetTransactionHash: cleanTransactionDataMainnet[0].transaction_hash,
+          mainnetTransactionDate: cleanTransactionDataMainnet[0].transaction_date,
+        };
+        transactionData.push(mainnetTransaction);
       }
   
       const [getUserlastTransaction] = await db.query(
@@ -1137,10 +1139,11 @@ app.post('/xera/v1/api/user/last-transaction', authenticateToken, async (req, re
           }) => clean
         );
   
-        
-        const networkTransactionhash = {NetworkTransactionHash: cleanTransactionDataNetwork[0].transaction_hash}
-        const networkTransactiondate = {NetworkTransactionDate: cleanTransactionDataNetwork[0].transaction_date}
-        transactionData.push(networkTransactionhash,networkTransactiondate);
+        const networkTransaction = {
+          networkTransactionHash: cleanTransactionDataNetwork[0].transaction_hash,
+          networkTransactionDate: cleanTransactionDataNetwork[0].transaction_date,
+        };
+        transactionData.push(networkTransaction);
       }
   
       return res.json({
