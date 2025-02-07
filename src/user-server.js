@@ -1486,26 +1486,7 @@ app.post('/xera/v1/api/user/mainnet/booster/sol', authenticateToken, async (req,
     }
 
     try {
-        const [inserFund] = await db.query(`
-            INSERT INTO xera_user_investments (tx_hash, tx_amount, tx_token, tx_dollar, tx_investor_address, tx_investor_name, tx_external_hash, tx_external_date, tx_bought_asset, tx_funding_asset, tx_asset_id, xera_address) 
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        `, [formRequestTXERADetails.tx_hash, formRequestTXERADetails.tx_amount, formRequestTXERADetails.tx_token, '', formRequestTXERADetails.tx_investor_address, formRequestTXERADetails.tx_investor_name, formRequestTXERADetails.tx_external_hash, formRequestTXERADetails.tx_external_date, '', formRequestTXERADetails.tx_funding_asset,  formRequestTXERADetails.tx_asset_id, formRequestTXERADetails.xera_address]);
-        
-        if (inserFund.affectedRows === 0) {
-            return res.json({ success: false, message: 'Funding addition failed' });
-        }
-
-        const [recordTaskResult] = await db.query(
-            `INSERT INTO xera_user_tasks 
-            (username, xera_wallet, xera_task, xera_status, xera_points, xera_telegram_id, xera_twitter_username)
-            VALUES (?, ?, ?, ?, ?, ?, ?)`,
-            [formRequestTXERADetails.tx_investor_name, formRequestTXERADetails.xera_address, 'Booster Task', 'ok', formRequestTXERADetails.xera_points, '', '']
-        );
-
-        if (recordTaskResult.affectedRows === 0) {
-            return res.status(500).json({ success: false, message: 'Error inserting record' });
-        }
-
+        let transactionOrigin = "Genesis Transaction"
         const getLatestTransactionOrigin = async (formRequestTXERADetails) => {
             const [[lastTransaction]] = await db.query(
               'SELECT transaction_date, transaction_hash FROM xera_mainnet_transactions WHERE transaction_command = ? AND sender_address = ? ORDER BY transaction_date DESC LIMIT 1',
@@ -1533,7 +1514,15 @@ app.post('/xera/v1/api/user/mainnet/booster/sol', authenticateToken, async (req,
             }
           };
 
-        const transactionOrigin = await getLatestTransactionOrigin(formRequestTXERADetails);
+        const latesttransaction = await getLatestTransactionOrigin(formRequestTXERADetails);
+
+        if (latesttransaction === formRequestTXERADetails.lastTxMainnet) {
+            transactionOrigin = latesttransaction;
+        } else {
+            return res.status(400).json({ success: false, message: 'Transaction failed.' });
+        }
+
+
 
         const [addTokenTransaction] = await db.query(
             `INSERT INTO xera_mainnet_transactions 
@@ -1544,6 +1533,27 @@ app.post('/xera/v1/api/user/mainnet/booster/sol', authenticateToken, async (req,
 
         if (addTokenTransaction.affectedRows === 0) {
             return res.json({ success: false, message: 'Add Transaction failed' });
+        }
+
+
+        const [inserFund] = await db.query(`
+            INSERT INTO xera_user_investments (tx_hash, tx_amount, tx_token, tx_dollar, tx_investor_address, tx_investor_name, tx_external_hash, tx_external_date, tx_bought_asset, tx_funding_asset, tx_asset_id, xera_address) 
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        `, [formRequestTXERADetails.tx_hash, formRequestTXERADetails.tx_amount, formRequestTXERADetails.tx_token, '', formRequestTXERADetails.tx_investor_address, formRequestTXERADetails.tx_investor_name, formRequestTXERADetails.tx_external_hash, formRequestTXERADetails.tx_external_date, '', formRequestTXERADetails.tx_funding_asset,  formRequestTXERADetails.tx_asset_id, formRequestTXERADetails.xera_address]);
+        
+        if (inserFund.affectedRows === 0) {
+            return res.json({ success: false, message: 'Funding addition failed' });
+        }
+
+        const [recordTaskResult] = await db.query(
+            `INSERT INTO xera_user_tasks 
+            (username, xera_wallet, xera_task, xera_status, xera_points, xera_telegram_id, xera_twitter_username)
+            VALUES (?, ?, ?, ?, ?, ?, ?)`,
+            [formRequestTXERADetails.tx_investor_name, formRequestTXERADetails.xera_address, 'Booster Task', 'ok', formRequestTXERADetails.xera_points, '', '']
+        );
+
+        if (recordTaskResult.affectedRows === 0) {
+            return res.status(500).json({ success: false, message: 'Error inserting record' });
         }
 
         const [addBlock] = await db.query(
@@ -1797,35 +1807,6 @@ app.post('/xera/v1/api/user/mainnet/mintnft/sol', authenticateToken, async (req,
     const { nft_id, nft_collection, nft_version, nft_icon, nft_name, nft_content, nft_creator, nft_type, nft_status, nft_rarity, nft_info, tx_hash, tx_amount, tx_token, tx_investor_address, tx_investor_name, tx_external_hash, tx_external_date, tx_funding_asset, tx_asset_id, xera_address, transaction_hash, sender_address, receiver_address, transaction_command, transaction_amount, transaction_token, transaction_token_id, transaction_validator, transaction_info } = formRequestTXERADetails;
     // Validate request body
 
-    const getLatestTransactionOrigin = async () => {
-        const [[lastTransaction]] = await db.query(
-          'SELECT transaction_date, transaction_hash FROM xera_mainnet_transactions WHERE sender_address = ? ORDER BY transaction_date DESC LIMIT 1',
-          [sender_address]
-        );
-      
-        const [[lastTransactionMint]] = await db.query(
-          'SELECT transaction_date, transaction_hash FROM xera_mainnet_transactions WHERE receiver_address = ? AND sender_address = ? ORDER BY transaction_date DESC LIMIT 1',
-          [xera_address, "XERA MintLab"]
-        );
-      
-        if (lastTransaction && lastTransactionMint) {
-          // Compare transaction dates and return the latest one
-          if (new Date(lastTransaction.transaction_date) > new Date(lastTransactionMint.transaction_date)) {
-            return lastTransaction.transaction_hash;
-          } else {
-            return lastTransactionMint.transaction_hash;
-          }
-        } else if (lastTransaction) {
-          return lastTransaction.transaction_hash;
-        } else if (lastTransactionMint) {
-          return lastTransactionMint.transaction_hash;
-        } else {
-          return "Genesis Transaction"; 
-        }
-      };
-
-    const transactionOrigin = await getLatestTransactionOrigin(formRequestTXERADetails);
-
     // const [[lastTransactionMint]] = await db.query(
     //     'SELECT transaction_date, transaction_hash FROM xera_mainnet_transactions WHERE transaction_command = ? AND sender_address = ? ORDER BY transaction_date DESC LIMIT 1',
     //     [transaction_command, sender_address]
@@ -1837,6 +1818,43 @@ app.post('/xera/v1/api/user/mainnet/mintnft/sol', authenticateToken, async (req,
 
 
     try {
+        let transactionOrigin = 'Genesis Transaction';
+
+        const getLatestTransactionOrigin = async () => {
+            const [[lastTransaction]] = await db.query(
+              'SELECT transaction_date, transaction_hash FROM xera_mainnet_transactions WHERE sender_address = ? ORDER BY transaction_date DESC LIMIT 1',
+              [sender_address]
+            );
+          
+            const [[lastTransactionMint]] = await db.query(
+              'SELECT transaction_date, transaction_hash FROM xera_mainnet_transactions WHERE receiver_address = ? AND sender_address = ? ORDER BY transaction_date DESC LIMIT 1',
+              [xera_address, "XERA MintLab"]
+            );
+          
+            if (lastTransaction && lastTransactionMint) {
+              // Compare transaction dates and return the latest one
+              if (new Date(lastTransaction.transaction_date) > new Date(lastTransactionMint.transaction_date)) {
+                return lastTransaction.transaction_hash;
+              } else {
+                return lastTransactionMint.transaction_hash;
+              }
+            } else if (lastTransaction) {
+              return lastTransaction.transaction_hash;
+            } else if (lastTransactionMint) {
+              return lastTransactionMint.transaction_hash;
+            } else {
+              return "Genesis Transaction"; 
+            }
+          };
+    
+        const latesttransaction = await getLatestTransactionOrigin(formRequestTXERADetails);
+    
+        if (latesttransaction === formRequestTXERADetails.lastTxMainnet) {
+            transactionOrigin = latesttransaction;
+        } else {
+            return res.status(400).json({ success: false, message: 'Transaction failed.' });
+        }
+
         const [addNft] = await db.query(
             `INSERT INTO xera_asset_nfts 
             (nft_id, nft_collection, nft_version, nft_icon, nft_name, nft_content, nft_creator, nft_owner, nft_type, nft_status, nft_rarity, nft_parts, nft_stakeable, nft_redeemable, nft_price, nft_token, nft_token_id, nft_info)
