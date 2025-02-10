@@ -12,6 +12,7 @@ const path = require('path');
 const multer = require('multer');
 const { default: axios } = require("axios");
 require("dotenv").config();
+const CryptoJS = require("crypto-js");
 
 const app = express();
 const port = 5001;
@@ -1471,7 +1472,7 @@ app.post('/xera/v1/api/user/mainnet/booster/sol', authenticateToken, async (req,
     const decodedFormRequestTXERADetails = Buffer.from(data, 'base64').toString('utf-8');
 
     const formRequestTXERADetails = JSON.parse(decodedFormRequestTXERADetails);
-
+    
     if (!formRequestTXERADetails) {
         return res.status(400).json({ success: false, message: 'Incomplete data' });
     }
@@ -1495,7 +1496,7 @@ app.post('/xera/v1/api/user/mainnet/booster/sol', authenticateToken, async (req,
           
             const [[lastTransactionMint]] = await db.query(
               'SELECT transaction_date, transaction_hash FROM xera_mainnet_transactions WHERE receiver_address = ? AND sender_address = ? ORDER BY transaction_date DESC LIMIT 1',
-              [formRequestTXERADetails.xera_address, "XERA MintLab"]
+              [formRequestTXERADetails.xera_address,formRequestTXERADetails.xera_address]
             );
           
             if (lastTransaction && lastTransactionMint) {
@@ -1516,12 +1517,9 @@ app.post('/xera/v1/api/user/mainnet/booster/sol', authenticateToken, async (req,
 
         const latesttransaction = await getLatestTransactionOrigin(formRequestTXERADetails);
 
-        if (latesttransaction === formRequestTXERADetails.lastTxMainnet) {
+        if (latesttransaction) {
             transactionOrigin = latesttransaction;
-        } else {
-            return res.status(400).json({ success: false, message: 'Transaction failed.' });
-        }
-
+        } 
 
 
         const [addTokenTransaction] = await db.query(
@@ -1852,7 +1850,7 @@ app.post('/xera/v1/api/user/mainnet/mintnft/sol', authenticateToken, async (req,
         if (latesttransaction === formRequestTXERADetails.lastTxMainnet) {
             transactionOrigin = latesttransaction;
         } else {
-            return res.status(400).json({ success: false, message: 'Transaction failed.', last_transaction: latesttransaction });
+            return res.status(400).json({ success: false, message: `Transaction failed. wallet last transaction: ${latesttransaction}` });
         }
 
         const [addNft] = await db.query(
