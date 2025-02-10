@@ -4,6 +4,7 @@ require('dotenv').config();
 // 46.202.129.137
 // 2a02:4780:28:feaa::1
 // /home/texeractbot/htdocs/texeractbot.xyz
+// /home/texeract/htdocs/texeract.network
 // pm2 start src/server.js src/airdrop-server.js src/user-server.js src/faucet-server.js src/genesis-server.js src/watcher-server.js
 // node start src/server.js src/airdrop-server.js src/user-server.js src/faucet-server.js src/genesis-server.js src/watcher-server.js
 

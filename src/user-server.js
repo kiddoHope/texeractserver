@@ -1852,7 +1852,7 @@ app.post('/xera/v1/api/user/mainnet/mintnft/sol', authenticateToken, async (req,
         if (latesttransaction === formRequestTXERADetails.lastTxMainnet) {
             transactionOrigin = latesttransaction;
         } else {
-            return res.status(400).json({ success: false, message: 'Transaction failed.' });
+            return res.status(400).json({ success: false, message: 'Transaction failed.', last_transaction: latesttransaction });
         }
 
         const [addNft] = await db.query(
