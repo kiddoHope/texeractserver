@@ -1596,9 +1596,11 @@ app.post('/xera/v1/api/user/staking/nft', authenticateToken, async (req, res) =>
             );
           
             const [[lastTransactionMint]] = await db.query(
-              'SELECT transaction_date, transaction_hash FROM xera_network_transactions WHERE receiver_address = ? AND sender_address = ? ORDER BY transaction_date DESC LIMIT 1',
+              'SELECT transaction_date, transaction_hash FROM xera_network_transactions WHERE receiver_address = ? OR sender_address = ? ORDER BY transaction_date DESC LIMIT 1',
               [formRequestTXERADetails.sender_address,formRequestTXERADetails.sender_address]
             );
+            console.log(lastTransaction,lastTransactionMint);
+            
           
             if (lastTransaction && lastTransactionMint) {
               // Compare transaction dates and return the latest one
@@ -1659,7 +1661,7 @@ app.post('/xera/v1/api/user/staking/nft', authenticateToken, async (req, res) =>
             return res.json({ success: false, message: 'Add Block failed' });
         }
         
-        return res.json({ success: true, message: `Successfully Apply Booster` });
+        return res.json({ success: true, message: `Successfully Stake NFT` });
     } catch (error) {
         return res.json({ success: false, message: 'Request error', error: error.message });
     }
