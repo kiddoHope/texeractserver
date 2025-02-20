@@ -662,6 +662,28 @@ app.post('/xera/v1/api/user/balance', authenticateToken, async (req, res) => {
     }
 });
 
+app.post('/xera/v1/api/user/onstake/nft', authenticateToken, async (req, res) => {
+    const { user } = req.body;
+    if (!user) {
+        return res.json({ success: false, message: "Invalid request" });
+    }
+
+    try {
+        // Fetch user transactions and token list in parallel
+        const [nftStake] = await db.query('SELECT * FROM xera_user_stake_nft WHERE xera_wallet = ? ', [user]);
+
+        if (nftStake.length > 0) {
+            // Clean the data to exclude unnecessary fields
+            const cleanedData = cleanData(nftStake, ['id']);
+            return res.json({ success: true, data: cleanedData });
+        } else {
+            return res.json({ success: false, message: "No stake nft found" });
+        }
+    } catch (error) {
+        return res.json({ success: false, message: "Request error", error });
+    }
+});
+
 app.post('/xera/v1/api/user/mainnet/balance', authenticateToken, async (req, res) => {
     const { user } = req.body;
     if (!user) {
@@ -1646,9 +1668,9 @@ app.post('/xera/v1/api/user/staking/nft', authenticateToken, async (req, res) =>
         }
 
         const [insertStakenft] = await db.query(`
-            INSERT INTO xera_user_stake_nft (xera_wallet, nft_id, nft_content, nft_rarity, nft_reward_xp, nft_reward_amount, nft_reward_token, nft_reward_token_id, expiry) 
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-        `, [formRequestTXERADetails.sender_address, formRequestTXERADetails.transaction_token_id, formRequestTXERADetails.nftContent, formRequestTXERADetails.nftRarity, formRequestTXERADetails.nftRewardXP, formRequestTXERADetails.nftRewardAmount, formRequestTXERADetails.nftRewardToken, formRequestTXERADetails.nftRewardTokenID, expireDate]);
+            INSERT INTO xera_user_stake_nft (xera_wallet, nft_id, nft_content, nft_rarity, nft_reward_xp, nft_reward_amount, nft_reward_token, nft_reward_token_id, expiry, status) 
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        `, [formRequestTXERADetails.sender_address, formRequestTXERADetails.transaction_token_id, formRequestTXERADetails.nftContent, formRequestTXERADetails.nftRarity, formRequestTXERADetails.nftRewardXP, formRequestTXERADetails.nftRewardAmount, formRequestTXERADetails.nftRewardToken, formRequestTXERADetails.nftRewardTokenID, expireDate, "Staked"]);
         
         if (insertStakenft.affectedRows === 0) {
             return res.json({ success: false, message: 'Staking failed' });
