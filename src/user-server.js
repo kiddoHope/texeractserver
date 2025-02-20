@@ -1611,6 +1611,14 @@ app.post('/xera/v1/api/user/staking/nft', authenticateToken, async (req, res) =>
 
     const expireDate = new Date();
     expireDate.setHours(expireDate.getHours() + 24);
+
+    
+    const [nftStake] = await db.query('SELECT * FROM xera_user_stake_nft WHERE xera_wallet = ? AND status = ?', [formRequestTXERADetails.sender_address, 'Staked']);
+
+    if (nftStake.length >= 3) {
+        return res.json({ success: false, message: 'Limit Reached. Max 3 NFT Staking' });
+    }
+
     try {
         let transactionOrigin = "Genesis Transaction"
         const getLatestTransactionOrigin = async (formRequestTXERADetails) => {
