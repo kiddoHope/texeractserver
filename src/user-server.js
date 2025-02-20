@@ -1599,7 +1599,6 @@ app.post('/xera/v1/api/user/staking/nft', authenticateToken, async (req, res) =>
               'SELECT transaction_date, transaction_hash FROM xera_network_transactions WHERE receiver_address = ? OR sender_address = ? ORDER BY transaction_date DESC LIMIT 1',
               [formRequestTXERADetails.sender_address,formRequestTXERADetails.sender_address]
             );
-            console.log(lastTransaction,lastTransactionMint);
             
           
             if (lastTransaction && lastTransactionMint) {
