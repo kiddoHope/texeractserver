@@ -1597,7 +1597,7 @@ app.post('/xera/v1/api/user/staking/nft', authenticateToken, async (req, res) =>
           
             const [[lastTransactionMint]] = await db.query(
               'SELECT transaction_date, transaction_hash FROM xera_network_transactions WHERE receiver_address = ? AND sender_address = ? ORDER BY transaction_date DESC LIMIT 1',
-              [formRequestTXERADetails.xera_address,formRequestTXERADetails.xera_address]
+              [formRequestTXERADetails.sender_address,formRequestTXERADetails.sender_address]
             );
           
             if (lastTransaction && lastTransactionMint) {
@@ -1635,7 +1635,7 @@ app.post('/xera/v1/api/user/staking/nft', authenticateToken, async (req, res) =>
         }
 
         const [updateNFTasset] = await db.query(
-            `UPDATE xera_asset_nfts SET nft_owner = ? WHERE nft_owner = ?`,[formRequestTXERADetails.receiver_address,formRequestTXERADetails.sender_address]
+            `UPDATE xera_asset_nfts SET nft_owner = ? WHERE nft_owner = ? AND nft_id = ?`,[formRequestTXERADetails.receiver_address,formRequestTXERADetails.sender_address, formRequestTXERADetails.transaction_token_id]
         );
 
         if (updateNFTasset.affectedRows === 0) {
