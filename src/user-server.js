@@ -1587,6 +1587,8 @@ app.post('/xera/v1/api/user/staking/nft', authenticateToken, async (req, res) =>
         return res.status(400).json({ success: false, message: isValid });
     }
 
+    const expireDate = new Date();
+    expireDate.setHours(expireDate.getHours() + 24);
     try {
         let transactionOrigin = "Genesis Transaction"
         const getLatestTransactionOrigin = async (formRequestTXERADetails) => {
@@ -1644,9 +1646,9 @@ app.post('/xera/v1/api/user/staking/nft', authenticateToken, async (req, res) =>
         }
 
         const [insertStakenft] = await db.query(`
-            INSERT INTO xera_user_stake_nft (xera_wallet, nft_id, nft_content, nft_rarity, nft_reward_xp, nft_reward_amount, nft_reward_token, nft_reward_token_id) 
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-        `, [formRequestTXERADetails.sender_address, formRequestTXERADetails.transaction_token_id, formRequestTXERADetails.nftContent, formRequestTXERADetails.nftRarity, formRequestTXERADetails.nftRewardXP, formRequestTXERADetails.nftRewardAmount, formRequestTXERADetails.nftRewardToken, formRequestTXERADetails.nftRewardTokenID]);
+            INSERT INTO xera_user_stake_nft (xera_wallet, nft_id, nft_content, nft_rarity, nft_reward_xp, nft_reward_amount, nft_reward_token, nft_reward_token_id, expiry) 
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        `, [formRequestTXERADetails.sender_address, formRequestTXERADetails.transaction_token_id, formRequestTXERADetails.nftContent, formRequestTXERADetails.nftRarity, formRequestTXERADetails.nftRewardXP, formRequestTXERADetails.nftRewardAmount, formRequestTXERADetails.nftRewardToken, formRequestTXERADetails.nftRewardTokenID, expireDate]);
         
         if (insertStakenft.affectedRows === 0) {
             return res.json({ success: false, message: 'Staking failed' });
