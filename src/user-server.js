@@ -670,7 +670,7 @@ app.post('/xera/v1/api/user/onstake/nft', authenticateToken, async (req, res) =>
 
     try {
         // Fetch user transactions and token list in parallel
-        const [nftStake] = await db.query('SELECT * FROM xera_user_stake_nft WHERE xera_wallet = ? ', [user]);
+        const [nftStake] = await db.query('SELECT * FROM xera_user_stake_nft WHERE xera_wallet = ? AND status = "Staked"', [user]);
 
         if (nftStake.length > 0) {
             // Clean the data to exclude unnecessary fields
