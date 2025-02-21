@@ -1787,7 +1787,6 @@ app.post('/xera/v1/api/user/unstake/nft', authenticateToken, async (req, res) =>
         if (addBlock.affectedRows === 0) {
             return res.json({ success: false, message: 'Add Block failed' });
         }
-
         
         const [recordTaskResult] = await db.query(
             `INSERT INTO xera_user_tasks 
