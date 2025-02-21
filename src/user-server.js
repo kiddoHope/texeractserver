@@ -1773,7 +1773,7 @@ app.post('/xera/v1/api/user/unstake/nft', authenticateToken, async (req, res) =>
         }
 
         const [userStakeupdate] = await db.query(
-            `UPDATE xera_user_stake_nft SET nft_owner = ? AND status = ? WHERE nft_id = ?`,[formRequestTXERADetails.receiver_address, "Claimed", formRequestTXERADetails.transaction_token_id]
+            `UPDATE xera_user_stake_nft SET status = ? WHERE xera_wallet = ? AND nft_id = ? `,["Claimed", formRequestTXERADetails.receiver_address, formRequestTXERADetails.transaction_token_id]
         );
 
         if (userStakeupdate.affectedRows === 0) {
