@@ -1698,6 +1698,114 @@ app.post('/xera/v1/api/user/staking/nft', authenticateToken, async (req, res) =>
     }
 });
 
+app.post('/xera/v1/api/user/unstake/nft', authenticateToken, async (req, res) => {
+    const { data } = req.body;
+    const decodedFormRequestTXERADetails = Buffer.from(data, 'base64').toString('utf-8');
+
+    const formRequestTXERADetails = JSON.parse(decodedFormRequestTXERADetails);
+    
+    if (!formRequestTXERADetails) {
+        return res.status(400).json({ success: false, message: 'Incomplete data' });
+    }
+
+    const apikey = formRequestTXERADetails.apikey;
+    const origin = req.headers.origin
+    
+    const isValid = await validateApiKey(apikey,origin);
+    
+    if (!isValid)  {
+        return res.status(400).json({ success: false, message: isValid });
+    }
+
+    try {
+        let transactionOrigin = "Genesis Transaction"
+        const getLatestTransactionOrigin = async (formRequestTXERADetails) => {
+            const [[lastTransaction]] = await db.query(
+              'SELECT transaction_date, transaction_hash FROM xera_network_transactions WHERE transaction_command = ? AND sender_address = ? ORDER BY transaction_date DESC LIMIT 1',
+              [formRequestTXERADetails.transaction_command, formRequestTXERADetails.sender_address]
+            );
+          
+            const [[lastTransactionMint]] = await db.query(
+              'SELECT transaction_date, transaction_hash FROM xera_network_transactions WHERE receiver_address = ? OR sender_address = ? ORDER BY transaction_date DESC LIMIT 1',
+              [formRequestTXERADetails.receiver_address,formRequestTXERADetails.receiver_address]
+            );
+            
+          
+            if (lastTransaction && lastTransactionMint) {
+              // Compare transaction dates and return the latest one
+              if (new Date(lastTransaction.transaction_date) > new Date(lastTransactionMint.transaction_date)) {
+                return lastTransaction.transaction_hash;
+              } else {
+                return lastTransactionMint.transaction_hash;
+              }
+            } else if (lastTransaction) {
+              return lastTransaction.transaction_hash;
+            } else if (lastTransactionMint) {
+              return lastTransactionMint.transaction_hash;
+            } else {
+              return "Genesis Transaction"; 
+            }
+          };
+
+        const latesttransaction = await getLatestTransactionOrigin(formRequestTXERADetails);
+
+        if (latesttransaction) {
+            transactionOrigin = latesttransaction;
+        } 
+
+        const [addTokenTransaction] = await db.query(
+            `INSERT INTO xera_network_transactions 
+            (transaction_block, transaction_origin, transaction_hash, sender_address, receiver_address, transaction_command, transaction_amount, transaction_token, transaction_token_id, transaction_fee_amount, transaction_fee_token, transaction_fee_token_id, transaction_validator, transaction_info)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+            ["Genesis", transactionOrigin, formRequestTXERADetails.transaction_hash, formRequestTXERADetails.sender_address, formRequestTXERADetails.receiver_address, formRequestTXERADetails.transaction_command, formRequestTXERADetails.transaction_amount, formRequestTXERADetails.transaction_token, formRequestTXERADetails.transaction_token_id, '', '', '', formRequestTXERADetails.transaction_validator, formRequestTXERADetails.transaction_info]
+        );
+
+        if (addTokenTransaction.affectedRows === 0) {
+            return res.json({ success: false, message: 'Add Transaction failed' });
+        }
+
+        const [updateNFTasset] = await db.query(
+            `UPDATE xera_asset_nfts SET nft_owner = ? WHERE nft_id = ?`,[formRequestTXERADetails.receiver_address, formRequestTXERADetails.transaction_token_id]
+        );
+
+        if (updateNFTasset.affectedRows === 0) {
+            return res.json({ success: false, message: 'NFT update failed' });
+        }
+
+        const [userStakeupdate] = await db.query(
+            `UPDATE xera_user_stake_nft SET nft_owner = ? AND status = ? WHERE nft_id = ?`,[formRequestTXERADetails.receiver_address, "Claimed", formRequestTXERADetails.transaction_token_id]
+        );
+
+        if (userStakeupdate.affectedRows === 0) {
+            return res.json({ success: false, message: 'NFT stake update failed' });
+        }
+
+        const [addBlock] = await db.query(
+            `UPDATE xera_network_blocks SET block_transactions = block_transactions + 1 WHERE block_validator = ?`,[formRequestTXERADetails.transaction_validator]
+        );
+
+        if (addBlock.affectedRows === 0) {
+            return res.json({ success: false, message: 'Add Block failed' });
+        }
+
+        
+        const [recordTaskResult] = await db.query(
+            `INSERT INTO xera_user_tasks 
+            (username, xera_wallet, xera_task, xera_status, xera_points, xera_telegram_id, xera_twitter_username)
+            VALUES (?, ?, ?, ?, ?, ?, ?)`,
+            [formRequestTXERADetails.xera_username, formRequestTXERADetails.receiver_address, 'Staking Task', 'ok', formRequestTXERADetails.xera_points, '', '']
+        );
+
+        if (recordTaskResult.affectedRows === 0) {
+            return res.status(500).json({ success: false, message: 'Error inserting record' });
+        }
+        
+        return res.json({ success: true, message: `Successfully Claim Staked NFT` });
+    } catch (error) {
+        return res.json({ success: false, message: 'Request error', error: error.message });
+    }
+});
+
 app.post('/xera/v1/api/user/send-token', authenticateToken, async (req, res) => {
     const { data } = req.body;
     const decodedFormRequestTXERADetails = Buffer.from(data, 'base64').toString('utf-8');
