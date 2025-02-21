@@ -1716,7 +1716,15 @@ app.post('/xera/v1/api/user/unstake/nft', authenticateToken, async (req, res) =>
     if (!isValid)  {
         return res.status(400).json({ success: false, message: isValid });
     }
+    const serverTime = new Date();
+    const [getExpire] = await db.query('SELECT * FROM xera_user_stake_nft WHERE xera_wallet = ? AND nft_id = ? AND status = ?', [formRequestTXERADetails.receiver_address, formRequestTXERADetails.transaction_token_id, 'Staked']);
 
+    if (getExpire.length > 0) {
+        if (new Date(getExpire[0].expiry) > serverTime) {
+            return res.json({ success: false, message: 'NFT unable to unstake' });
+        }
+    }
+        
     try {
         let transactionOrigin = "Genesis Transaction"
         const getLatestTransactionOrigin = async (formRequestTXERADetails) => {
