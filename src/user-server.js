@@ -476,7 +476,7 @@ app.post('/xera/v1/api/user/rank-phase2', authenticateToken, async (req, res) =>
     if (!user) return res.json({ success: false, message: "Invalid request" });
 
     try {
-        const result = await getUserRank(user, '2024-12-19', '2025-02-25');
+        const result = await getUserRank(user, '2024-12-19', '2025-04-15');
         return res.json(result);
     } catch (error) {
         return res.json({ success: false, message: "Request error", error: error.message });
@@ -1183,7 +1183,7 @@ app.post('/xera/v1/api/user/last-transaction', authenticateToken, async (req, re
         error: error.message,
       });
     }
-  });
+});
 
 // Telegram Task Endpoint
 app.post('/xera/v1/api/user/task/telegram', authenticateToken, async (req, res) => {
