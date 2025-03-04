@@ -2205,22 +2205,45 @@ app.post('/xera/v1/api/user/mainnet/send/token', authenticateToken, async (req, 
         return res.status(400).json({ success: false, message: isValid });
     }
 
-    const { username, txHash, sender, receiver, command, amount, token, tokenId, transactioninfo } = formRequestTXERADetails;
+    const { username, txHash, sender, receiver, command, amount, token, tokenId, transactioninfo, lastMainnetTransaction } = formRequestTXERADetails;
     // Validate request body
-    if (![username, txHash, sender, receiver, command, amount, token, tokenId,transactioninfo].every(Boolean)) {
+    if (![username, txHash, sender, receiver, command, amount, token, tokenId,transactioninfo, lastMainnetTransaction].every(Boolean)) {
         return res.status(400).json({ success: false, message: 'Incomplete transaction data.' });
     }
 
     try {
         // Check for recent transactions
         const [[lastTransaction]] = await db.query(
+            'SELECT transaction_date, transaction_hash FROM xera_mainnet_transactions WHERE receiver_address = ? OR sender_address = ? ORDER BY transaction_date DESC LIMIT 1',
+            [sender,sender]
+        );
+
+        const [[lastTransactioncommand]] = await db.query(
             'SELECT transaction_date, transaction_hash FROM xera_mainnet_transactions WHERE transaction_command = ? AND sender_address = ? ORDER BY transaction_date DESC LIMIT 1',
             [command,sender]
         );
 
         let transactionOrigin = 'Genesis Transaction';
-        if (lastTransaction) {
+        if (lastTransactioncommand) {
+            const lastTxDate = new Date(lastTransactioncommand.transaction_date).getTime();
+            const timeDiff = Date.now() - lastTxDate;
+
+            if (timeDiff < 43200000) { // 12 hours in milliseconds
+                const timeRemainingMs = 43200000 - timeDiff;
+                const hours = Math.floor(timeRemainingMs / 3600000);
+                const minutes = Math.floor((timeRemainingMs % 3600000) / 60000);
+                const seconds = Math.floor((timeRemainingMs % 60000) / 1000);
+                return res.status(429).json({
+                    success: false,
+                    message: `Send again after ${hours}h ${minutes}m ${seconds}s`,
+                });
+            }
+        }
+
+        if (lastMainnetTransaction === lastTransaction.transaction_hash) {
             transactionOrigin = lastTransaction.transaction_hash;
+        } else {
+            return res.status(400).json({ success: false, message: 'Transaction failed' });
         }
 
         // Retrieve the latest block details
@@ -2236,7 +2259,7 @@ app.post('/xera/v1/api/user/mainnet/send/token', authenticateToken, async (req, 
 
         // Increment block transaction count
         const [incrementBlockResult] = await db.query(
-            'UPDATE xera_network_blocks SET block_transactions = block_transactions + 1 WHERE current_block = ?',
+            'UPDATE xera_mainnet_blocks SET block_transactions = block_transactions + 1 WHERE current_block = ?',
             [txBlock]
         );
 
@@ -2266,6 +2289,8 @@ app.post('/xera/v1/api/user/mainnet/send/token', authenticateToken, async (req, 
                 return res.status(200).json({ success: true, message: `${amount} ${token} Sent Successfully.` });
             }
         } 
+        
+        
         // Update token circulation
         if (checkTokenOwner.length > 0) {
             const [[currentToken]] = await db.query(
@@ -2286,6 +2311,26 @@ app.post('/xera/v1/api/user/mainnet/send/token', authenticateToken, async (req, 
     
             if (updateTokenResult.affectedRows === 0) {
                 return res.status(500).json({ success: false, message: 'Error updating token circulation' });
+            }
+
+            const [updateTokenOwner] = await db.query('UPDATE xera_asset_token SET token_supply = token_supply + ? WHERE token_symbol = ?', [amount, token]);
+
+            if (updateTokenOwner.affectedRows === 0) {
+                return res.status(500).json({ success: false, message: 'Error updating token owner' });
+            } 
+        }
+
+        if (checkTokenOwner.length === 0) {
+            // Record task completion
+            const [recordTaskResult] = await db.query(
+                `INSERT INTO xera_user_tasks 
+                (username, xera_wallet, xera_task, xera_status, xera_points, xera_telegram_id, xera_twitter_username)
+                VALUES (?, ?, ?, ?, ?, ?, ?)`,
+                [username, sender, 'Sending Task', 'ok', '5000', '', '']
+            );
+
+            if (recordTaskResult.affectedRows === 0) {
+                return res.status(500).json({ success: false, message: 'Error inserting record' });
             }
         }
 
