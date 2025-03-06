@@ -1583,6 +1583,58 @@ app.post('/xera/v1/api/user/mainnet/booster/sol', authenticateToken, async (req,
         if (addBlock.affectedRows === 0) {
             return res.json({ success: false, message: 'Add Block failed' });
         }
+
+        const [addTransactionResult] = await db.query(
+            `INSERT INTO xera_mainnet_transactions 
+            (transaction_block, transaction_origin, transaction_hash, sender_address, receiver_address, transaction_command, transaction_amount, transaction_token, transaction_token_id, transaction_validator, transaction_fee_amount, transaction_fee_token, transaction_fee_token_id, transaction_info)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+            ["Genesis", formRequestTXERADetails.lastMainnetTransaction, formRequestTXERADetails.xera_tx_hash, "XERA Centralized Treasury", formRequestTXERADetails.sender_address, "Send", formRequestTXERADetails.xera_tx_reward, formRequestTXERADetails.transaction_token, formRequestTXERADetails.transaction_token_id, '', '', '', formRequestTXERADetails.transaction_validator, formRequestTXERADetails.xera_tx_info ]
+        );
+
+        if (addTransactionResult.affectedRows === 0) {
+            return res.status(500).json({ success: false, message: 'Error adding transaction' });
+        }
+
+         // Retrieve the latest block details
+         const [[blockData]] = await db.query(
+            'SELECT current_block, block_validator FROM xera_mainnet_blocks ORDER BY id DESC LIMIT 1'
+        );
+
+        if (!blockData) {
+            return res.status(500).json({ success: false, message: 'Block data not found. Transaction aborted.' });
+        }
+
+        const { current_block: txBlock, block_validator: validator } = blockData;
+
+        // Increment block transaction count
+        const [incrementBlockResult] = await db.query(
+            'UPDATE xera_mainnet_blocks SET block_transactions = block_transactions + 1 WHERE current_block = ?',
+            [txBlock]
+        );
+
+        if (incrementBlockResult.affectedRows === 0) {
+            return res.status(500).json({ success: false, message: 'Error incrementing block count' });
+        }
+
+        const [[currentToken]] = await db.query(
+            'SELECT token_circulating FROM xera_asset_token WHERE token_symbol = ?',
+            [formRequestTXERADetails.tx_token]
+        );
+
+        if (!currentToken) {
+            return res.status(404).json({ success: false, message: 'Token not found or mismatched token symbol.' });
+        }
+
+        const newCirculating = parseInt(currentToken.token_circulating, 10) + parseInt(amount, 10);
+
+        const [updateTokenResult] = await db.query(
+            'UPDATE xera_asset_token SET token_circulating = ? WHERE token_id = ?',
+            [newCirculating, formRequestTXERADetails.transaction_token_id]
+        );
+
+        if (updateTokenResult.affectedRows === 0) {
+            return res.status(500).json({ success: false, message: 'Error updating token circulation' });
+        }
         
         return res.json({ success: true, message: `Successfully Apply Booster` });
     } catch (error) {
