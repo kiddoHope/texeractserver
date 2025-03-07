@@ -619,6 +619,7 @@ const fetchTotalBalanceTokens = async () => {
         }
 }
 
+
 // Endpoint for fetching user balances
 app.post('/xera/v1/api/user/balance', authenticateToken, async (req, res) => {
     const { user } = req.body;
@@ -1104,14 +1105,44 @@ app.post('/xera/v1/api/user/last-transaction', authenticateToken, async (req, re
     let transactionNetwork = [];
     let transactionMainnet = [];
     try {
-      const [getUserlastTransactionMainnet] = await db.query(
-        'SELECT transaction_hash, transaction_date FROM xera_mainnet_transactions WHERE sender_address = ? OR receiver_address = ? ORDER BY transaction_date DESC LIMIT 1',
-        [user, user]
-      );
+    //   const [getUserlastTransactionMainnet] = await db.query(
+    //     'SELECT transaction_hash, transaction_date FROM xera_mainnet_transactions WHERE sender_address = ? OR receiver_address = ? ORDER BY transaction_date DESC LIMIT 1',
+    //     [user, user]
+    //   );
+    
+      const getLatestTransactionOrigin = async () => {
+        const [[senderLastTransaction]] = await db.query(
+            'SELECT transaction_hash, transaction_date FROM xera_mainnet_transactions WHERE sender_address = ? ORDER BY transaction_date DESC LIMIT 1',
+            [user]
+          );
+    
+          const [[receiverLastTransaction]] = await db.query(
+            'SELECT transaction_hash, transaction_date FROM xera_mainnet_transactions WHERE receiver_address = ? AND transaction_command = "Mint" ORDER BY transaction_date DESC LIMIT 1',
+            [user]
+          );
+      
+        if (senderLastTransaction && receiverLastTransaction) {
+          // Compare transaction dates and return the latest one
+          if (new Date(senderLastTransaction.transaction_date) > new Date(receiverLastTransaction.transaction_date)) {
+            return senderLastTransaction;
+          } else {
+            return receiverLastTransaction;
+          }
+        } else if (senderLastTransaction) {
+          return senderLastTransaction;
+        } else if (receiverLastTransaction) {
+          return receiverLastTransaction;
+        } else {
+          return "Genesis Transaction"; 
+        }
+      };
   
-      if (getUserlastTransactionMainnet.length > 0) {
+      
+      const latesttransaction = await getLatestTransactionOrigin();
+  
+      if (latesttransaction.length > 0) {
         // Clean response by removing sensitive data like id, ip_address, etc.
-        const cleanTransactionDataMainnet = getUserlastTransactionMainnet.map(
+        const cleanTransactionDataMainnet = latesttransaction.map(
           ({
             transaction_block,
             transaction_origin,
@@ -1588,7 +1619,7 @@ app.post('/xera/v1/api/user/mainnet/booster/sol', authenticateToken, async (req,
             `INSERT INTO xera_mainnet_transactions 
             (transaction_block, transaction_origin, transaction_hash, sender_address, receiver_address, transaction_command, transaction_amount, transaction_token, transaction_token_id, transaction_validator, transaction_fee_amount, transaction_fee_token, transaction_fee_token_id, transaction_info)
             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-            ["Genesis", formRequestTXERADetails.lastMainnetTransaction, formRequestTXERADetails.xera_tx_hash, "XERA Centralized Treasury", formRequestTXERADetails.sender_address, "Send", formRequestTXERADetails.xera_tx_reward, formRequestTXERADetails.transaction_token, formRequestTXERADetails.transaction_token_id, '', '', '', formRequestTXERADetails.transaction_validator, formRequestTXERADetails.xera_tx_info ]
+            ["Genesis", transactionOrigin, formRequestTXERADetails.xera_tx_hash, "XERA Centralized Treasury", formRequestTXERADetails.xera_address, "Send", formRequestTXERADetails.xera_tx_reward, formRequestTXERADetails.transaction_token, formRequestTXERADetails.transaction_token_id, formRequestTXERADetails.transaction_validator, '', '', '', formRequestTXERADetails.xera_tx_info ]
         );
 
         if (addTransactionResult.affectedRows === 0) {
@@ -2220,7 +2251,7 @@ app.post('/xera/v1/api/user/mainnet/mintlab/nft', authenticateToken, async (req,
             `INSERT INTO xera_mainnet_transactions 
             (transaction_block, transaction_origin, transaction_hash, sender_address, receiver_address, transaction_command, transaction_amount, transaction_token, transaction_token_id, transaction_fee_amount, transaction_fee_token, transaction_fee_token_id, transaction_validator, transaction_info)
             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-            ["Genesis", transaction_origin, transaction_hash, sender_address, receiver_address, transaction_command, transaction_amount, transaction_token, transaction_token_id, '', '', '', transaction_validator,transaction_info ]
+            ["Genesis", transaction_origin, transaction_hash, sender_address, receiver_address, transaction_command, transaction_amount, transaction_token, transaction_token_id, '', '', '', transaction_validator, transaction_info]
         );
 
         if (addTokenTransaction.affectedRows === 0) {
@@ -2259,7 +2290,7 @@ app.post('/xera/v1/api/user/mainnet/send/token', authenticateToken, async (req, 
 
     const { username, txHash, sender, receiver, command, amount, token, tokenId, transactioninfo, lastMainnetTransaction } = formRequestTXERADetails;
     // Validate request body
-    if (![username, txHash, sender, receiver, command, amount, token, tokenId,transactioninfo, lastMainnetTransaction].every(Boolean)) {
+    if (![username, txHash, sender, receiver, command, amount, token, tokenId,transactioninfo,  ].every(Boolean)) {
         return res.status(400).json({ success: false, message: 'Incomplete transaction data.' });
     }
 
