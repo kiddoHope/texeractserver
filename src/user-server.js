@@ -966,6 +966,9 @@ app.post('/xera/v1/api/user/coin/claim', authenticateToken, async (req, res) => 
 
     const txLocalDate = new Date().toISOString().slice(0, 19).replace('T', ' ');
 
+    const connection = await db.getConnection();
+    await connection.beginTransaction();
+
     try {
         let transactionOrigin = 'Genesis Transaction';
         let transactionOriginMainnet = 'Genesis Transaction';
@@ -1842,10 +1845,10 @@ app.post('/xera/v1/api/user/unstake/nft', authenticateToken, async (req, res) =>
     try {
         let transactionOrigin = "Genesis Transaction"
         
-        const latesttransaction = await getLatestTransactionOriginTestnet(formRequestTXERADetails.sender_address);
+        const latesttransaction = await getLatestTransactionOriginTestnet(formRequestTXERADetails.receiver_address);
 
         if (latesttransaction) {
-            transactionOrigin = latesttransaction;
+            transactionOrigin = latesttransaction.transaction_hash;
         } 
 
         const [addTokenTransaction] = await connection.query(
@@ -1854,7 +1857,7 @@ app.post('/xera/v1/api/user/unstake/nft', authenticateToken, async (req, res) =>
             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
             ["Genesis", transactionOrigin, formRequestTXERADetails.transaction_hash, formRequestTXERADetails.sender_address, formRequestTXERADetails.receiver_address, formRequestTXERADetails.transaction_command, formRequestTXERADetails.transaction_amount, formRequestTXERADetails.transaction_token, formRequestTXERADetails.transaction_token_id, '', '', '', formRequestTXERADetails.transaction_validator, formRequestTXERADetails.transaction_info]
         );
-
+        
         if (addTokenTransaction.affectedRows === 0) {
             await connection.rollback();
             return res.json({ success: false, message: 'Add Transaction failed' });
