@@ -1759,7 +1759,7 @@ app.post('/xera/v1/api/user/staking/nft', authenticateToken, async (req, res) =>
         const latesttransaction = await getLatestTransactionOriginTestnet(formRequestTXERADetails.sender_address);
 
         if (latesttransaction) {
-            transactionOrigin = latesttransaction;
+            transactionOrigin = latesttransaction.transaction_hash;
         } 
 
         const [addTokenTransaction] = await connection.query(
