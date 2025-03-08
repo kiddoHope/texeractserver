@@ -270,6 +270,60 @@ const handleUserLogin = async (user, password, res) => {
     }
 };
 
+const getLatestTransactionOrigin = async (user) => {
+    const [[senderLastTransaction]] = await db.query(
+        'SELECT transaction_hash, transaction_date FROM xera_mainnet_transactions WHERE sender_address = ? ORDER BY transaction_date DESC LIMIT 1',
+        [user]
+      );
+
+      const [[receiverLastTransaction]] = await db.query(
+        'SELECT transaction_hash, transaction_date FROM xera_mainnet_transactions WHERE receiver_address = ? AND transaction_command != "Send" ORDER BY transaction_date DESC LIMIT 1',
+        [user]
+      );
+  
+    if (senderLastTransaction && receiverLastTransaction) {
+      // Compare transaction dates and return the latest one
+      if (new Date(senderLastTransaction.transaction_date) > new Date(receiverLastTransaction.transaction_date)) {
+        return senderLastTransaction;
+      } else {
+        return receiverLastTransaction;
+      }
+    } else if (senderLastTransaction) {
+      return senderLastTransaction;
+    } else if (receiverLastTransaction) {
+      return receiverLastTransaction;
+    } else {
+      return "Genesis Transaction"; 
+    }
+  };
+
+const getLatestTransactionOriginTestnet = async (user) => {
+    const [[senderLastTransaction]] = await db.query(
+        'SELECT transaction_hash, transaction_date FROM xera_network_transactions WHERE sender_address = ? ORDER BY transaction_date DESC LIMIT 1',
+        [user]
+    );
+
+    const [[receiverLastTransaction]] = await db.query(
+        'SELECT transaction_hash, transaction_date FROM xera_network_transactions WHERE receiver_address = ? AND transaction_command != "Send" ORDER BY transaction_date DESC LIMIT 1',
+        [user]
+    );
+
+    if (senderLastTransaction && receiverLastTransaction) {
+        // Compare transaction dates and return the latest one
+        if (new Date(senderLastTransaction.transaction_date) > new Date(receiverLastTransaction.transaction_date)) {
+        return senderLastTransaction;
+        } else {
+        return receiverLastTransaction;
+        }
+    } else if (senderLastTransaction) {
+        return senderLastTransaction;
+    } else if (receiverLastTransaction) {
+        return receiverLastTransaction;
+    } else {
+        return "Genesis Transaction"; 
+    }
+};
+
 // Route to check username availability
 app.post("/xera/v1/api/user/check-username", async (req, res) => {
     const { username } = req.body;
@@ -1110,63 +1164,41 @@ app.post('/xera/v1/api/user/last-transaction', authenticateToken, async (req, re
     //     [user, user]
     //   );
     
-      const getLatestTransactionOrigin = async () => {
-        const [[senderLastTransaction]] = await db.query(
-            'SELECT transaction_hash, transaction_date FROM xera_mainnet_transactions WHERE sender_address = ? ORDER BY transaction_date DESC LIMIT 1',
-            [user]
-          );
-    
-          const [[receiverLastTransaction]] = await db.query(
-            'SELECT transaction_hash, transaction_date FROM xera_mainnet_transactions WHERE receiver_address = ? AND transaction_command = "Mint" ORDER BY transaction_date DESC LIMIT 1',
-            [user]
-          );
+
       
-        if (senderLastTransaction && receiverLastTransaction) {
-          // Compare transaction dates and return the latest one
-          if (new Date(senderLastTransaction.transaction_date) > new Date(receiverLastTransaction.transaction_date)) {
-            return senderLastTransaction;
-          } else {
-            return receiverLastTransaction;
-          }
-        } else if (senderLastTransaction) {
-          return senderLastTransaction;
-        } else if (receiverLastTransaction) {
-          return receiverLastTransaction;
-        } else {
-          return "Genesis Transaction"; 
-        }
-      };
   
       
-      const latesttransaction = await getLatestTransactionOrigin();
+      const latesttransaction = await getLatestTransactionOrigin(user);
+
+    //   if (latesttransaction) {
+    //     // Clean response by removing sensitive data like id, ip_address, etc.
+    //     const cleanTransactionDataMainnet = latesttransaction.map(
+    //       ({
+    //         transaction_block,
+    //         transaction_origin,
+    //         sender_address,
+    //         receiver_address,
+    //         transaction_command,
+    //         transaction_amount,
+    //         transaction_token,
+    //         transaction_token_id,
+    //         transaction_fee_amount,
+    //         transaction_fee_token,
+    //         transaction_fee_token_id,
+    //         transaction_validator,
+    //         transaction_info,
+    //         ...clean
+    //       }) => clean
+    //     );
   
-      if (latesttransaction.length > 0) {
-        // Clean response by removing sensitive data like id, ip_address, etc.
-        const cleanTransactionDataMainnet = latesttransaction.map(
-          ({
-            transaction_block,
-            transaction_origin,
-            sender_address,
-            receiver_address,
-            transaction_command,
-            transaction_amount,
-            transaction_token,
-            transaction_token_id,
-            transaction_fee_amount,
-            transaction_fee_token,
-            transaction_fee_token_id,
-            transaction_validator,
-            transaction_info,
-            ...clean
-          }) => clean
-        );
-  
-        const mainnetTransaction = {
-          mainnetTransactionHash: cleanTransactionDataMainnet[0].transaction_hash,
-          mainnetTransactionDate: cleanTransactionDataMainnet[0].transaction_date,
-        };
-        transactionMainnet.push(mainnetTransaction);
-      }
+    //     const mainnetTransaction = {
+    //       mainnetTransactionHash: cleanTransactionDataMainnet[0].transaction_hash,
+    //       mainnetTransactionDate: cleanTransactionDataMainnet[0].transaction_date,
+    //     };
+    //     console.log(mainnetTransaction, "mainnet transaction");
+        
+    //     transactionMainnet.push(mainnetTransaction);
+    //   }
   
       const [getUserlastTransaction] = await db.query(
         'SELECT transaction_hash, transaction_date FROM xera_network_transactions WHERE sender_address = ? OR receiver_address = ? ORDER BY transaction_date DESC LIMIT 1',
@@ -1204,7 +1236,7 @@ app.post('/xera/v1/api/user/last-transaction', authenticateToken, async (req, re
       return res.json({
         success: true,
         message: `Successfully retrieved transaction data. Wallet: ${user}`,
-        mainnetTransaction: transactionMainnet,
+        mainnetTransaction: latesttransaction,
         networkTransaction: transactionNetwork,
       });
     } catch (error) {
@@ -1539,43 +1571,36 @@ app.post('/xera/v1/api/user/mainnet/booster/sol', authenticateToken, async (req,
         return res.status(400).json({ success: false, message: isValid });
     }
 
+    const connection = await db.getConnection();
+    await connection.beginTransaction();
+
     try {
         let transactionOrigin = "Genesis Transaction"
-        const getLatestTransactionOrigin = async (formRequestTXERADetails) => {
-            const [[lastTransaction]] = await db.query(
-              'SELECT transaction_date, transaction_hash FROM xera_mainnet_transactions WHERE transaction_command = ? AND sender_address = ? ORDER BY transaction_date DESC LIMIT 1',
-              [formRequestTXERADetails.transaction_command, formRequestTXERADetails.sender_address]
-            );
-          
-            const [[lastTransactionMint]] = await db.query(
-              'SELECT transaction_date, transaction_hash FROM xera_mainnet_transactions WHERE receiver_address = ? AND sender_address = ? ORDER BY transaction_date DESC LIMIT 1',
-              [formRequestTXERADetails.xera_address,formRequestTXERADetails.xera_address]
-            );
-          
-            if (lastTransaction && lastTransactionMint) {
-              // Compare transaction dates and return the latest one
-              if (new Date(lastTransaction.transaction_date) > new Date(lastTransactionMint.transaction_date)) {
-                return lastTransaction.transaction_hash;
-              } else {
-                return lastTransactionMint.transaction_hash;
-              }
-            } else if (lastTransaction) {
-              return lastTransaction.transaction_hash;
-            } else if (lastTransactionMint) {
-              return lastTransactionMint.transaction_hash;
+
+        const [[senderTransactionCommand]] = await connection.query(
+            'SELECT transaction_hash, transaction_date FROM xera_mainnet_transactions WHERE sender_address = ? AND transaction_command = ? ORDER BY transaction_date DESC LIMIT 1',
+            [formRequestTXERADetails.sender_address, formRequestTXERADetails.transaction_command]
+        );
+    
+
+        const latestTransactionWallet = await getLatestTransactionOrigin(formRequestTXERADetails.xera_address);
+
+        if (senderTransactionCommand && latestTransactionWallet) {
+            // Compare transaction dates and return the latest one
+            if (new Date(senderTransactionCommand.transaction_date) > new Date(latestTransactionWallet.transaction_date)) {
+                transactionOrigin = senderTransactionCommand;
             } else {
-              return "Genesis Transaction"; 
+                transactionOrigin = latestTransactionWallet;
             }
-          };
+        } else if (senderTransactionCommand) {
+            transactionOrigin = senderTransactionCommand;
+        } else if (latestTransactionWallet) {
+            transactionOrigin = latestTransactionWallet;
+        } else {
+            transactionOrigin = "Genesis Transaction"; 
+        }
 
-        const latesttransaction = await getLatestTransactionOrigin(formRequestTXERADetails);
-
-        if (latesttransaction) {
-            transactionOrigin = latesttransaction;
-        } 
-
-
-        const [addTokenTransaction] = await db.query(
+        const [addTokenTransaction] = await connection.query(
             `INSERT INTO xera_mainnet_transactions 
             (transaction_block, transaction_origin, transaction_hash, sender_address, receiver_address, transaction_command, transaction_amount, transaction_token, transaction_token_id, transaction_fee_amount, transaction_fee_token, transaction_fee_token_id, transaction_validator, transaction_info)
             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
@@ -1583,9 +1608,9 @@ app.post('/xera/v1/api/user/mainnet/booster/sol', authenticateToken, async (req,
         );
 
         if (addTokenTransaction.affectedRows === 0) {
+            await connection.rollback();
             return res.json({ success: false, message: 'Add Transaction failed' });
         }
-
 
         const [inserFund] = await db.query(`
             INSERT INTO xera_user_investments (tx_hash, tx_amount, tx_token, tx_dollar, tx_investor_address, tx_investor_name, tx_external_hash, tx_external_date, tx_bought_asset, tx_funding_asset, tx_asset_id, xera_address) 
@@ -1593,6 +1618,7 @@ app.post('/xera/v1/api/user/mainnet/booster/sol', authenticateToken, async (req,
         `, [formRequestTXERADetails.tx_hash, formRequestTXERADetails.tx_amount, formRequestTXERADetails.tx_token, '', formRequestTXERADetails.tx_investor_address, formRequestTXERADetails.tx_investor_name, formRequestTXERADetails.tx_external_hash, formRequestTXERADetails.tx_external_date, '', formRequestTXERADetails.tx_funding_asset,  formRequestTXERADetails.tx_asset_id, formRequestTXERADetails.xera_address]);
         
         if (inserFund.affectedRows === 0) {
+            await connection.rollback();
             return res.json({ success: false, message: 'Funding addition failed' });
         }
 
@@ -1604,6 +1630,7 @@ app.post('/xera/v1/api/user/mainnet/booster/sol', authenticateToken, async (req,
         );
 
         if (recordTaskResult.affectedRows === 0) {
+            await connection.rollback();
             return res.status(500).json({ success: false, message: 'Error inserting record' });
         }
 
@@ -1612,26 +1639,37 @@ app.post('/xera/v1/api/user/mainnet/booster/sol', authenticateToken, async (req,
         );
 
         if (addBlock.affectedRows === 0) {
+            await connection.rollback();
             return res.json({ success: false, message: 'Add Block failed' });
         }
 
-        const [addTransactionResult] = await db.query(
+        const senderTransactionOrigin = "Genesis Transaction"
+
+        const [[getSenderTransaction]] = await connection.query(`Select transaction_hash, transaction_date FROM xera_mainnet_transactions WHERE sender_address = ? ORDER BY transaction_date DESC LIMIT 1`, ["XERA Centralized Treasury"]);
+
+        if (getSenderTransaction) {
+            senderTransactionOrigin = getSenderTransaction.transaction_hash;
+        }
+
+        const [addSendTransaction] = await db.query(
             `INSERT INTO xera_mainnet_transactions 
             (transaction_block, transaction_origin, transaction_hash, sender_address, receiver_address, transaction_command, transaction_amount, transaction_token, transaction_token_id, transaction_validator, transaction_fee_amount, transaction_fee_token, transaction_fee_token_id, transaction_info)
             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-            ["Genesis", transactionOrigin, formRequestTXERADetails.xera_tx_hash, "XERA Centralized Treasury", formRequestTXERADetails.xera_address, "Send", formRequestTXERADetails.xera_tx_reward, formRequestTXERADetails.transaction_token, formRequestTXERADetails.transaction_token_id, formRequestTXERADetails.transaction_validator, '', '', '', formRequestTXERADetails.xera_tx_info ]
+            ["Genesis", senderTransactionOrigin, formRequestTXERADetails.xera_tx_hash, "XERA Centralized Treasury", formRequestTXERADetails.xera_address, "Send", formRequestTXERADetails.xera_tx_reward, formRequestTXERADetails.transaction_token, formRequestTXERADetails.transaction_token_id, formRequestTXERADetails.transaction_validator, '', '', '', formRequestTXERADetails.xera_tx_info ]
         );
 
-        if (addTransactionResult.affectedRows === 0) {
+        if (addSendTransaction.affectedRows === 0) {
+            await connection.rollback();
             return res.status(500).json({ success: false, message: 'Error adding transaction' });
         }
 
-         // Retrieve the latest block details
-         const [[blockData]] = await db.query(
+        // Retrieve the latest block details
+        const [[blockData]] = await db.query(
             'SELECT current_block, block_validator FROM xera_mainnet_blocks ORDER BY id DESC LIMIT 1'
         );
 
         if (!blockData) {
+            await connection.rollback();
             return res.status(500).json({ success: false, message: 'Block data not found. Transaction aborted.' });
         }
 
@@ -1644,6 +1682,7 @@ app.post('/xera/v1/api/user/mainnet/booster/sol', authenticateToken, async (req,
         );
 
         if (incrementBlockResult.affectedRows === 0) {
+            await connection.rollback();
             return res.status(500).json({ success: false, message: 'Error incrementing block count' });
         }
 
@@ -1653,7 +1692,8 @@ app.post('/xera/v1/api/user/mainnet/booster/sol', authenticateToken, async (req,
         );
 
         if (!currentToken) {
-            return res.status(404).json({ success: false, message: 'Token not found or mismatched token symbol.' });
+            await connection.rollback();
+            return res.status(404).json({ success: false, message: 'Token not found or mismatched token symbol.'});
         }
 
         const newCirculating = parseInt(currentToken.token_circulating, 10) + parseInt(amount, 10);
@@ -1664,12 +1704,17 @@ app.post('/xera/v1/api/user/mainnet/booster/sol', authenticateToken, async (req,
         );
 
         if (updateTokenResult.affectedRows === 0) {
+            await connection.rollback();
             return res.status(500).json({ success: false, message: 'Error updating token circulation' });
         }
-        
+
+        await connection.commit();
         return res.json({ success: true, message: `Successfully Apply Booster` });
     } catch (error) {
+        await connection.rollback();
         return res.json({ success: false, message: 'Request error', error: error.message });
+    } finally {
+        connection.release();
     }
 });
 
@@ -1702,44 +1747,19 @@ app.post('/xera/v1/api/user/staking/nft', authenticateToken, async (req, res) =>
         return res.json({ success: false, message: 'Limit Reached. Max 3 NFT Staking' });
     }
 
+    const connection = await db.getConnection();
+    await connection.beginTransaction();
+
     try {
         let transactionOrigin = "Genesis Transaction"
-        const getLatestTransactionOrigin = async (formRequestTXERADetails) => {
-            const [[lastTransaction]] = await db.query(
-              'SELECT transaction_date, transaction_hash FROM xera_network_transactions WHERE transaction_command = ? AND sender_address = ? ORDER BY transaction_date DESC LIMIT 1',
-              [formRequestTXERADetails.transaction_command, formRequestTXERADetails.sender_address]
-            );
-          
-            const [[lastTransactionMint]] = await db.query(
-              'SELECT transaction_date, transaction_hash FROM xera_network_transactions WHERE receiver_address = ? OR sender_address = ? ORDER BY transaction_date DESC LIMIT 1',
-              [formRequestTXERADetails.sender_address,formRequestTXERADetails.sender_address]
-            );
-            
-          
-            if (lastTransaction && lastTransactionMint) {
-              // Compare transaction dates and return the latest one
-              if (new Date(lastTransaction.transaction_date) > new Date(lastTransactionMint.transaction_date)) {
-                return lastTransaction.transaction_hash;
-              } else {
-                return lastTransactionMint.transaction_hash;
-              }
-            } else if (lastTransaction) {
-              return lastTransaction.transaction_hash;
-            } else if (lastTransactionMint) {
-              return lastTransactionMint.transaction_hash;
-            } else {
-              return "Genesis Transaction"; 
-            }
-          };
 
-        const latesttransaction = await getLatestTransactionOrigin(formRequestTXERADetails);
+        const latesttransaction = await getLatestTransactionOriginTestnet(formRequestTXERADetails.sender_address);
 
         if (latesttransaction) {
             transactionOrigin = latesttransaction;
         } 
 
-
-        const [addTokenTransaction] = await db.query(
+        const [addTokenTransaction] = await connection.query(
             `INSERT INTO xera_network_transactions 
             (transaction_block, transaction_origin, transaction_hash, sender_address, receiver_address, transaction_command, transaction_amount, transaction_token, transaction_token_id, transaction_fee_amount, transaction_fee_token, transaction_fee_token_id, transaction_validator, transaction_info)
             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
@@ -1747,37 +1767,45 @@ app.post('/xera/v1/api/user/staking/nft', authenticateToken, async (req, res) =>
         );
 
         if (addTokenTransaction.affectedRows === 0) {
+            await connection.rollback();
             return res.json({ success: false, message: 'Add Transaction failed' });
         }
 
-        const [updateNFTasset] = await db.query(
+        const [updateNFTasset] = await connection.query(
             `UPDATE xera_asset_nfts SET nft_owner = ? WHERE nft_owner = ? AND nft_id = ?`,[formRequestTXERADetails.receiver_address,formRequestTXERADetails.sender_address, formRequestTXERADetails.transaction_token_id]
         );
 
         if (updateNFTasset.affectedRows === 0) {
+            await connection.rollback();
             return res.json({ success: false, message: 'NFT update failed' });
         }
 
-        const [insertStakenft] = await db.query(`
+        const [insertStakenft] = await connection.query(`
             INSERT INTO xera_user_stake_nft (xera_wallet, nft_id, nft_content, nft_rarity, nft_reward_xp, nft_reward_amount, nft_reward_token, nft_reward_token_id, expiry, status) 
             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         `, [formRequestTXERADetails.sender_address, formRequestTXERADetails.transaction_token_id, formRequestTXERADetails.nftContent, formRequestTXERADetails.nftRarity, formRequestTXERADetails.nftRewardXP, formRequestTXERADetails.nftRewardAmount, formRequestTXERADetails.nftRewardToken, formRequestTXERADetails.nftRewardTokenID, expireDate, "Staked"]);
         
         if (insertStakenft.affectedRows === 0) {
+            await connection.rollback();
             return res.json({ success: false, message: 'Staking failed' });
         }
 
-        const [addBlock] = await db.query(
+        const [addBlock] = await connection.query(
             `UPDATE xera_network_blocks SET block_transactions = block_transactions + 1 WHERE block_validator = ?`,[formRequestTXERADetails.transaction_validator]
         );
 
         if (addBlock.affectedRows === 0) {
+            await connection.rollback();
             return res.json({ success: false, message: 'Add Block failed' });
         }
         
+        await connection.commit();
         return res.json({ success: true, message: `Successfully Stake NFT` });
     } catch (error) {
+        await connection.rollback();
         return res.json({ success: false, message: 'Request error', error: error.message });
+    } finally {
+        connection.release();
     }
 });
 
@@ -1807,44 +1835,20 @@ app.post('/xera/v1/api/user/unstake/nft', authenticateToken, async (req, res) =>
             return res.json({ success: false, message: 'NFT unable to unstake' });
         }
     }
-        
+    
+    const connection = await db.getConnection();
+    await connection.beginTransaction();
+
     try {
         let transactionOrigin = "Genesis Transaction"
-        const getLatestTransactionOrigin = async (formRequestTXERADetails) => {
-            const [[lastTransaction]] = await db.query(
-              'SELECT transaction_date, transaction_hash FROM xera_network_transactions WHERE transaction_command = ? AND sender_address = ? ORDER BY transaction_date DESC LIMIT 1',
-              [formRequestTXERADetails.transaction_command, formRequestTXERADetails.sender_address]
-            );
-          
-            const [[lastTransactionMint]] = await db.query(
-              'SELECT transaction_date, transaction_hash FROM xera_network_transactions WHERE receiver_address = ? OR sender_address = ? ORDER BY transaction_date DESC LIMIT 1',
-              [formRequestTXERADetails.receiver_address,formRequestTXERADetails.receiver_address]
-            );
-            
-          
-            if (lastTransaction && lastTransactionMint) {
-              // Compare transaction dates and return the latest one
-              if (new Date(lastTransaction.transaction_date) > new Date(lastTransactionMint.transaction_date)) {
-                return lastTransaction.transaction_hash;
-              } else {
-                return lastTransactionMint.transaction_hash;
-              }
-            } else if (lastTransaction) {
-              return lastTransaction.transaction_hash;
-            } else if (lastTransactionMint) {
-              return lastTransactionMint.transaction_hash;
-            } else {
-              return "Genesis Transaction"; 
-            }
-          };
-
-        const latesttransaction = await getLatestTransactionOrigin(formRequestTXERADetails);
+        
+        const latesttransaction = await getLatestTransactionOriginTestnet(formRequestTXERADetails.sender_address);
 
         if (latesttransaction) {
             transactionOrigin = latesttransaction;
         } 
 
-        const [addTokenTransaction] = await db.query(
+        const [addTokenTransaction] = await connection.query(
             `INSERT INTO xera_network_transactions 
             (transaction_block, transaction_origin, transaction_hash, sender_address, receiver_address, transaction_command, transaction_amount, transaction_token, transaction_token_id, transaction_fee_amount, transaction_fee_token, transaction_fee_token_id, transaction_validator, transaction_info)
             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
@@ -1852,34 +1856,38 @@ app.post('/xera/v1/api/user/unstake/nft', authenticateToken, async (req, res) =>
         );
 
         if (addTokenTransaction.affectedRows === 0) {
+            await connection.rollback();
             return res.json({ success: false, message: 'Add Transaction failed' });
         }
 
-        const [updateNFTasset] = await db.query(
+        const [updateNFTasset] = await connection.query(
             `UPDATE xera_asset_nfts SET nft_owner = ? WHERE nft_id = ?`,[formRequestTXERADetails.receiver_address, formRequestTXERADetails.transaction_token_id]
         );
 
         if (updateNFTasset.affectedRows === 0) {
+            await connection.rollback();
             return res.json({ success: false, message: 'NFT update failed' });
         }
 
-        const [userStakeupdate] = await db.query(
+        const [userStakeupdate] = await connection.query(
             `UPDATE xera_user_stake_nft SET status = ? WHERE xera_wallet = ? AND nft_id = ? `,["Claimed", formRequestTXERADetails.receiver_address, formRequestTXERADetails.transaction_token_id]
         );
 
         if (userStakeupdate.affectedRows === 0) {
+            await connection.rollback();
             return res.json({ success: false, message: 'NFT stake update failed' });
         }
 
-        const [addBlock] = await db.query(
+        const [addBlock] = await connection.query(
             `UPDATE xera_network_blocks SET block_transactions = block_transactions + 1 WHERE block_validator = ?`,[formRequestTXERADetails.transaction_validator]
         );
 
         if (addBlock.affectedRows === 0) {
+            await connection.rollback();
             return res.json({ success: false, message: 'Add Block failed' });
         }
         
-        const [recordTaskResult] = await db.query(
+        const [recordTaskResult] = await connection.query(
             `INSERT INTO xera_user_tasks 
             (username, xera_wallet, xera_task, xera_status, xera_points, xera_telegram_id, xera_twitter_username)
             VALUES (?, ?, ?, ?, ?, ?, ?)`,
@@ -1887,12 +1895,17 @@ app.post('/xera/v1/api/user/unstake/nft', authenticateToken, async (req, res) =>
         );
 
         if (recordTaskResult.affectedRows === 0) {
+            await connection.rollback();
             return res.status(500).json({ success: false, message: 'Error inserting record' });
         }
         
+        await connection.commit();
         return res.json({ success: true, message: `Successfully Claim Staked NFT` });
     } catch (error) {
+        await connection.rollback();
         return res.json({ success: false, message: 'Request error', error: error.message });
+    } finally {
+        connection.release();
     }
 });
 
@@ -2143,43 +2156,19 @@ app.post('/xera/v1/api/user/mainnet/mintnft/sol', authenticateToken, async (req,
     // }
 
 
+    const connection = await db.getConnection();
+    await connection.beginTransaction();
+
     try {
         let transactionOrigin = 'Genesis Transaction';
-
-        const getLatestTransactionOrigin = async () => {
-            const [[lastTransaction]] = await db.query(
-              'SELECT transaction_date, transaction_hash FROM xera_mainnet_transactions WHERE sender_address = ? ORDER BY transaction_date DESC LIMIT 1',
-              [sender_address]
-            );
-          
-            const [[lastTransactionMint]] = await db.query(
-              'SELECT transaction_date, transaction_hash FROM xera_mainnet_transactions WHERE receiver_address = ? AND sender_address = ? ORDER BY transaction_date DESC LIMIT 1',
-              [xera_address, "XERA MintLab"]
-            );
-          
-            if (lastTransaction && lastTransactionMint) {
-              // Compare transaction dates and return the latest one
-              if (new Date(lastTransaction.transaction_date) > new Date(lastTransactionMint.transaction_date)) {
-                return lastTransaction.transaction_hash;
-              } else {
-                return lastTransactionMint.transaction_hash;
-              }
-            } else if (lastTransaction) {
-              return lastTransaction.transaction_hash;
-            } else if (lastTransactionMint) {
-              return lastTransactionMint.transaction_hash;
-            } else {
-              return "Genesis Transaction"; 
-            }
-          };
     
-        const latesttransaction = await getLatestTransactionOrigin(formRequestTXERADetails);
+        const latesttransaction = await getLatestTransactionOrigin(formRequestTXERADetails.xera_address);
     
         if (latesttransaction) {
             transactionOrigin = latesttransaction;
         }
 
-        const [addNft] = await db.query(
+        const [addNft] = await connection.query(
             `INSERT INTO xera_asset_nfts 
             (nft_id, nft_collection, nft_version, nft_icon, nft_name, nft_content, nft_creator, nft_owner, nft_type, nft_status, nft_rarity, nft_parts, nft_stakeable, nft_redeemable, nft_price, nft_token, nft_token_id, nft_info)
             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
@@ -2187,89 +2176,69 @@ app.post('/xera/v1/api/user/mainnet/mintnft/sol', authenticateToken, async (req,
         );
 
         if (addNft.affectedRows === 0) {
+            await connection.rollback();
             return res.json({ success: false, message: 'Add NFT failed' });
         }
 
-        const [inserFund] = await db.query(`
+        const [inserFund] = await connection.query(`
             INSERT INTO xera_user_investments (tx_hash, tx_amount, tx_token, tx_dollar, tx_investor_address, tx_investor_name, tx_external_hash, tx_external_date, tx_bought_asset, tx_funding_asset, tx_asset_id, xera_address) 
             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         `, [tx_hash, tx_amount, tx_token, '', tx_investor_address, tx_investor_name, tx_external_hash, tx_external_date, '', tx_funding_asset,  tx_asset_id, xera_address]);
         
         if (inserFund.affectedRows === 0) {
+            await connection.rollback();
             return res.json({ success: false, message: 'Funding addition failed' });
         }
 
-        const [addTokenTransaction] = await db.query(
+        const [addTokenTransaction] = await connection.query(
             `INSERT INTO xera_mainnet_transactions 
             (transaction_block, transaction_origin, transaction_hash, sender_address, receiver_address, transaction_command, transaction_amount, transaction_token, transaction_token_id, transaction_fee_amount, transaction_fee_token, transaction_fee_token_id, transaction_validator, transaction_info)
             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-            ["Genesis", transactionOrigin, transaction_hash, sender_address, receiver_address, transaction_command, transaction_amount, transaction_token, transaction_token_id, '', '', '', transaction_validator,transaction_info ]
+            ["Genesis", transactionOrigin, transaction_hash, sender_address, receiver_address, transaction_command, tx_amount, tx_token, transaction_token_id, '', '', '', transaction_validator,transaction_info ]
         );
 
         if (addTokenTransaction.affectedRows === 0) {
+            await connection.rollback();
             return res.json({ success: false, message: 'Add Transaction failed' });
         }
 
-        const [addBlock] = await db.query(
+        const [addBlock] = await connection.query(
             `UPDATE xera_mainnet_blocks SET block_transactions = block_transactions + 1 WHERE block_validator = ?`,[transaction_validator]
         );
 
         if (addBlock.affectedRows === 0) {
+            await connection.rollback();
             return res.json({ success: false, message: 'Add Block failed' });
         }
-        
+
+        const [mintLabTransaction] = await connection.query(
+            `INSERT INTO xera_mainnet_transactions 
+            (transaction_block, transaction_origin, transaction_hash, sender_address, receiver_address, transaction_command, transaction_amount, transaction_token, transaction_token_id, transaction_fee_amount, transaction_fee_token, transaction_fee_token_id, transaction_validator, transaction_info)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+            ["Genesis", tx_hash, transaction_hash, "XERA MintLab", xera_address, transaction_command, transaction_amount, tx_funding_asset, tx_asset_id, '', '', '', transaction_validator, transaction_info]
+        );
+
+        if (mintLabTransaction.affectedRows === 0) {
+            await connection.rollback();
+            return res.json({ success: false, message: 'Add Transaction failed' });
+        }
+
+        const [mintlabBlock] = await connection.query(
+            `UPDATE xera_mainnet_blocks SET block_transactions = block_transactions + 1 WHERE block_validator = ?`,[transaction_validator]
+        );
+
+        if (mintlabBlock.affectedRows === 0) {
+            await connection.rollback();
+            return res.json({ success: false, message: 'Add Block failed' });
+        }
+
+        await connection.commit();
         return res.json({ success: true, message: `Successfully minted NFT ${nft_name}` });
     } catch (error) {
-        console.error('Transaction Error:', error.message);
+        await connection.rollback();
         return res.status(500).json({ success: false, message: 'Internal Server Error', error: error.message });
-    }
-});
-
-app.post('/xera/v1/api/user/mainnet/mintlab/nft', authenticateToken, async (req, res) => {
-    const { data } = req.body;
-    const decodedFormRequestTXERADetails = Buffer.from(data, 'base64').toString('utf-8');
-
-    const formRequestTXERADetails = JSON.parse(decodedFormRequestTXERADetails);
-    
-    const apikey = formRequestTXERADetails.apiKey;
-    const origin = req.headers.origin
-    
-    const isValid = await validateApiKey(apikey,origin);
-    
-    if (!isValid)  {
-        return res.status(400).json({ success: false, message: isValid });
-    }
-
-    const { transaction_origin, transaction_hash, sender_address, receiver_address, transaction_command, transaction_amount, transaction_token, transaction_token_id, transaction_validator, transaction_info } = formRequestTXERADetails;
-    // Validate request body
-    if (![ transaction_hash, sender_address, receiver_address, transaction_command, transaction_amount, transaction_token, transaction_token_id, transaction_validator, transaction_info].every(Boolean)) {
-        return res.status(400).json({ success: false, message: 'Incomplete transaction data.' });
-    }
-
-    try {
-        const [addTokenTransaction] = await db.query(
-            `INSERT INTO xera_mainnet_transactions 
-            (transaction_block, transaction_origin, transaction_hash, sender_address, receiver_address, transaction_command, transaction_amount, transaction_token, transaction_token_id, transaction_fee_amount, transaction_fee_token, transaction_fee_token_id, transaction_validator, transaction_info)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-            ["Genesis", transaction_origin, transaction_hash, sender_address, receiver_address, transaction_command, transaction_amount, transaction_token, transaction_token_id, '', '', '', transaction_validator, transaction_info]
-        );
-
-        if (addTokenTransaction.affectedRows === 0) {
-            return res.json({ success: false, message: 'Add Transaction failed' });
-        }
-
-        const [addBlock] = await db.query(
-            `UPDATE xera_mainnet_blocks SET block_transactions = block_transactions + 1 WHERE block_validator = ?`,[transaction_validator]
-        );
-
-        if (addBlock.affectedRows === 0) {
-            return res.json({ success: false, message: 'Add Block failed' });
-        }
-        
-        return res.json({ success: true, message: `Successfully minted NFT` });
-    } catch (error) {
-        console.error('Transaction Error:', error.message);
-        return res.status(500).json({ success: false, message: 'Internal Server Error', error: error.message });
+    } finally {
+        connection.release();
     }
 });
 
@@ -2294,19 +2263,20 @@ app.post('/xera/v1/api/user/mainnet/send/token', authenticateToken, async (req, 
         return res.status(400).json({ success: false, message: 'Incomplete transaction data.' });
     }
 
+    const connection = await db.getConnection();
+    await connection.beginTransaction();
+
+    let transactionOrigin = 'Genesis Transaction';
+
     try {
         // Check for recent transactions
-        const [[lastTransaction]] = await db.query(
-            'SELECT transaction_date, transaction_hash FROM xera_mainnet_transactions WHERE receiver_address = ? OR sender_address = ? ORDER BY transaction_date DESC LIMIT 1',
-            [sender,sender]
-        );
+        const lastTransaction = await getLatestTransactionOrigin(sender);
 
-        const [[lastTransactioncommand]] = await db.query(
+        const [[lastTransactioncommand]] = await connection.query(
             'SELECT transaction_date, transaction_hash FROM xera_mainnet_transactions WHERE transaction_command = ? AND sender_address = ? ORDER BY transaction_date DESC LIMIT 1',
             [command,sender]
         );
 
-        let transactionOrigin = 'Genesis Transaction';
         if (lastTransactioncommand) {
             const lastTxDate = new Date(lastTransactioncommand.transaction_date).getTime();
             const timeDiff = Date.now() - lastTxDate;
@@ -2330,28 +2300,30 @@ app.post('/xera/v1/api/user/mainnet/send/token', authenticateToken, async (req, 
         }
 
         // Retrieve the latest block details
-        const [[blockData]] = await db.query(
+        const [[blockData]] = await connection.query(
             'SELECT current_block, block_validator FROM xera_mainnet_blocks ORDER BY id DESC LIMIT 1'
         );
 
         if (!blockData) {
+            await connection.rollback();
             return res.status(500).json({ success: false, message: 'Block data not found. Transaction aborted.' });
         }
 
         const { current_block: txBlock, block_validator: validator } = blockData;
 
         // Increment block transaction count
-        const [incrementBlockResult] = await db.query(
+        const [incrementBlockResult] = await connection.query(
             'UPDATE xera_mainnet_blocks SET block_transactions = block_transactions + 1 WHERE current_block = ?',
             [txBlock]
         );
 
         if (incrementBlockResult.affectedRows === 0) {
+            await connection.rollback();
             return res.status(500).json({ success: false, message: 'Error incrementing block count' });
         }
 
         // Add new transaction
-        const [addTransactionResult] = await db.query(
+        const [addTransactionResult] = await connection.query(
             `INSERT INTO xera_mainnet_transactions 
             (transaction_block, transaction_origin, transaction_hash, sender_address, receiver_address, transaction_command, transaction_amount, transaction_token, transaction_token_id, transaction_validator, transaction_fee_amount, transaction_fee_token, transaction_fee_token_id, transaction_info)
             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
@@ -2359,16 +2331,19 @@ app.post('/xera/v1/api/user/mainnet/send/token', authenticateToken, async (req, 
         );
 
         if (addTransactionResult.affectedRows === 0) {
+            await connection.rollback();
             return res.status(500).json({ success: false, message: 'Error adding transaction' });
         }
 
-        const [checkTokenOwner] = await db.query('SELECT token_symbol FROM xera_asset_token WHERE token_owner = ?', [sender]);
+        const [checkTokenOwner] = await connection.query('SELECT token_symbol FROM xera_asset_token WHERE token_owner = ?', [sender]);
 
         if (receiver === 'XERA Centralized Treasury' && checkTokenOwner.length > 0) {
-            const [updateTokenOwner] = await db.query('UPDATE xera_asset_token SET token_supply = token_supply + ? WHERE token_symbol = ?', [amount, token]);
+            const [updateTokenOwner] = await connection.query('UPDATE xera_asset_token SET token_supply = token_supply + ? WHERE token_symbol = ?', [amount, token]);
             if (updateTokenOwner.affectedRows === 0) {
+                await connection.rollback();
                 return res.status(500).json({ success: false, message: 'Error updating token owner' });
             } else {
+                await connection.commit();
                 return res.status(200).json({ success: true, message: `${amount} ${token} Sent Successfully.` });
             }
         } 
@@ -2376,36 +2351,39 @@ app.post('/xera/v1/api/user/mainnet/send/token', authenticateToken, async (req, 
         
         // Update token circulation
         if (checkTokenOwner.length > 0) {
-            const [[currentToken]] = await db.query(
+            const [[currentToken]] = await connection.query(
                 'SELECT token_circulating FROM xera_asset_token WHERE token_symbol = ?',
                 [token]
             );
     
             if (!currentToken) {
+                await connection.rollback();
                 return res.status(404).json({ success: false, message: 'Token not found or mismatched token symbol.' });
             }
     
             const newCirculating = parseInt(currentToken.token_circulating, 10) + parseInt(amount, 10);
     
-            const [updateTokenResult] = await db.query(
+            const [updateTokenResult] = await connection.query(
                 'UPDATE xera_asset_token SET token_circulating = ? WHERE token_id = ?',
                 [newCirculating, tokenId]
             );
     
             if (updateTokenResult.affectedRows === 0) {
+                await connection.rollback();
                 return res.status(500).json({ success: false, message: 'Error updating token circulation' });
             }
 
-            const [updateTokenOwner] = await db.query('UPDATE xera_asset_token SET token_supply = token_supply + ? WHERE token_symbol = ?', [amount, token]);
+            const [updateTokenOwner] = await connection.query('UPDATE xera_asset_token SET token_supply = token_supply + ? WHERE token_symbol = ?', [amount, token]);
 
             if (updateTokenOwner.affectedRows === 0) {
+                await connection.rollback();
                 return res.status(500).json({ success: false, message: 'Error updating token owner' });
-            } 
+            }
         }
 
         if (checkTokenOwner.length === 0) {
             // Record task completion
-            const [recordTaskResult] = await db.query(
+            const [recordTaskResult] = await connection.query(
                 `INSERT INTO xera_user_tasks 
                 (username, xera_wallet, xera_task, xera_status, xera_points, xera_telegram_id, xera_twitter_username)
                 VALUES (?, ?, ?, ?, ?, ?, ?)`,
@@ -2413,15 +2391,19 @@ app.post('/xera/v1/api/user/mainnet/send/token', authenticateToken, async (req, 
             );
 
             if (recordTaskResult.affectedRows === 0) {
+                await connection.rollback();
                 return res.status(500).json({ success: false, message: 'Error inserting record' });
             }
         }
 
         // All operations succeeded
+        await connection.commit();
         return res.status(200).json({ success: true, message: `${amount} ${token} Sent Successfully.` });
     } catch (error) {
-        console.error('Transaction Error:', error.message);
+        await connection.rollback();
         return res.status(500).json({ success: false, message: 'Internal Server Error' });
+    } finally {
+        connection.release();
     }
 });
 
