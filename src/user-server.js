@@ -371,6 +371,7 @@ app.post('/xera/v1/api/user/login-basic', async (req, res) => {
             return res.json({ success: false, message: "No user found" });
         }
     } catch (error) {
+        console.error('Error fetching conversion rate:', error.message);
         return res.json({ success: false, message: "Request error" });
     }
 });
@@ -590,6 +591,7 @@ app.post('/xera/v1/api/user/transactions', authenticateToken, async (req, res) =
             return res.json({ success: false, message: "No transactions found" });
         }
     } catch (error) {
+        console.error('Error fetching conversion rate:', error.message);
         return res.json({ success: false, message: "Request error", error });
     }
 });
@@ -724,6 +726,7 @@ app.post('/xera/v1/api/user/balance', authenticateToken, async (req, res) => {
             return res.json({ success: false, message: "No tokens found" });
         }
     } catch (error) {
+        console.error('Error fetching conversion rate:', error.message);
         return res.json({ success: false, message: "Request error", error });
     }
 });
@@ -746,6 +749,7 @@ app.post('/xera/v1/api/user/onstake/nft', authenticateToken, async (req, res) =>
             return res.json({ success: false, message: "No stake nft found" });
         }
     } catch (error) {
+        console.error('Error fetching conversion rate:', error.message);
         return res.json({ success: false, message: "Request error", error });
     }
 });
@@ -788,6 +792,7 @@ app.post('/xera/v1/api/user/mainnet/balance', authenticateToken, async (req, res
             return res.json({ success: false, message: "No tokens found" });
         }
     } catch (error) {
+        console.error('Error fetching conversion rate:', error.message);
         return res.json({ success: false, message: "Request error", error });
     }
 });
@@ -813,6 +818,7 @@ app.post('/xera/v1/api/user/following', authenticateToken, async (req, res) => {
             return res.json({ success: false, message: "No followers found" });
         }
     } catch (error) {
+        console.error('Error fetching conversion rate:', error.message);
         return res.json({ success: false, message: "Request error", error });
     }
 });
@@ -1135,6 +1141,7 @@ app.post('/xera/v1/api/user/nodes', authenticateToken, async (req, res) => {
             return res.json({ success: false, message: 'No node found for the provided address' });
         }
     } catch (error) {
+        console.error('Error fetching conversion rate:', error.message);
         return res.json({ success: false, message: error.message });
     }
 });
@@ -1159,6 +1166,7 @@ app.post('/xera/v1/api/user/security', authenticateToken, async (req, res) => {
             return res.json({ success: false, message: "No security data found" });
         }
     } catch (error) {
+        console.error('Error fetching conversion rate:', error.message);
         return res.json({ success: false, message: 'Error retrieving security data', error: error.message });
     }
 });
@@ -1254,6 +1262,7 @@ app.post('/xera/v1/api/user/last-transaction', authenticateToken, async (req, re
         networkTransaction: transactionNetwork,
       });
     } catch (error) {
+        console.error('Error fetching conversion rate:', error.message);
       return res.json({
         success: false,
         message: 'Error retrieving transaction data',
@@ -1315,6 +1324,7 @@ app.post('/xera/v1/api/user/task/telegram', authenticateToken, async (req, res) 
 
         res.json({ success: true, message: 'Telegram user successfully verified' });
     } catch (error) {
+        console.error('Error fetching conversion rate:', error.message);
         res.json({ success: false, message: 'Request error', error: error.message });
     }
 });
@@ -1371,6 +1381,7 @@ app.post('/xera/v1/api/user/task/twitter', authenticateToken, async (req, res) =
 
         res.json({ success: true, message: 'Twitter user successfully verified' });
     } catch (error) {
+        console.error('Error fetching conversion rate:', error.message);
         res.json({ success: false, message: 'Request error', error: error.message });
     }
 });
@@ -1412,6 +1423,7 @@ app.post('/xera/v1/api/user/task/social', authenticateToken, async (req, res) =>
 
         res.json({ success: true, message: 'Task successfully added' });
     } catch (error) {
+        console.error('Error fetching conversion rate:', error.message);
         res.json({ success: false, message: 'Request error', error: error.message });
     }
 });
@@ -1464,6 +1476,7 @@ app.post('/xera/v1/api/user/task/connect-wallet', authenticateToken, async (req,
             return res.json({ success: true, message: 'Wallet successfully updated and task recorded' });
         }
     } catch (error) {
+        console.error('Error fetching conversion rate:', error.message);
         return res.json({ success: false, message: 'Request error', error: error.message });
     }
 });
@@ -1532,6 +1545,7 @@ app.post('/xera/v1/api/user/register', async (req, res) => {
             return res.json({ success: false, message: 'Registration failed' });
         }
     } catch (error) {
+        console.error('Error fetching conversion rate:', error.message);
         return res.json({ success: false, message: 'Request error', error: error.message });
     }
 });
@@ -1562,6 +1576,7 @@ app.post('/xera/v1/api/user/update-display', authenticateToken, async (req, res)
         }
         
     } catch (error) {
+        console.error('Error fetching conversion rate:', error.message);
         return res.json({ success: false, message: 'Request error', error: error.message });
     }
 });
@@ -1725,6 +1740,7 @@ app.post('/xera/v1/api/user/mainnet/booster/sol', authenticateToken, async (req,
         await connection.commit();
         return res.json({ success: true, message: `Successfully Apply Booster` });
     } catch (error) {
+        console.error('Error fetching conversion rate:', error.message);
         await connection.rollback();
         return res.json({ success: false, message: 'Request error', error: error.message });
     } finally {
@@ -1816,6 +1832,7 @@ app.post('/xera/v1/api/user/staking/nft', authenticateToken, async (req, res) =>
         await connection.commit();
         return res.json({ success: true, message: `Successfully Stake NFT` });
     } catch (error) {
+        console.error('Error fetching conversion rate:', error.message);
         await connection.rollback();
         return res.json({ success: false, message: 'Request error', error: error.message });
     } finally {
@@ -1917,6 +1934,7 @@ app.post('/xera/v1/api/user/unstake/nft', authenticateToken, async (req, res) =>
         return res.json({ success: true, message: `Successfully Claim Staked NFT` });
     } catch (error) {
         await connection.rollback();
+        console.error('Error fetching conversion rate:', error.message);
         return res.json({ success: false, message: 'Request error', error: error.message });
     } finally {
         connection.release();
@@ -2249,6 +2267,7 @@ app.post('/xera/v1/api/user/mainnet/mintnft/sol', authenticateToken, async (req,
         await connection.commit();
         return res.json({ success: true, message: `Successfully minted NFT ${nft_name}` });
     } catch (error) {
+        console.error('Error fetching conversion rate:', error.message);
         await connection.rollback();
         return res.status(500).json({ success: false, message: 'Internal Server Error', error: error.message });
     } finally {
@@ -2414,6 +2433,7 @@ app.post('/xera/v1/api/user/mainnet/send/token', authenticateToken, async (req, 
         await connection.commit();
         return res.status(200).json({ success: true, message: `${amount} ${token} Sent Successfully.` });
     } catch (error) {
+        console.error('Error fetching conversion rate:', error.message);
         await connection.rollback();
         return res.status(500).json({ success: false, message: 'Internal Server Error' });
     } finally {
@@ -2440,6 +2460,7 @@ app.post('/xera/v1/api/user/nfts', authenticateToken, async (req, res) => {
             return res.json({ success: false, message: 'No NFT found for the provided address' });
         }
     } catch (error) {
+        console.error('Error fetching conversion rate:', error.message);
         return res.json({ success: false, message: error.message });
     }
 });
@@ -2520,6 +2541,7 @@ app.post('/xera/v1/api/user/nft-claim', authenticateToken, async (req, res) => {
             }
         }
     } catch (error) {
+        console.error('Error fetching conversion rate:', error.message);
         return res.json({ success: false, message: "Request error", error });
     }
 });
