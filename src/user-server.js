@@ -1565,7 +1565,7 @@ app.post('/xera/v1/api/user/mainnet/booster/sol', authenticateToken, async (req,
     if (!formRequestTXERADetails) {
         return res.status(400).json({ success: false, message: 'Incomplete data' });
     }
-
+    
     const apikey = formRequestTXERADetails.apikey;
     const origin = req.headers.origin
     
@@ -1594,12 +1594,12 @@ app.post('/xera/v1/api/user/mainnet/booster/sol', authenticateToken, async (req,
             if (new Date(senderTransactionCommand.transaction_date) > new Date(latestTransactionWallet.transaction_date)) {
                 transactionOrigin = senderTransactionCommand;
             } else {
-                transactionOrigin = latestTransactionWallet;
+                transactionOrigin = latestTransactionWallet.transaction_hash;
             }
         } else if (senderTransactionCommand) {
             transactionOrigin = senderTransactionCommand;
         } else if (latestTransactionWallet) {
-            transactionOrigin = latestTransactionWallet;
+            transactionOrigin = latestTransactionWallet.transaction_hash;
         } else {
             transactionOrigin = "Genesis Transaction"; 
         }
@@ -1647,10 +1647,10 @@ app.post('/xera/v1/api/user/mainnet/booster/sol', authenticateToken, async (req,
             return res.json({ success: false, message: 'Add Block failed' });
         }
 
-        const senderTransactionOrigin = "Genesis Transaction"
+        let senderTransactionOrigin = "Genesis Transaction"
 
         const [[getSenderTransaction]] = await connection.query(`Select transaction_hash, transaction_date FROM xera_mainnet_transactions WHERE sender_address = ? ORDER BY transaction_date DESC LIMIT 1`, ["XERA Centralized Treasury"]);
-
+        
         if (getSenderTransaction) {
             senderTransactionOrigin = getSenderTransaction.transaction_hash;
         }
@@ -1700,7 +1700,7 @@ app.post('/xera/v1/api/user/mainnet/booster/sol', authenticateToken, async (req,
             return res.status(404).json({ success: false, message: 'Token not found or mismatched token symbol.'});
         }
 
-        const newCirculating = parseInt(currentToken.token_circulating, 10) + parseInt(amount, 10);
+        const newCirculating = parseInt(currentToken.token_circulating, 10) + parseInt(formRequestTXERADetails.xera_tx_reward, 10);
 
         const [updateTokenResult] = await db.query(
             'UPDATE xera_asset_token SET token_circulating = ? WHERE token_id = ?',
