@@ -368,10 +368,10 @@ app.post('/xera/v1/api/users/total-points/phase1', (req, res) => {
     getTotalPoints(req, res, '2024-11-01 01:01:01', '2024-12-18 01:01:01');
 });
 app.post('/xera/v1/api/users/total-points/phase2', (req, res) => {
-    getTotalPoints(req, res, '2024-12-19 01:01:01', '2025-02-25 01:01:01');
+    getTotalPoints(req, res, '2024-12-19 01:01:01', '2025-04-15 01:01:01');
 });
 app.post('/xera/v1/api/users/total-points/phase3', (req, res) => {
-    getTotalPoints(req, res, '2025-02-25 01:01:01', '2025-05-30 01:01:01');
+    getTotalPoints(req, res, '2025-04-16 01:01:01', '2025-08-30 01:01:01');
 });
 
 

@@ -551,6 +551,7 @@ app.post('/xera/v1/api/user/rank-phase2', authenticateToken, async (req, res) =>
 // });
 
 // Helper function for cleaning response data
+
 const cleanData = (data, fieldsToRemove = []) => {
     return data.map(item => {
         fieldsToRemove.forEach(field => delete item[field]);
