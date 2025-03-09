@@ -72,6 +72,26 @@ app.options("*", (req, res) => {
     res.sendStatus(204);
 });
 
+const MAX_RETRIES = 3;
+
+const executeWithRetry = async (fn, retries = MAX_RETRIES) => {
+    let attempt = 0;
+    while (attempt < retries) {
+        try {
+            return await fn();
+        } catch (error) {
+            if (error.code === 'ER_LOCK_WAIT_TIMEOUT' || error.code === 'ER_LOCK_DEADLOCK') {
+                attempt++;
+                if (attempt >= retries) {
+                    throw error;
+                }
+            } else {
+                throw error;
+            }
+        }
+    }
+};
+
 // Authentication middleware
 const authenticateToken = (req, res, next) => {
     const authHeader = req.headers["authorization"];
@@ -982,9 +1002,6 @@ app.post('/xera/v1/api/user/coin/claim', authenticateToken, async (req, res) => 
     }
 
     const txLocalDate = new Date().toISOString().slice(0, 19).replace('T', ' ');
-
-    const connection = await db.getConnection();
-    await connection.beginTransaction();
 
     try {
         let transactionOrigin = 'Genesis Transaction';
@@ -2319,6 +2336,7 @@ app.post('/xera/v1/api/user/mainnet/send/token', authenticateToken, async (req, 
                 const hours = Math.floor(timeRemainingMs / 3600000);
                 const minutes = Math.floor((timeRemainingMs % 3600000) / 60000);
                 const seconds = Math.floor((timeRemainingMs % 60000) / 1000);
+                await connection.rollback();
                 return res.status(429).json({
                     success: false,
                     message: `Send again after ${hours}h ${minutes}m ${seconds}s`,
@@ -2329,6 +2347,7 @@ app.post('/xera/v1/api/user/mainnet/send/token', authenticateToken, async (req, 
         if (lastMainnetTransaction === lastTransaction.transaction_hash) {
             transactionOrigin = lastTransaction.transaction_hash;
         } else {
+            await connection.rollback();
             return res.status(400).json({ success: false, message: 'Transaction failed' });
         }
 
