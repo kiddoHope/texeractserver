@@ -211,15 +211,15 @@ app.post('/xera/v1/api/public', async (req, res) => {
     })
 
     const collections  = await axios.post(`${xeraBaseAPI}/nft/collections`, {
-      apikey: decodekey,
+      apikey: apikey,
     })
 
     const totalPointsP1  = await axios.post(`${xeraBaseAPI}/users/airdrop/phase1`, {
-      apikey: decodekey,
+      apikey: apikey,
     })
 
     const totalPointsP2  = await axios.post(`${xeraBaseAPI}/users/airdrop/phase2`, {
-      apikey: decodekey,
+      apikey: apikey,
     })
     
     const allData = {
@@ -237,6 +237,8 @@ app.post('/xera/v1/api/public', async (req, res) => {
     
     return res.status(200).json({ success: true, data: encryptedKey });
   } catch (error) {
+    console.log(error);
+    
       return res.status(500).json({ success: false, message: "Request error", error: error.message });
   }
 });
@@ -262,8 +264,8 @@ try {
     axios.post(`${xeraBaseAPI}/user/nodes`, {user: user.address}, { headers }),
     axios.post(`${xeraBaseAPI}/user/nfts`, {user: user.address}, { headers }),
     axios.post(`${xeraBaseAPI}/user/tasks/all-task`, {user: user.username}, { headers }),
-    axios.post(`${xeraBaseAPI}/user/tasks/rank-phase1`, {user: user.username}, { headers }),
-    axios.post(`${xeraBaseAPI}/user/tasks/rank-phase2`, {user: user.username}, { headers }),
+    axios.post(`${xeraBaseAPI}/user/rank-phase1`, {user: user.username}, { headers }),
+    axios.post(`${xeraBaseAPI}/user/rank-phase2`, {user: user.username}, { headers }),
 ]);
   
   const allData = {
@@ -279,12 +281,13 @@ try {
       rankP1: rankP1.data || {},
       rankP2: rankP2.data || {}
   };
-
+  
   const stringify = JSON.stringify(allData);
   const encryptedKey = CryptoJS.AES.encrypt(stringify, process.env.MAIN_JWT_SECRET).toString();
 
   return res.status(200).json({ success: true, data: encryptedKey });
 } catch (error) {
+  console.log(error);
     return res.status(500).json({ success: false, message: "Request error", error: error.message });
 }
 });
