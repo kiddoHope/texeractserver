@@ -214,21 +214,21 @@ app.post('/xera/v1/api/public', async (req, res) => {
       apikey: apikey,
     })
 
-    const airdropP1  = await axios.post(`${xeraBaseAPI}/users/airdrop/phase1`, {
-      apikey: apikey,
-    })
+    // const airdropP1  = await axios.post(`${xeraBaseAPI}/users/airdrop/phase1`, {
+    //   apikey: apikey,
+    // })
 
-    const airdropP2  = await axios.post(`${xeraBaseAPI}/users/airdrop/phase2`, {
-      apikey: apikey,
-    })
+    // const airdropP2  = await axios.post(`${xeraBaseAPI}/users/airdrop/phase2`, {
+    //   apikey: apikey,
+    // })
     
-    const totalPointsP1  = await axios.post(`${xeraBaseAPI}/users/total-points/phase1`, {
-      apikey: apikey,
-    })
+    // const totalPointsP1  = await axios.post(`${xeraBaseAPI}/users/total-points/phase1`, {
+    //   apikey: apikey,
+    // })
 
-    const totalPointsP2  = await axios.post(`${xeraBaseAPI}/users/total-points/phase2`, {
-      apikey: apikey,
-    })
+    // const totalPointsP2  = await axios.post(`${xeraBaseAPI}/users/total-points/phase2`, {
+    //   apikey: apikey,
+    // })
 
     const allData = {
         allWallet: allWallet.data || {},
@@ -236,10 +236,10 @@ app.post('/xera/v1/api/public', async (req, res) => {
         nftBanners: nftBanners.data || {},
         nftFeatured: nftFeatured.data || {},
         collections: collections.data || {},
-        airdropP1: airdropP1.data || {},
-        airdropP2: airdropP2.data || {},
-        totalPointsP1: totalPointsP1.data || {},
-        totalPointsP2: totalPointsP2.data || {}
+        // airdropP1: airdropP1.data || {},
+        // airdropP2: airdropP2.data || {},
+        // totalPointsP1: totalPointsP1.data || {},
+        // totalPointsP2: totalPointsP2.data || {}
     };
 
     const stringify = JSON.stringify(allData);
