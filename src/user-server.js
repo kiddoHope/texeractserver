@@ -1701,7 +1701,7 @@ app.post('/xera/v1/api/user/mainnet/booster/sol', authenticateToken, async (req,
             `INSERT INTO xera_mainnet_transactions 
             (transaction_block, transaction_origin, transaction_hash, sender_address, receiver_address, transaction_command, transaction_amount, transaction_token, transaction_token_id, transaction_validator, transaction_fee_amount, transaction_fee_token, transaction_fee_token_id, transaction_info)
             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-            ["Genesis", senderTransactionOrigin, formRequestTXERADetails.xera_tx_hash, "XERA Centralized Treasury", formRequestTXERADetails.xera_address, "Send", formRequestTXERADetails.xera_tx_reward, formRequestTXERADetails.tx_funding_asset, formRequestTXERADetails.tx_asset_id, formRequestTXERADetails.transaction_validator, '', '', '', formRequestTXERADetails.xera_tx_info ]
+            ["Genesis", "Genesis Transaction", formRequestTXERADetails.xera_tx_hash, "XERA Centralized Treasury", formRequestTXERADetails.xera_address, "Send", formRequestTXERADetails.xera_tx_reward, formRequestTXERADetails.tx_funding_asset, formRequestTXERADetails.tx_asset_id, formRequestTXERADetails.transaction_validator, '', '', '', formRequestTXERADetails.xera_tx_info ]
         );
 
         if (addSendTransaction.affectedRows === 0) {

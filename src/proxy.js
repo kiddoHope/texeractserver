@@ -209,12 +209,27 @@ app.post('/xera/v1/api/public', async (req, res) => {
     const nftFeatured  = await axios.post(`${xeraBaseAPI}/marketplace/featured`, {
         apikey: decodekey,
     })
+
+    const collections  = await axios.post(`${xeraBaseAPI}/nft/collections`, {
+      apikey: decodekey,
+    })
+
+    const totalPointsP1  = await axios.post(`${xeraBaseAPI}/users/airdrop/phase1`, {
+      apikey: decodekey,
+    })
+
+    const totalPointsP2  = await axios.post(`${xeraBaseAPI}/users/airdrop/phase2`, {
+      apikey: decodekey,
+    })
     
     const allData = {
         allWallet: allWallet.data || {},
         assetToken: assetToken.data || {},
         nftBanners: nftBanners.data || {},
-        nftFeatured: nftFeatured.data || {}
+        nftFeatured: nftFeatured.data || {},
+        collections: collections.data || {},
+        totalPointsP1: totalPointsP1.data || {},
+        totalPointsP2: totalPointsP2.data || {}
     };
 
     const stringify = JSON.stringify(allData);
@@ -237,7 +252,7 @@ app.post('/xera/v1/api/public/user', async (req, res) => {
 
 try {
 
-  const [security, lastTransactions, transactions, followers, balance, onstake, nodes, nfts] = await Promise.all([
+  const [security, lastTransactions, transactions, followers, balance, onstake, nodes, nfts, allTask, rankP1, rankP2] = await Promise.all([
     axios.post(`${xeraBaseAPI}/user/security`, {user: user.address}, { headers }),
     axios.post(`${xeraBaseAPI}/user/last-transaction`, {user: user.address}, { headers }),
     axios.post(`${xeraBaseAPI}/user/transactions`, {user: user.address}, { headers }),
@@ -246,6 +261,9 @@ try {
     axios.post(`${xeraBaseAPI}/user/onstake/nft`, {user: user.address}, { headers }),
     axios.post(`${xeraBaseAPI}/user/nodes`, {user: user.address}, { headers }),
     axios.post(`${xeraBaseAPI}/user/nfts`, {user: user.address}, { headers }),
+    axios.post(`${xeraBaseAPI}/user/tasks/all-task`, {user: user.username}, { headers }),
+    axios.post(`${xeraBaseAPI}/user/tasks/rank-phase1`, {user: user.username}, { headers }),
+    axios.post(`${xeraBaseAPI}/user/tasks/rank-phase2`, {user: user.username}, { headers }),
 ]);
   
   const allData = {
@@ -256,7 +274,10 @@ try {
       balance: balance.data || {},
       onstake: onstake.data || {},
       nodes: nodes.data || {},
-      nfts: nfts.data || {}
+      nfts: nfts.data || {},
+      allTask: allTask.data || {},
+      rankP1: rankP1.data || {},
+      rankP2: rankP2.data || {}
   };
 
   const stringify = JSON.stringify(allData);
