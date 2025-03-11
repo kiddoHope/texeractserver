@@ -2346,7 +2346,10 @@ app.post('/xera/v1/api/user/mainnet/send/token', authenticateToken, async (req, 
 
         if (lastMainnetTransaction === lastTransaction.transaction_hash) {
             transactionOrigin = lastTransaction.transaction_hash;
-        } else {
+        } else if (!lastTransaction) {
+            transactionOrigin = 'Genesis Transaction';
+        }
+         else {
             await connection.rollback();
             return res.status(400).json({ success: false, message: 'Transaction failed' });
         }
