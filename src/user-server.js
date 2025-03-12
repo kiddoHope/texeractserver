@@ -2320,7 +2320,11 @@ app.post('/xera/v1/api/user/mainnet/send/token', authenticateToken, async (req, 
 
     try {
         // Check for recent transactions
-        const lastTransaction = await getLatestTransactionOrigin(sender);
+        let lastTransaction = await getLatestTransactionOrigin(sender);
+
+        if (!lastTransaction){
+            lastTransaction = 'Genesis Transaction';
+        }
 
         const [[lastTransactioncommand]] = await connection.query(
             'SELECT transaction_date, transaction_hash FROM xera_mainnet_transactions WHERE transaction_command = ? AND sender_address = ? ORDER BY transaction_date DESC LIMIT 1',
@@ -2346,10 +2350,7 @@ app.post('/xera/v1/api/user/mainnet/send/token', authenticateToken, async (req, 
 
         if (lastMainnetTransaction === lastTransaction.transaction_hash) {
             transactionOrigin = lastTransaction.transaction_hash;
-        } else if (!lastTransaction) {
-            transactionOrigin = 'Genesis Transaction';
-        }
-         else {
+        } else {
             await connection.rollback();
             return res.status(400).json({ success: false, message: 'Transaction failed' });
         }
