@@ -1634,12 +1634,12 @@ app.post('/xera/v1/api/user/mainnet/booster/sol', authenticateToken, async (req,
         if (senderTransactionCommand && latestTransactionWallet) {
             // Compare transaction dates and return the latest one
             if (new Date(senderTransactionCommand.transaction_date) > new Date(latestTransactionWallet.transaction_date)) {
-                transactionOrigin = senderTransactionCommand;
+                transactionOrigin = senderTransactionCommand.transaction_hash;
             } else {
                 transactionOrigin = latestTransactionWallet.transaction_hash;
             }
         } else if (senderTransactionCommand) {
-            transactionOrigin = senderTransactionCommand;
+            transactionOrigin = senderTransactionCommand.transaction_hash;
         } else if (latestTransactionWallet) {
             transactionOrigin = latestTransactionWallet.transaction_hash;
         } else {
@@ -2213,8 +2213,10 @@ app.post('/xera/v1/api/user/mainnet/mintnft/sol', authenticateToken, async (req,
     
         const latesttransaction = await getLatestTransactionOrigin(formRequestTXERADetails.xera_address);
     
-        if (latesttransaction) {
+        if (latesttransaction === "Genesis Transaction") {
             transactionOrigin = latesttransaction;
+        } else {
+            transactionOrigin = latesttransaction.transaction_hash;
         }
 
         const [addNft] = await connection.query(
