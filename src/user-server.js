@@ -1904,7 +1904,7 @@ app.post('/xera/v1/api/user/unstake/nft', authenticateToken, async (req, res) =>
             const seconds = Math.floor((timeRemainingMs % 60000) / 1000);
             return res.json({ 
                 success: false, 
-                message: `NFT unable to unstake. Time remaining: ${hours}h ${minutes}m ${seconds}s` 
+                message: `${hours}h ${minutes}m ${seconds}s` 
             });
         }
     }
