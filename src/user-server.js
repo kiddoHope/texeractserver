@@ -1892,7 +1892,7 @@ app.post('/xera/v1/api/user/unstake/nft', authenticateToken, async (req, res) =>
         
         const latesttransaction = await getLatestTransactionOriginTestnet(formRequestTXERADetails.receiver_address);
 
-        if (latesttransaction) {
+        if (latesttransaction !== "Genesis Transaction") {
             transactionOrigin = latesttransaction.transaction_hash;
         } 
 
