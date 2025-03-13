@@ -363,6 +363,7 @@ const getTotalPoints = async (req, res, startDate, endDate) => {
         return res.json({ success: false, message: "Request error", error: error.message });
     }
 };
+
 // Routes for each phase using the optimized function
 app.post('/xera/v1/api/users/total-points/phase1', (req, res) => {
     getTotalPoints(req, res, '2024-11-01 01:01:01', '2024-12-18 01:01:01');
