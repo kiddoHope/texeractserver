@@ -246,14 +246,6 @@ app.post('/xera/v1/api/public/airdrop', async (req, res) => {
   const decodekey = decodeKey(apikey);
   
 try {
-  const airdropP1  = await axios.post(`${xeraBaseAPI}/users/airdrop/phase1`, {
-    apikey: apikey,
-  })
-
-  const airdropP2  = await axios.post(`${xeraBaseAPI}/users/airdrop/phase2`, {
-    apikey: apikey,
-  })
-
   const totalPointsP1  = await axios.post(`${xeraBaseAPI}/users/total-points/phase1`, {
     apikey: apikey,
   })
@@ -268,8 +260,6 @@ try {
   })
 
   const allData = {
-      airdropP1: airdropP1.data || {},
-      airdropP2: airdropP2.data || {},
       totalPointsP1: totalPointsP1.data || {},
       totalPointsP2: totalPointsP2.data || {},
       totalPointsP3: totalPointsP3.data || {},
