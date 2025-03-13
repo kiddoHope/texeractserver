@@ -1896,8 +1896,16 @@ app.post('/xera/v1/api/user/unstake/nft', authenticateToken, async (req, res) =>
     const [getExpire] = await db.query('SELECT * FROM xera_user_stake_nft WHERE xera_wallet = ? AND nft_id = ? AND status = ?', [formRequestTXERADetails.receiver_address, formRequestTXERADetails.transaction_token_id, 'Staked']);
 
     if (getExpire.length > 0) {
-        if (new Date(getExpire[0].expiry) > serverTime) {
-            return res.json({ success: false, message: 'NFT unable to unstake' });
+        const expiryDate = new Date(getExpire[0].expiry);
+        if (expiryDate > serverTime) {
+            const timeRemainingMs = expiryDate - serverTime;
+            const hours = Math.floor(timeRemainingMs / 3600000);
+            const minutes = Math.floor((timeRemainingMs % 3600000) / 60000);
+            const seconds = Math.floor((timeRemainingMs % 60000) / 1000);
+            return res.json({ 
+                success: false, 
+                message: `NFT unable to unstake. Time remaining: ${hours}h ${minutes}m ${seconds}s` 
+            });
         }
     }
     
