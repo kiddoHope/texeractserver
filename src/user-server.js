@@ -1631,7 +1631,7 @@ app.post('/xera/v1/api/user/mainnet/booster/sol', authenticateToken, async (req,
 
         const latestTransactionWallet = await getLatestTransactionOrigin(formRequestTXERADetails.xera_address);
 
-        if (senderTransactionCommand && latestTransactionWallet) {
+        if (senderTransactionCommand && latestTransactionWallet !== "Genesis Transaction") {
             // Compare transaction dates and return the latest one
             if (new Date(senderTransactionCommand.transaction_date) > new Date(latestTransactionWallet.transaction_date)) {
                 transactionOrigin = senderTransactionCommand.transaction_hash;
@@ -1640,7 +1640,7 @@ app.post('/xera/v1/api/user/mainnet/booster/sol', authenticateToken, async (req,
             }
         } else if (senderTransactionCommand) {
             transactionOrigin = senderTransactionCommand.transaction_hash;
-        } else if (latestTransactionWallet) {
+        } else if (latestTransactionWallet !== "Genesis Transaction") {
             transactionOrigin = latestTransactionWallet.transaction_hash;
         } else {
             transactionOrigin = "Genesis Transaction"; 
@@ -2213,9 +2213,7 @@ app.post('/xera/v1/api/user/mainnet/mintnft/sol', authenticateToken, async (req,
     
         const latesttransaction = await getLatestTransactionOrigin(formRequestTXERADetails.xera_address);
     
-        if (latesttransaction === "Genesis Transaction") {
-            transactionOrigin = latesttransaction;
-        } else {
+        if (latesttransaction !== "Genesis Transaction") {
             transactionOrigin = latesttransaction.transaction_hash;
         }
 
