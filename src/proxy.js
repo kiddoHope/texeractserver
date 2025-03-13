@@ -241,11 +241,11 @@ app.post('/xera/v1/api/public', async (req, res) => {
         nftBanners: nftBanners.data || {},
         nftFeatured: nftFeatured.data || {},
         collections: collections.data || {},
-        airdropP1: airdropP1.data || {},
-        airdropP2: airdropP2.data || {},
-        totalPointsP1: totalPointsP1.data || {},
-        totalPointsP2: totalPointsP2.data || {},
-        totalPointsP3: totalPointsP3.data || {},
+        // airdropP1: airdropP1.data || {},
+        // airdropP2: airdropP2.data || {},
+        // totalPointsP1: totalPointsP1.data || {},
+        // totalPointsP2: totalPointsP2.data || {},
+        // totalPointsP3: totalPointsP3.data || {},
     };
 
     const stringify = JSON.stringify(allData);
