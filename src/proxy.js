@@ -214,38 +214,12 @@ app.post('/xera/v1/api/public', async (req, res) => {
       apikey: apikey,
     })
 
-    const airdropP1  = await axios.post(`${xeraBaseAPI}/users/airdrop/phase1`, {
-      apikey: apikey,
-    })
-
-    const airdropP2  = await axios.post(`${xeraBaseAPI}/users/airdrop/phase2`, {
-      apikey: apikey,
-    })
-
-    const totalPointsP1  = await axios.post(`${xeraBaseAPI}/users/total-points/phase1`, {
-      apikey: apikey,
-    })
-
-    const totalPointsP2  = await axios.post(`${xeraBaseAPI}/users/total-points/phase2`, {
-      apikey: apikey,
-
-    })
-    
-    const totalPointsP3  = await axios.post(`${xeraBaseAPI}/users/total-points/phase3`, {
-      apikey: apikey,
-    })
-
     const allData = {
         allWallet: allWallet.data || {},
         assetToken: assetToken.data || {},
         nftBanners: nftBanners.data || {},
         nftFeatured: nftFeatured.data || {},
         collections: collections.data || {},
-        // airdropP1: airdropP1.data || {},
-        // airdropP2: airdropP2.data || {},
-        // totalPointsP1: totalPointsP1.data || {},
-        // totalPointsP2: totalPointsP2.data || {},
-        // totalPointsP3: totalPointsP3.data || {},
     };
 
     const stringify = JSON.stringify(allData);
@@ -257,6 +231,59 @@ app.post('/xera/v1/api/public', async (req, res) => {
     
       return res.status(500).json({ success: false, message: "Request error", error: error.message });
   }
+});
+
+app.post('/xera/v1/api/public/airdrop', async (req, res) => {
+  const { apikey } = req.body;
+  const origin = req.headers.origin
+  
+  const isValid = await validateApiKey(apikey,origin);
+
+  if (!isValid)  {
+      return res.status(400).json({ success: false, message: isValid });
+  }
+    
+  const decodekey = decodeKey(apikey);
+  
+try {
+  const airdropP1  = await axios.post(`${xeraBaseAPI}/users/airdrop/phase1`, {
+    apikey: apikey,
+  })
+
+  const airdropP2  = await axios.post(`${xeraBaseAPI}/users/airdrop/phase2`, {
+    apikey: apikey,
+  })
+
+  const totalPointsP1  = await axios.post(`${xeraBaseAPI}/users/total-points/phase1`, {
+    apikey: apikey,
+  })
+
+  const totalPointsP2  = await axios.post(`${xeraBaseAPI}/users/total-points/phase2`, {
+    apikey: apikey,
+
+  })
+  
+  const totalPointsP3  = await axios.post(`${xeraBaseAPI}/users/total-points/phase3`, {
+    apikey: apikey,
+  })
+
+  const allData = {
+      airdropP1: airdropP1.data || {},
+      airdropP2: airdropP2.data || {},
+      totalPointsP1: totalPointsP1.data || {},
+      totalPointsP2: totalPointsP2.data || {},
+      totalPointsP3: totalPointsP3.data || {},
+  };
+
+  const stringify = JSON.stringify(allData);
+  const encryptedKey = CryptoJS.AES.encrypt(stringify, process.env.MAIN_JWT_SECRET).toString();
+  
+  return res.status(200).json({ success: true, data: encryptedKey });
+} catch (error) {
+  console.log(error);
+  
+    return res.status(500).json({ success: false, message: "Request error", error: error.message });
+}
 });
 
 app.post('/xera/v1/api/public/user', async (req, res) => {
