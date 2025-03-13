@@ -92,6 +92,10 @@ const executeWithRetry = async (fn, retries = MAX_RETRIES) => {
     }
 };
 
+const pendingSendTokenMainnet = new Map();
+const pendingMintNFTMainnet = new Map();
+const pendingBoosterMainnet = new Map();
+
 // Authentication middleware
 const authenticateToken = (req, res, next) => {
     const authHeader = req.headers["authorization"];
@@ -1617,6 +1621,18 @@ app.post('/xera/v1/api/user/mainnet/booster/sol', authenticateToken, async (req,
         return res.status(400).json({ success: false, message: isValid });
     }
 
+    
+     // Check if user already has a pending transaction
+     if (pendingBoosterMainnet.has(formRequestTXERADetails.xera_address)) {
+        return res.status(429).json({
+            success: false,
+            message: 'You already have a pending request. Please wait for it to complete.',
+        });
+    }
+
+    // Mark request as pending
+    pendingBoosterMainnet.set(formRequestTXERADetails.xera_address, true);
+
     const connection = await db.getConnection();
     await connection.beginTransaction();
 
@@ -1761,6 +1777,7 @@ app.post('/xera/v1/api/user/mainnet/booster/sol', authenticateToken, async (req,
         await connection.rollback();
         return res.json({ success: false, message: 'Request error', error: error.message });
     } finally {
+        pendingBoosterMainnet.delete(formRequestTXERADetails.xera_address);
         connection.release();
     }
 });
@@ -2204,6 +2221,18 @@ app.post('/xera/v1/api/user/mainnet/mintnft/sol', authenticateToken, async (req,
     //     transactionOrigin = lastTransactionMint.transaction_hash;
     // }
 
+     // Check if user already has a pending transaction
+     if (pendingMintNFTMainnet.has(xera_address)) {
+        return res.status(429).json({
+            success: false,
+            message: 'You already have a pending request. Please wait for it to complete.',
+        });
+    }
+
+    // Mark request as pending
+    pendingMintNFTMainnet.set(xera_address, true);
+
+
 
     const connection = await db.getConnection();
     await connection.beginTransaction();
@@ -2288,6 +2317,7 @@ app.post('/xera/v1/api/user/mainnet/mintnft/sol', authenticateToken, async (req,
         await connection.rollback();
         return res.status(500).json({ success: false, message: 'Internal Server Error', error: error.message });
     } finally {
+        pendingMintNFTMainnet.delete(xera_address);
         connection.release();
     }
 });
@@ -2312,6 +2342,18 @@ app.post('/xera/v1/api/user/mainnet/send/token', authenticateToken, async (req, 
     if (![username, txHash, sender, receiver, command, amount, token, tokenId,transactioninfo,  ].every(Boolean)) {
         return res.status(400).json({ success: false, message: 'Incomplete transaction data.' });
     }
+
+
+     // Check if user already has a pending transaction
+    if (pendingSendTokenMainnet.has(sender)) {
+        return res.status(429).json({
+            success: false,
+            message: 'You already have a pending request. Please wait for it to complete.',
+        });
+    }
+
+    // Mark request as pending
+    pendingSendTokenMainnet.set(sender, true);
 
     const connection = await db.getConnection();
     await connection.beginTransaction();
@@ -2460,6 +2502,7 @@ app.post('/xera/v1/api/user/mainnet/send/token', authenticateToken, async (req, 
         await connection.rollback();
         return res.status(500).json({ success: false, message: 'Internal Server Error' });
     } finally {
+        pendingSendTokenMainnet.delete(sender);
         connection.release();
     }
 });
