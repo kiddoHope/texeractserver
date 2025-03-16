@@ -2381,8 +2381,8 @@ app.post('/xera/v1/api/user/mainnet/send/token', authenticateToken, async (req, 
             const lastTxDate = new Date(lastTransactioncommand.transaction_date).getTime();
             const timeDiff = Date.now() - lastTxDate;
 
-            if (timeDiff < 43200000) { // 12 hours in milliseconds
-                const timeRemainingMs = 43200000 - timeDiff;
+            if (timeDiff < 21600000) { // 12 hours in milliseconds
+                const timeRemainingMs = 21600000 - timeDiff;
                 const hours = Math.floor(timeRemainingMs / 3600000);
                 const minutes = Math.floor((timeRemainingMs % 3600000) / 60000);
                 const seconds = Math.floor((timeRemainingMs % 60000) / 1000);

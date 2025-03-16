@@ -1,7 +1,7 @@
 const mysql = require('mysql2/promise')
 require('dotenv').config();
 
-// 46.202.129.137
+// ssh root@46.202.129.137
 // ssh root@145.223.100.79
 // 2a02:4780:28:feaa::1
 // /home/texeractbot/htdocs/texeractbot.xyz
@@ -19,17 +19,5 @@ const db = mysql.createPool({
     connectionLimit: 10,
     queueLimit: 0,
 });
-
-async function testConnection() {
-    try {
-        const connection = await db.getConnection();
-        console.log('Database connection successful!');
-        connection.release();
-    } catch (error) {
-        console.error('Database connection failed:', error.message);
-    }
-}
-
-testConnection();
 
 module.exports = db;
