@@ -278,7 +278,7 @@ const generateAuthToken = async (username, publicKey) => {
         myXeraDisplay: user.display
     };
     
-    return jwt.sign({ xeraJWT }, jwtSecret, { expiresIn: "1d" });
+    return jwt.sign({ xeraJWT }, jwtSecret, { expiresIn: "2d" });
 };
 
 // Helper function to handle user login and token generation
