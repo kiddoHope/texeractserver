@@ -74,7 +74,6 @@ const authenticateToken = (req, res, next) => {
             const errorMessage = err.name === "TokenExpiredError" ? "Token has expired" : "Invalid token";
             return res.status(403).json({ success: false, message: errorMessage });
         }
-        
         req.user = decoded;
         next();
     });
@@ -254,8 +253,6 @@ app.post('/xera/v1/api/public', async (req, res) => {
     
     return res.status(200).json({ success: true, data: encryptedKey });
   } catch (error) {
-    console.log(error);
-    
       return res.status(500).json({ success: false, message: "Request error", error: error.message });
   }
 });
@@ -297,8 +294,6 @@ try {
   
   return res.status(200).json({ success: true, data: encryptedKey });
 } catch (error) {
-  console.log(error);
-  
     return res.status(500).json({ success: false, message: "Request error", error: error.message });
 }
 });
@@ -347,7 +342,6 @@ try {
 
   return res.status(200).json({ success: true, data: encryptedKey });
 } catch (error) {
-  console.log(error);
     return res.status(500).json({ success: false, message: "Request error", error: error.message });
 }
 });

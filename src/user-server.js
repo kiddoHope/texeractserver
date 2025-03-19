@@ -110,7 +110,6 @@ const authenticateToken = (req, res, next) => {
             const errorMessage = err.name === "TokenExpiredError" ? "Token has expired" : "Invalid token";
             return res.status(403).json({ success: false, message: errorMessage });
         }
-        
         req.user = decoded;
         next();
     });
@@ -277,8 +276,8 @@ const generateAuthToken = async (username, publicKey) => {
         myXeraAddress: publicKey,
         myXeraDisplay: user.display
     };
-    
-    return jwt.sign({ xeraJWT }, jwtSecret, { expiresIn: "2d" });
+    const jwtSign = jwt.sign({ xeraJWT }, jwtSecret, { expiresIn: "2d" })
+    return jwtSign;
 };
 
 // Helper function to handle user login and token generation
@@ -1531,9 +1530,9 @@ app.post('/xera/v1/api/user/register', async (req, res) => {
 
         // Register user in xera_user_accounts table
         const [result] = await db.query(`
-            INSERT INTO xera_user_accounts (username, password, xera_wallet, display, eth_wallet, bsc_wallet, pol_wallet, avax_wallet, arb_wallet, op_wallet, zks_wallet, sol_wallet, near_wallet, xera_referral, xera_account_ip, failed_attempts,loginSession)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        `, [username, hashedPassword, publicAddress, '' , '', '', '', '', '', '', '', '', '', referral, userIP, 0, '']);
+            INSERT INTO xera_user_accounts (username, password, xera_wallet, display, eth_wallet, bsc_wallet, pol_wallet, avax_wallet, arb_wallet, op_wallet, zks_wallet, sol_wallet, near_wallet, xera_referral, xera_account_ip, failed_attempts)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        `, [username, hashedPassword, publicAddress, '' , '', '', '', '', '', '', '', '', '', referral, userIP, 0,]);
 
         if (result.affectedRows > 0) {
             // Insert wallet details into xera_user_wallet table
