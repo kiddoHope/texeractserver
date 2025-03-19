@@ -1,6 +1,7 @@
 const express = require("express");
 const bodyParser = require("body-parser");
 const cors = require("cors");
+const jwt = require("jsonwebtoken");
 const compression = require('compression');
 const CryptoJS = require("crypto-js");
 const NodeCache = require('node-cache');
@@ -9,6 +10,13 @@ const { default: axios } = require("axios");
 
 const app = express();
 const port = 5008;
+const jwtSecret = process.env.MAIN_JWT_SECRET;
+
+// Validate required environment variables
+if (!jwtSecret || !process.env.DB_HOST || !process.env.DB_USER || !process.env.DB_PASSWORD || !process.env.DB_DATABASE) {
+    console.error("Missing required environment variables. Please check your .env file.");
+    process.exit(1);
+}
 
 app.use(compression());
 app.use(bodyParser.json());
