@@ -53,6 +53,25 @@ app.options("*", (req, res) => {
     res.sendStatus(204);
 });
 
+const authenticateToken = (req, res, next) => {
+    const authHeader = req.headers["authorization"];
+    const token = authHeader && authHeader.split(" ")[1];
+
+    if (!token) {
+        return res.status(401).json({ success: false, message: "Authentication token is required" });
+    }
+
+    jwt.verify(token, jwtSecret, (err, decoded) => {
+        if (err) {
+            const errorMessage = err.name === "TokenExpiredError" ? "Token has expired" : "Invalid token";
+            return res.status(403).json({ success: false, message: errorMessage });
+        }
+        
+        req.user = decoded;
+        next();
+    });
+};
+
 // Fetch developer data from cache or database
 const decodeKey = (encodedKey) => {
   if (!encodedKey) {
@@ -276,7 +295,7 @@ try {
 }
 });
 
-app.post('/xera/v1/api/public/user', async (req, res) => {
+app.post('/xera/v1/api/public/user', authenticateToken, async (req, res) => {
   const { user } = req.body;
 
   if (!user) {

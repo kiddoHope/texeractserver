@@ -1,8 +1,8 @@
 const mysql = require('mysql2/promise')
 require('dotenv').config();
 
-// ssh root@46.202.129.137
-// ssh root@145.223.100.79
+// ssh root@46.202.129.137 -- main
+// ssh root@145.223.100.79 -- 2nd
 // 2a02:4780:28:feaa::1
 // /home/texeractbot/htdocs/texeractbot.xyz
 // /home/texeract/htdocs/texeract.network
