@@ -2493,7 +2493,7 @@ app.post('/xera/v1/api/user/mainnet/send/token', authenticateToken, async (req, 
                 `INSERT INTO xera_user_tasks 
                 (username, xera_wallet, xera_task, xera_status, xera_points, xera_telegram_id, xera_twitter_username)
                 VALUES (?, ?, ?, ?, ?, ?, ?)`,
-                [username, sender, 'Sending Task', 'ok', '5000', '', '']
+                [username, sender, 'Sending Task', 'ok', '2500', '', '']
             );
 
             if (recordTaskResult.affectedRows === 0) {
