@@ -95,6 +95,7 @@ const executeWithRetry = async (fn, retries = MAX_RETRIES) => {
 const pendingSendTokenMainnet = new Map();
 const pendingMintNFTMainnet = new Map();
 const pendingBoosterMainnet = new Map();
+const pendingPurchaseSeedSale = new Map();
 
 // Authentication middleware
 const authenticateToken = (req, res, next) => {
@@ -1777,6 +1778,173 @@ app.post('/xera/v1/api/user/mainnet/booster/sol', authenticateToken, async (req,
         return res.json({ success: false, message: 'Request error', error: error.message });
     } finally {
         pendingBoosterMainnet.delete(formRequestTXERADetails.xera_address);
+        connection.release();
+    }
+});
+
+app.post('/xera/v1/api/user/mainnet/sale/seedsale', authenticateToken, async (req, res) => {
+    const { data } = req.body;
+    const decodedFormRequestTXERADetails = Buffer.from(data, 'base64').toString('utf-8');
+
+    const formRequestTXERADetails = JSON.parse(decodedFormRequestTXERADetails);
+    
+    if (!formRequestTXERADetails) {
+        return res.status(400).json({ success: false, message: 'Incomplete data' });
+    }
+    
+    const apikey = formRequestTXERADetails.apikey;
+    const origin = req.headers.origin
+    
+    const isValid = await validateApiKey(apikey,origin);
+    
+    if (!isValid)  {
+        return res.status(400).json({ success: false, message: isValid });
+    }
+    
+     // Check if user already has a pending transaction
+     if (pendingPurchaseSeedSale.has(formRequestTXERADetails.xera_address)) {
+        return res.status(429).json({
+            success: false,
+            message: 'You already have a pending request. Please wait for it to complete.',
+        });
+    }
+
+    // Mark request as pending
+    pendingPurchaseSeedSale.set(formRequestTXERADetails.xera_address, true);
+
+    const connection = await db.getConnection();
+    await connection.beginTransaction();
+
+    try {
+        let transactionOrigin = "Genesis Transaction"
+
+        const [[senderTransactionCommand]] = await connection.query(
+            'SELECT transaction_hash, transaction_date FROM xera_mainnet_transactions WHERE sender_address = ? AND transaction_command = ? ORDER BY transaction_date DESC LIMIT 1',
+            [formRequestTXERADetails.sender_address, formRequestTXERADetails.transaction_command]
+        );
+    
+
+        const latestTransactionWallet = await getLatestTransactionOrigin(formRequestTXERADetails.xera_address);
+
+        if (senderTransactionCommand && latestTransactionWallet !== "Genesis Transaction") {
+            // Compare transaction dates and return the latest one
+            if (new Date(senderTransactionCommand.transaction_date) > new Date(latestTransactionWallet.transaction_date)) {
+                transactionOrigin = senderTransactionCommand.transaction_hash;
+            } else {
+                transactionOrigin = latestTransactionWallet.transaction_hash;
+            }
+        } else if (senderTransactionCommand) {
+            transactionOrigin = senderTransactionCommand.transaction_hash;
+        } else if (latestTransactionWallet !== "Genesis Transaction") {
+            transactionOrigin = latestTransactionWallet.transaction_hash;
+        } else {
+            transactionOrigin = "Genesis Transaction"; 
+        }
+
+        const [addTokenTransaction] = await connection.query(
+            `INSERT INTO xera_mainnet_transactions 
+            (transaction_block, transaction_origin, transaction_hash, sender_address, receiver_address, transaction_command, transaction_amount, transaction_token, transaction_token_id, transaction_fee_amount, transaction_fee_token, transaction_fee_token_id, transaction_validator, transaction_info)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+            ["Genesis", transactionOrigin, formRequestTXERADetails.transaction_hash, formRequestTXERADetails.sender_address, formRequestTXERADetails.receiver_address, formRequestTXERADetails.transaction_command, formRequestTXERADetails.transaction_amount, formRequestTXERADetails.transaction_token, formRequestTXERADetails.transaction_token_id, '', '', '', formRequestTXERADetails.transaction_validator, formRequestTXERADetails.transaction_info ]
+        );
+
+        if (addTokenTransaction.affectedRows === 0) {
+            await connection.rollback();
+            return res.json({ success: false, message: 'Add Transaction failed' });
+        }
+
+        const [inserFund] = await db.query(`
+            INSERT INTO xera_user_investments (tx_hash, tx_amount, tx_token, tx_dollar, tx_investor_address, tx_investor_name, tx_external_hash, tx_external_date, tx_bought_asset, tx_funding_asset, tx_asset_id, xera_address) 
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        `, [formRequestTXERADetails.tx_hash, formRequestTXERADetails.tx_amount, formRequestTXERADetails.tx_token, '', formRequestTXERADetails.tx_investor_address, formRequestTXERADetails.tx_investor_name, formRequestTXERADetails.tx_external_hash, formRequestTXERADetails.tx_external_date, '', formRequestTXERADetails.tx_funding_asset,  formRequestTXERADetails.tx_asset_id, formRequestTXERADetails.xera_address]);
+        
+        if (inserFund.affectedRows === 0) {
+            await connection.rollback();
+            return res.json({ success: false, message: 'Funding addition failed' });
+        }
+
+        const [addBlock] = await db.query(
+            `UPDATE xera_mainnet_blocks SET block_transactions = block_transactions + 1 WHERE block_validator = ?`,[formRequestTXERADetails.transaction_validator]
+        );
+
+        if (addBlock.affectedRows === 0) {
+            await connection.rollback();
+            return res.json({ success: false, message: 'Add Block failed' });
+        }
+
+        // let senderTransactionOrigin = "Genesis Transaction"
+
+        // const [[getSenderTransaction]] = await connection.query(`Select transaction_hash, transaction_date FROM xera_mainnet_transactions WHERE sender_address = ? ORDER BY transaction_date DESC LIMIT 1`, ["XERA Centralized Treasury"]);
+        
+        // if (getSenderTransaction) {
+        //     senderTransactionOrigin = getSenderTransaction.transaction_hash;
+        // }
+
+        const [addSendTransaction] = await db.query(
+            `INSERT INTO xera_mainnet_transactions 
+            (transaction_block, transaction_origin, transaction_hash, sender_address, receiver_address, transaction_command, transaction_amount, transaction_token, transaction_token_id, transaction_validator, transaction_fee_amount, transaction_fee_token, transaction_fee_token_id, transaction_info)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+            ["Genesis", "Genesis Transaction", formRequestTXERADetails.xera_tx_hash, "XERA Centralized Treasury", formRequestTXERADetails.xera_address, "Send", formRequestTXERADetails.transaction_amount, formRequestTXERADetails.tx_funding_asset, formRequestTXERADetails.tx_asset_id, formRequestTXERADetails.transaction_validator, '', '', '', formRequestTXERADetails.transaction_info ]
+        );
+
+        if (addSendTransaction.affectedRows === 0) {
+            await connection.rollback();
+            return res.status(500).json({ success: false, message: 'Error adding transaction' });
+        }
+
+        // Retrieve the latest block details
+        const [[blockData]] = await db.query(
+            'SELECT current_block, block_validator FROM xera_mainnet_blocks ORDER BY id DESC LIMIT 1'
+        );
+
+        if (!blockData) {
+            await connection.rollback();
+            return res.status(500).json({ success: false, message: 'Block data not found. Transaction aborted.' });
+        }
+
+        const { current_block: txBlock, block_validator: validator } = blockData;
+
+        // Increment block transaction count
+        const [incrementBlockResult] = await db.query(
+            'UPDATE xera_mainnet_blocks SET block_transactions = block_transactions + 1 WHERE current_block = ?',
+            [txBlock]
+        );
+
+        if (incrementBlockResult.affectedRows === 0) {
+            await connection.rollback();
+            return res.status(500).json({ success: false, message: 'Error incrementing block count' });
+        }
+
+        const [[currentToken]] = await db.query(
+            'SELECT token_circulating FROM xera_asset_token WHERE token_symbol = ?',
+            [formRequestTXERADetails.tx_token]
+        );
+
+        if (!currentToken) {
+            await connection.rollback();
+            return res.status(404).json({ success: false, message: 'Token not found or mismatched token symbol.'});
+        }
+
+        const newCirculating = parseInt(currentToken.token_circulating, 10) + parseInt(formRequestTXERADetails.transaction_amount, 10);
+
+        const [updateTokenResult] = await db.query(
+            'UPDATE xera_asset_token SET token_circulating = ? WHERE token_id = ?',
+            [newCirculating, formRequestTXERADetails.transaction_token_id]
+        );
+
+        if (updateTokenResult.affectedRows === 0) {
+            await connection.rollback();
+            return res.status(500).json({ success: false, message: 'Error updating token circulation' });
+        }
+
+        await connection.commit();
+        return res.json({ success: true, message: `Successfully Buy XERA` });
+    } catch (error) {
+        console.error('Error transaction:', error.message, error);
+        await connection.rollback();
+        return res.json({ success: false, message: 'Request error', error: error.message });
+    } finally {
+        pendingPurchaseSeedSale.delete(formRequestTXERADetails.xera_address);
         connection.release();
     }
 });
