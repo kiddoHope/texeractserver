@@ -1884,7 +1884,7 @@ app.post('/xera/v1/api/user/mainnet/sale/seedsale', authenticateToken, async (re
             `INSERT INTO xera_mainnet_transactions 
             (transaction_block, transaction_origin, transaction_hash, sender_address, receiver_address, transaction_command, transaction_amount, transaction_token, transaction_token_id, transaction_validator, transaction_fee_amount, transaction_fee_token, transaction_fee_token_id, transaction_info)
             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-            ["Genesis", "Genesis Transaction", formRequestTXERADetails.xera_tx_hash, "XERA Centralized Treasury", formRequestTXERADetails.xera_address, "Send", formRequestTXERADetails.transaction_amount, formRequestTXERADetails.tx_funding_asset, formRequestTXERADetails.tx_asset_id, formRequestTXERADetails.transaction_validator, '', '', '', formRequestTXERADetails.transaction_info ]
+            ["Genesis", "Genesis Transaction", formRequestTXERADetails.xera_tx_hash, "XERA Centralized Treasury", formRequestTXERADetails.xera_address, "Send", formRequestTXERADetails.xera_tx_reward, formRequestTXERADetails.tx_funding_asset, formRequestTXERADetails.tx_asset_id, formRequestTXERADetails.transaction_validator, '', '', '', formRequestTXERADetails.transaction_info ]
         );
 
         if (addSendTransaction.affectedRows === 0) {
@@ -1925,7 +1925,7 @@ app.post('/xera/v1/api/user/mainnet/sale/seedsale', authenticateToken, async (re
             return res.status(404).json({ success: false, message: 'Token not found or mismatched token symbol.'});
         }
 
-        const newCirculating = parseInt(currentToken.token_circulating, 10) + parseInt(formRequestTXERADetails.transaction_amount, 10);
+        const newCirculating = parseInt(currentToken.token_circulating, 10) + parseInt(formRequestTXERADetails.xera_tx_reward, 10);
 
         const [updateTokenResult] = await db.query(
             'UPDATE xera_asset_token SET token_circulating = ? WHERE token_id = ?',
